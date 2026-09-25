@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. 语法检查 + 冒烟测试（PHP 版本矩阵）
+  #
+  # 插件声明 Requires PHP 7.4，但只在 7.4 上测是不够的：
+  # PHP 8.x 移除了不少旧写法（花括号字符串下标、each()、create_function() 等），
+  # 而 7.4 又能提前拦住"不小心用了 8.0 语法"。两头都要测。
+  # ---------------------------------------------------------------------------
+  test:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: [ '7.4', '8.0', '8.1', '8.2', '8.3' ]
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          ini-values: error_reporting=E_ALL, display_errors=On
+
+      - name: 语法检查（全部 PHP 文件）
+        run: |
+          set -e
+          find . -name '*.php' -not -path './vendor/*' -print0 \
+            | xargs -0 -n1 -P4 php -l
+
+      - name: 冒烟测试
+        run: php tests/unit/smoke.php
+
+      - name: 翻译模板是否与源码同步
+        run: |
+          set -e
+          php tools/make-pot.php
+          if ! git diff --quiet -- languages/at8-site-accelerator.pot; then
+            echo "::error::languages/at8-site-accelerator.pot 已过期。请在本地运行 php tools/make-pot.php 并提交结果。"
+            git --no-pager diff --stat -- languages/at8-site-accelerator.pot
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
+  # 2. 编码规范（WordPress Coding Standards）
+  #
+  # 非阻断：先把问题列出来，等存量清干净再改成阻断。
+  # ---------------------------------------------------------------------------
+  phpcs:
+    name: PHPCS (WordPress 规范)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+          tools: phpcs
+
+      - name: 拉取 WordPress 规范
+        run: |
+          composer global config allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+          composer global require --no-interaction wp-coding-standards/wpcs:^3 dealerdirect/phpcodesniffer-composer-installer
+
+      - name: 执行 phpcs
+        run: phpcs --standard=phpcs.xml.dist --report=summary --colors
+
+  # ---------------------------------------------------------------------------
+  # 3. 打包产物（打 tag 时生成，供人工下载检查）
+  # ---------------------------------------------------------------------------
+  package:
+    name: 打包 Free 版 ZIP
+    runs-on: ubuntu-latest
+    needs: [ test ]
+    if: startsWith( github.ref, 'refs/tags/v' )
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: 打包
+        run: php tools/build-zip.php
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: at8-site-accelerator-${{ github.ref_name }}
+          path: dist/*.zip
+          if-no-files-found: error

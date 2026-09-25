@@ -1,0 +1,1273 @@
+# Copyright (C) 2026 AT8
+# This file is distributed under the GPL-2.0-or-later license.
+msgid ""
+msgstr ""
+"Project-Id-Version: AT8 Site Accelerator 3.0.0\n"
+"Report-Msgid-Bugs-To: https://www.at8.fun/\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"X-Domain: at8-site-accelerator\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: tools/make-pot.php\n"
+
+#: includes/Optimization/BrowserCache.php
+msgid ".htaccess 不可写。"
+msgstr ""
+
+#: includes/Admin/SettingsPage.php templates/settings-page.php
+msgid "AT8 Site Accelerator"
+msgstr ""
+
+#: includes/Admin/Notices.php
+msgid "AT8 Site Accelerator 已从 2.x 升级并自动迁移设置。原有开关保持不变，旧的 %s 选项仍保留以便回滚。"
+msgstr ""
+
+#: at8-site-accelerator.php
+msgid "AT8 Site Accelerator 需要 PHP %1$s 或更高版本，当前为 %2$s。插件未加载。"
+msgstr ""
+
+#: at8-site-accelerator.php
+msgid "AT8 Site Accelerator 需要 WordPress %1$s 或更高版本，当前为 %2$s。插件未加载。"
+msgstr ""
+
+#: includes/Admin/Notices.php
+msgid "AT8 Site Accelerator：<code>advanced-cache.php</code> 尚未安装，缓存命中仍会先启动 WordPress。可到 %s 安装。"
+msgstr ""
+
+#: includes/Admin/Notices.php
+msgid "AT8 Site Accelerator：<code>wp-config.php</code> 中的 <code>WP_CACHE</code> 未启用，高级缓存 drop-in 不会生效。可到 %s 一键启用（会自动备份 wp-config.php）。"
+msgstr ""
+
+#: includes/Admin/Notices.php
+msgid "AT8 Site Accelerator：你同时开启了「移除静态资源 ?ver= 版本号」与「静态资源长缓存」。这会导致主题/插件更新后访客仍使用旧的 CSS/JS。建议关闭其中一项，详见 %s。"
+msgstr ""
+
+#: includes/Admin/SettingsPage.php
+msgid "AT8 加速"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Apache / LiteSpeed"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "GD WebP 支持"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "HTML 缓存（秒）"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "HTTPS"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "HTTPS 是浏览器缓存、HTTP/2、Service Worker 等能力的前提。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Heartbeat 心跳频率"
+msgstr ""
+
+#: includes/Admin/Ajax.php
+msgid "JSON 格式不正确，需包含 settings 对象。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "OPcache"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "OPcache 能让 drop-in 读取配置文件的开销降到接近零。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "PHP"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "PHP 只能给 HTML 文档设置缓存头；CSS/JS/图片由 Web 服务器直接返回，需要服务器规则。到「工具」标签页可以复制对应你服务器的规则片段。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Redis"
+msgstr ""
+
+#: includes/Cache/AdvancedCache.php
+msgid "WP_CACHE 已启用。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php templates/settings-page.php
+msgid "WP_CACHE 常量"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "Web 服务器"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "WordPress"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "advanced-cache drop-in"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "advanced-cache.php"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "auto 模式下 Redis 可达时优先 Redis，否则用磁盘。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "dns-prefetch —— DNS 预解析"
+msgstr ""
+
+#: includes/Admin/Ajax.php
+msgid "drop-in 写入失败，请检查 wp-content 目录权限。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "drop-in 只有在 wp-config.php 里 WP_CACHE 为 true 时才会被加载。"
+msgstr ""
+
+#: includes/Admin/Ajax.php
+msgid "drop-in 已安装。还需确保 wp-config.php 中 WP_CACHE 为 true。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "drop-in 已就位，但 wp-config.php 中的 WP_CACHE 未启用，drop-in 不会被加载。可在「工具」标签页一键启用。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "drop-in 把缓存命中提前到 WordPress 启动之前。启用 WP_CACHE 会修改 wp-config.php，修改前会自动备份为 wp-config.php.at8sa.bak，写入后会做完整性校验，校验失败立即回滚。"
+msgstr ""
+
+#: includes/Admin/Ajax.php
+msgid "drop-in 移除失败。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "nginx"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "nginx 用户请在后台复制对应的静态资源缓存规则片段。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "object-cache.php"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "preconnect —— 预建连接"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "prefetch —— 预取 HTML（推荐）"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "prerender —— 预渲染（流量与 CPU 开销大，慎用）"
+msgstr ""
+
+#: includes/Cache/AdvancedCache.php
+msgid "wp-config.php 不可写，请手动在文件中加入：define( 'WP_CACHE', true );"
+msgstr ""
+
+#: includes/Cache/AdvancedCache.php
+msgid "wp-config.php 不可写，请手动移除 WP_CACHE 定义。"
+msgstr ""
+
+#: includes/Cache/AdvancedCache.php
+msgid "wp-config.php 中已有 WP_CACHE 定义且无法自动改写，请手动设为 true。"
+msgstr ""
+
+#: includes/Cache/AdvancedCache.php
+msgid "wp-config.php 写入后校验未通过，已自动回滚。请手动添加 WP_CACHE 定义。"
+msgstr ""
+
+#: includes/Cache/AdvancedCache.php
+msgid "wp-config.php 读取失败。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "① 页面缓存"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "② 缓存失效策略"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "③ 前端链接预取"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "④ 浏览器缓存"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "⑤ HTML 压缩"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "⑥ 图片懒加载"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "⑦ 图片格式"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "⑧ 前端资源精简"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "⑨ 后台瘦身"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "⑩ 数据库清理"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "⚠ 删除后不可从后台恢复。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "「仅相关页面」在内容更新时只失效受影响的页面，命中率显著更高。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "上传时自动生成 WebP 副本"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "不再生成 medium_large / 1536 / 2048 尺寸"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "不可达"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "不存在"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "不支持"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "不支持时 WebP 自动转换会静默跳过，不影响其它功能。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "为移动端单独缓存"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "也为登录用户缓存"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "仅检测已知的缓存/优化插件，不覆盖全部可能性。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "仅相关页面"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "仅相关页面（推荐，命中率最高）"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "仅磁盘后端可精确统计。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "仅错误"
+msgstr ""
+
+#: includes/Admin/SettingsPage.php
+msgid "优化"
+msgstr ""
+
+#: includes/Optimization/DatabaseCleanup.php
+msgid "优化数据表（消除碎片）"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "低于 128M 时，大站点在清理缓存与生成缩略图时容易耗尽内存。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "低风险"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "使用浏览器原生的 loading=\"lazy\"，不引入任何 JavaScript。首屏前两张图会显式标记为 eager 并跳过懒加载，避免恶化 LCP。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "例如 fonts.googleapis.com。只在确实用到时添加，过多的 preconnect 反而会浪费连接数。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "保存文章时同时失效首页"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "保存设置"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "保存设置会重写 drop-in 运行时配置并清空整站缓存，确保新旧配置不混用。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "保守实现：只删注释、只在标签之间折叠空白。pre / textarea / script / style / svg 内容原样保留。压缩后体积低于原始 40% 时会自动放弃本次压缩，防止正则误伤。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "信息"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "停用 WP_CACHE"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "全部（含调试）"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "关闭"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "关闭后所有页面都由 PHP 实时渲染。"
+msgstr ""
+
+#: includes/Admin/Notices.php includes/Admin/SettingsPage.php
+msgid "兼容与诊断"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "兼容性"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "内存上限"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "内容保存时的失效范围"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "内容更新时，插件会算出受影响的 URL 集合（文章页、首页、文章类型归档、所属分类与父分类、作者归档、分页），只删除这些页面的缓存。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "内置已包含 wordpress_logged_in_、wordpress_sec_、wp-postpass_、woocommerce_* 等。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "内置已排除 emoji、wpicons、gravatar、Elementor 占位图等。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "内置已排除 wp-admin、wp-login、wp-json、xmlrpc.php、preview、admin-ajax、feed、?s= 等。此处只填你额外需要的。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "内置已自动忽略 UTM、fbclid、gclid、msclkid 等营销参数，避免同一页面因追踪参数产生大量碎片缓存。填 * 表示忽略全部 query（谨慎）。"
+msgstr ""
+
+#: includes/Optimization/BrowserCache.php
+msgid "写入 .htaccess 失败。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "写入 .htaccess（会先备份）"
+msgstr ""
+
+#: includes/Cache/AdvancedCache.php
+msgid "写入 wp-config.php 失败。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "冲突检测"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "切换主题、启停插件、升级、改菜单、Elementor 保存等结构性变更，无论上面的设置如何，一律整站失效——因为这类改动可能影响任意页面。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "切换主题会自动清空整站缓存。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "利于 CDN 与浏览器缓存，但与静态资源长缓存同时开启时会导致更新不生效，后台会给出警告。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "前台禁用"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "前台禁用 Gutenberg 区块样式"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "前台（非登录用户）禁用 Dashicons"
+msgstr ""
+
+#: includes/Admin/Notices.php
+msgid "前往设置"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "单个 URL 清缓存"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "单域名上限"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "单页最多预取数"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "卸载插件时保留设置数据"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "卸载行为"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "只删除该 URL 的缓存目录（含桌面与移动端两个变体），不影响其它页面。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "只影响新上传的图片，已有缩略图不会被删除。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "只缓存未登录访客的 GET 请求。后台、AJAX、REST、预览、搜索、404、购物车与结算页一律自动绕过。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "可达"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "同一链接冷却（秒）"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "同时压缩内联 CSS / JS"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "同时对 iframe 启用懒加载"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "同时移除 Elementor / 主题输出的 generator 元标签。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "否"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "含索引。可在「数据库清理」里预览可回收的修订版与过期数据。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "启用 HTML 压缩"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "启用 WP_CACHE"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "启用 advanced-cache.php 高级缓存"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "启用图片懒加载"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "启用安全模式（暂停缓存）"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "启用日志"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "启用浏览器缓存头"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "启用访客页面缓存"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "启用链接预取"
+msgstr ""
+
+#: includes/Optimization/DatabaseCleanup.php
+msgid "回收站中的文章"
+msgstr ""
+
+#: includes/Optimization/DatabaseCleanup.php
+msgid "回收站中的评论"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "在 <head> 里输出 <link rel=\"preload\" as=\"script\">，让预取脚本更早可用。旧版叫「HTTP/2 Server Push」，但浏览器已移除该能力，实际生效的一直是资源预加载。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "在浏览器控制台输出预取调试日志"
+msgstr ""
+
+#: includes/Optimization/DatabaseCleanup.php
+msgid "垃圾评论"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "域名变更后需要重新生成 drop-in 配置。"
+msgstr ""
+
+#: includes/Admin/SettingsPage.php
+msgid "处理中…"
+msgstr ""
+
+#: includes/Optimization/BrowserCache.php
+msgid "备份 .htaccess 失败，已中止（安全优先）。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "复制 Apache 规则"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "复制 nginx 规则"
+msgstr ""
+
+#: includes/Admin/SettingsPage.php
+msgid "失效与预加载"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "失效策略"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "如遇旧插件报错请关闭。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "字符集"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "安全模式"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "安装 / 更新 drop-in"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "定时任务只执行你已勾选的项目。单次最多处理 5000 行，避免大站点超时。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "对象缓存"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "导入设置"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "导出的 JSON 只包含本插件的设置项，不含任何密钥、账号或站点内容。导入时会走与后台表单完全相同的清洗流程。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "导出设置（下载 JSON）"
+msgstr ""
+
+#: includes/Admin/SettingsPage.php
+msgid "工具"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "已关闭"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "已启用"
+msgstr ""
+
+#: includes/Cache/AdvancedCache.php
+msgid "已启用 WP_CACHE。原文件已备份至 %s。"
+msgstr ""
+
+#: includes/Admin/SettingsPage.php
+msgid "已复制到剪贴板。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "已存在"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php templates/settings-page.php
+msgid "已安装"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "已缓存页面"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "已缓存页面数"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "开启后桌面与移动端各存一份，避免响应式主题给移动端输出不同结构时串页。会同时发送 Vary: User-Agent。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "开启后立即停止所有缓存读写与失效，但保留设置与缓存文件。适合在排查\"某功能异常是否由缓存引起\"时使用——比停用插件更快、更可逆。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "强制 Redis"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "强制磁盘"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "强烈建议保持开启。给首屏大图加 lazy 是最常见的自伤式优化。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "当前主题"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "当前协议"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "当前后端"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "快速操作"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "忽略的 Query 参数（每行一个，支持前缀*）"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "悬停延迟（毫秒）"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "执行清理"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "持久化对象缓存（如 Redis Object Cache）能显著减少数据库查询。本插件不提供也不接管它。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "排除 URL 关键词（每行一个，命中即不缓存）"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "排除关键词（每行一个，命中则不处理）"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "支持"
+msgstr ""
+
+#: includes/Admin/SettingsPage.php includes/Diagnostics/Diagnostics.php
+msgid "数据库"
+msgstr ""
+
+#: includes/Admin/Ajax.php
+msgid "数据库模块不可用。"
+msgstr ""
+
+#: includes/Admin/SettingsPage.php
+msgid "数据库清理不可撤销。确认按当前勾选项执行？"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "数据库清理是分批执行的，不受此项影响。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "数据总大小"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "整站失效"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "整站清空（与 2.x 行为一致）"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "整页缓存 + 精准失效 + 浏览器缓存 + HTML 压缩 + 图片懒加载 + WebP 转换 + 数据库瘦身。所有数据都只留在你自己的服务器上。"
+msgstr ""
+
+#: includes/Optimization/DatabaseCleanup.php
+msgid "文章修订版"
+msgstr ""
+
+#: includes/Cache/AdvancedCache.php
+msgid "无法创建 wp-config.php 备份，操作已中止（安全优先）。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "无（未生效）"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "日志"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "日志只写在本地服务器，默认关闭，绝不会发送到任何远程服务。日志中的密钥形态字符串会被自动脱敏。"
+msgstr ""
+
+#: includes/Admin/Ajax.php
+msgid "日志已清空。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "日志文件：%s（超过 1MB 自动轮转）"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "日志级别"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "是"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "暂无日志。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "最大执行时间"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "服务器"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "服务器软件标识"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "服务器静态资源规则"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "未发现已知冲突"
+msgstr ""
+
+#: includes/Admin/Ajax.php templates/settings-page.php
+msgid "未发现已知冲突。"
+msgstr ""
+
+#: includes/Cache/AdvancedCache.php
+msgid "未发现本插件写入的 WP_CACHE 定义，无需处理。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "未启用"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php templates/settings-page.php
+msgid "未安装"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "未安装时缓存命中仍会先启动 WordPress，命中路径的收益会打对折。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php templates/settings-page.php
+msgid "未定义 / false"
+msgstr ""
+
+#: includes/Optimization/BrowserCache.php
+msgid "未找到本插件写入的规则块。"
+msgstr ""
+
+#: includes/Optimization/BrowserCache.php
+msgid "未检测到可写的 .htaccess，请手动把规则片段粘贴到你的服务器配置中。"
+msgstr ""
+
+#: includes/Admin/SettingsPage.php
+msgid "未生效"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "未知"
+msgstr ""
+
+#: includes/Compatibility/CachePluginDetector.php
+msgid "未知来源的 advanced-cache.php"
+msgstr ""
+
+#: includes/Cache/AdvancedCache.php
+msgid "未能在 wp-config.php 中定位插入点，请手动加入：define( 'WP_CACHE', true );"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "本插件不会自动停用任何插件。同时启用多个整页缓存会导致\"内容不更新\"或\"样式错乱\"，请自行决定保留哪一个。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "本插件不会自动停用任何插件，请你自行决定保留哪一个整页缓存。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "本插件不做变量重命名等\"真压缩\"（那需要 JS 解析器，风险不成比例）。此项当前仅作为预留开关。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "本插件最低要求 PHP 7.4。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "本插件最低要求 WordPress 5.8。"
+msgstr ""
+
+#: includes/Admin/Ajax.php includes/Admin/SettingsPage.php
+msgid "权限不足。"
+msgstr ""
+
+#: includes/Admin/Notices.php
+msgid "查看详情"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "检测到 2.x 的旧设置，已自动迁移。原有开关与数值保持不变，旧选项仍保留在数据库中以便回滚。"
+msgstr ""
+
+#: includes/Compatibility/CachePluginDetector.php
+msgid "检测到其它缓存/优化系统：%s。建议避免同时启用多个整页缓存，否则可能出现「页面内容不更新」或「样式错乱」。本插件不会自动停用任何插件。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "检测到的服务器类型：%s。本插件不会自动改写你的服务器配置；请复制下方片段自行合并（若你已有同类规则，合并即可，不要重复声明）。"
+msgstr ""
+
+#: includes/Admin/Ajax.php
+msgid "检测完成，详见下方列表。"
+msgstr ""
+
+#: includes/Admin/SettingsPage.php
+msgid "概览"
+msgstr ""
+
+#: includes/Admin/SettingsPage.php
+msgid "模板文件缺失。"
+msgstr ""
+
+#: includes/Admin/AdminBar.php
+msgid "正在清空缓存…"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "正常"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "每周一次"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "每天一次"
+msgstr ""
+
+#: includes/Admin/Ajax.php
+msgid "没有任何清理项被勾选，请先在上方选择要清理的内容。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "注意"
+msgstr ""
+
+#: includes/Admin/Ajax.php
+msgid "清理完成。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "清理该 URL"
+msgstr ""
+
+#: includes/Admin/AdminBar.php
+msgid "清空 AT8 Site Accelerator 的整站缓存"
+msgstr ""
+
+#: includes/Admin/AdminBar.php
+msgid "清空失败，请查看日志。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "清空整站缓存"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "清空整站缓存会同时递增缓存版本盐，确保旧缓存即便删除不干净也不会被访客命中。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "清空日志"
+msgstr ""
+
+#: includes/Admin/AdminBar.php
+msgid "清空缓存"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "版本"
+msgstr ""
+
+#: includes/Admin/AdminBar.php includes/Admin/SettingsPage.php
+msgid "确定清空整站缓存？"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "磁盘后端统计 index*.html 文件数；Redis 后端统计索引集合成员数。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "磁盘后端需要 wp-content/cache 可写。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "禁止浏览器 / PHP 版本检测提示"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "禁用 Emoji 脚本"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "禁用 jQuery Migrate"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "禁用 wp-embed"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "移除 .htaccess 规则块"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "移除 WordPress 版本号输出"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "移除 drop-in"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "移除「WordPress 活动与新闻」"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "移除「站点健康」"
+msgstr ""
+
+#: includes/Cache/AdvancedCache.php
+msgid "移除失败，请手动删除带 \"Added by AT8 Site Accelerator\" 标记的那一行。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "移除静态资源 ?ver= 版本号"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "站点地址"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "第三方缓存 / 优化插件检测"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "第三方预连接域名（每行一个）"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "粘贴导出的 JSON 后点击导入"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php templates/settings-page.php
+msgid "缓存占用"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "缓存后端"
+msgstr ""
+
+#: includes/Admin/AdminBar.php
+msgid "缓存已清空"
+msgstr ""
+
+#: includes/Admin/Ajax.php
+msgid "缓存已清空（处理 %s 个缓存页）。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "缓存开关"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "缓存有效期（秒）"
+msgstr ""
+
+#: includes/Admin/Ajax.php
+msgid "缓存模块不可用。"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "缓存目录可写"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "自动清理计划"
+msgstr ""
+
+#: includes/Optimization/DatabaseCleanup.php
+msgid "自动草稿"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "自动（Redis 优先，不可用时降级磁盘）"
+msgstr ""
+
+#: includes/Diagnostics/Diagnostics.php
+msgid "表数量"
+msgstr ""
+
+#: includes/Optimization/BrowserCache.php
+msgid "规则块已移除。"
+msgstr ""
+
+#: includes/Optimization/BrowserCache.php
+msgid "规则已存在，无需重复写入。"
+msgstr ""
+
+#: includes/Optimization/BrowserCache.php
+msgid "规则已追加到 .htaccess 末尾，原文件已备份为 .htaccess.at8sa.bak。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "触摸延迟（毫秒）"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "让 HTML 也参与浏览器长缓存"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "让缓存命中在 WordPress 启动前就返回，TTFB 收益最大。需要在「工具」里确保 drop-in 已安装且 WP_CACHE 已启用。"
+msgstr ""
+
+#: includes/Admin/SettingsPage.php
+msgid "设置"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "设置导入 / 导出"
+msgstr ""
+
+#: includes/Admin/Ajax.php
+msgid "设置已导入并生效。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "设置已重置为默认值，缓存已清空。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "访客鼠标悬停或触摸链接时，提前把目标页拉进浏览器缓存。它改善的是\"点下去之后的体感\"，不会让服务器产生缓存。服务端的批量缓存预热属于 Pro 功能。"
+msgstr ""
+
+#: includes/Admin/Ajax.php
+msgid "该 URL 没有缓存记录（或不属于本站）。"
+msgstr ""
+
+#: includes/Admin/Ajax.php
+msgid "该 URL 的缓存已清理。"
+msgstr ""
+
+#: includes/Admin/Ajax.php
+msgid "请提供要清理的 URL。"
+msgstr ""
+
+#: includes/Admin/SettingsPage.php
+msgid "请求失败，请重试。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "跳过首屏前 2 张图"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "输出本站 DNS 预取与预连接"
+msgstr ""
+
+#: includes/Optimization/DatabaseCleanup.php
+msgid "过期 transient"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "这里的操作不可撤销，且默认全部关闭。请先点「预览数量」看清将要删除多少条，再勾选执行。回收站与草稿类项目删除后无法通过 WordPress 后台恢复。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "遇到这些 Cookie 时绕过缓存（每行一个，支持前缀*）"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "避免一次性预取全页链接。页面切到后台标签页时会自动停止。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "重新检测"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "重置为默认值"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "链接进入视口时预取"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "错误 + 警告"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "错误 + 警告 + 信息"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "降低频率（60 秒）"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "需要服务器配置下发规则，插件在「工具」里提供 nginx 片段。转换后体积反而变大的图片会自动放弃。删除附件时同步清理副本。"
+msgstr ""
+
+#: includes/REST/CacheController.php includes/REST/DiagnosticsController.php includes/REST/SettingsController.php
+msgid "需要管理员权限。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "静态资源缓存（秒）"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "非区块主题可关；用区块编辑器写的页面建议保留。"
+msgstr ""
+
+#: includes/Admin/SettingsPage.php includes/Diagnostics/Diagnostics.php
+msgid "页面缓存"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "页面缓存当前已关闭，所有页面都由 PHP 实时渲染。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "预加载预取脚本本身"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "预取策略（可多选）"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "预览数量"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "风险"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "风险组合：「移除静态资源 ?ver= 版本号」与「静态资源长缓存」同时开启。主题或插件更新后，访客可能长期使用旧的 CSS/JS。建议关闭其中一项。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "高级缓存 drop-in"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "高级缓存 drop-in 未安装：缓存命中时仍会先启动 WordPress。可在「工具」标签页安装，命中路径的收益会明显提升。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "高级缓存已生效。当前后端：%1$s，已缓存 %2$s 个页面。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "高风险"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "默认保留。关闭后卸载会删除本插件的所有选项与临时数据（缓存目录无论开关都会清理）。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "默认关闭。开启后登录用户会看到彼此相同的页面（含管理栏差异），除非你确定站点没有个性化内容，否则不要开。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "默认关闭。开启后访客在有效期内不会回源，内容更新会有延迟。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "默认（15 秒）"
+msgstr ""

@@ -1,0 +1,43 @@
+# ---------------------------------------------------------------------------
+# AT8 Site Accelerator —— 版本控制排除清单
+#
+# 原则：仓库里只放"人手写的源码"，一切"机器生成的产物"都不入库。
+# ---------------------------------------------------------------------------
+
+# 冒烟测试在 tests/unit/fake-wp/ 下伪造了一个 wp-content 并写入缓存与 drop-in，
+# 每次运行都会重建，入库只会制造无意义的 diff。
+tests/unit/fake-wp/
+tests/e2e/artifacts/
+
+# 打包产物
+dist/
+*.zip
+!tests/**/*.zip
+
+# 编辑器 / 系统
+.idea/
+.vscode/
+*.sublime-*
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# PHP 工具链产物
+vendor/
+composer.lock
+.phpunit.result.cache
+.phpcs-cache
+*.cache
+
+# 本地环境与密钥（绝不入库）
+.env
+.env.*
+*.local.php
+wp-config.php
+*.pem
+*.key
+!assets/**/*.key
+
+# 日志
+*.log
+debug.log

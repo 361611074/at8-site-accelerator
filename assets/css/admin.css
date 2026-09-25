@@ -1,0 +1,463 @@
+/*
+ * AT8 Site Accelerator —— 后台样式
+ *
+ * 编写约定（项目铁律）：
+ * - 禁止使用 !important。需要覆盖时靠选择器作用域与层叠优先级解决。
+ * - 所有选择器都以 .at8sa-wrap 为根，绝不泄漏到 WordPress 后台其它页面。
+ * - 用 CSS 自定义属性集中管理颜色，方便后续加暗色方案。
+ */
+
+.at8sa-wrap {
+	--at8sa-border: #dcdcde;
+	--at8sa-border-strong: #c3c4c7;
+	--at8sa-surface: #fff;
+	--at8sa-surface-alt: #f6f7f7;
+	--at8sa-text: #1d2327;
+	--at8sa-text-muted: #646970;
+	--at8sa-good: #00844a;
+	--at8sa-good-bg: #edfaef;
+	--at8sa-warn: #8a5700;
+	--at8sa-warn-bg: #fcf4e5;
+	--at8sa-danger: #b32d2e;
+	--at8sa-danger-bg: #fcf0f1;
+	--at8sa-info: #1b4b8a;
+	--at8sa-info-bg: #eef4fb;
+	--at8sa-radius: 6px;
+
+	max-width: 1180px;
+	color: var(--at8sa-text);
+}
+
+.at8sa-wrap h1 {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-size: 22px;
+	font-weight: 600;
+	margin-bottom: 4px;
+}
+
+.at8sa-wrap h2 {
+	font-size: 15px;
+	font-weight: 600;
+	margin: 0 0 4px;
+}
+
+.at8sa-version {
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--at8sa-text-muted);
+	background: var(--at8sa-surface-alt);
+	border: 1px solid var(--at8sa-border);
+	border-radius: 999px;
+	padding: 2px 10px;
+}
+
+.at8sa-lead {
+	color: var(--at8sa-text-muted);
+	margin: 0 0 16px;
+	max-width: 760px;
+}
+
+/* ---------- 状态横幅 ---------- */
+
+.at8sa-status {
+	border: 1px solid var(--at8sa-border);
+	border-left-width: 4px;
+	border-radius: var(--at8sa-radius);
+	padding: 10px 14px;
+	margin: 0 0 16px;
+	background: var(--at8sa-surface);
+	font-size: 13px;
+	line-height: 1.6;
+}
+
+.at8sa-status--good {
+	border-left-color: var(--at8sa-good);
+	background: var(--at8sa-good-bg);
+}
+
+.at8sa-status--warn {
+	border-left-color: var(--at8sa-warn);
+	background: var(--at8sa-warn-bg);
+}
+
+.at8sa-status--danger {
+	border-left-color: var(--at8sa-danger);
+	background: var(--at8sa-danger-bg);
+}
+
+.at8sa-status--info {
+	border-left-color: var(--at8sa-info);
+	background: var(--at8sa-info-bg);
+}
+
+/* ---------- 标签导航 ---------- */
+
+.at8sa-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px;
+	border-bottom: 1px solid var(--at8sa-border-strong);
+	margin: 0 0 18px;
+}
+
+.at8sa-tab {
+	appearance: none;
+	background: transparent;
+	border: 1px solid transparent;
+	border-bottom: none;
+	border-radius: var(--at8sa-radius) var(--at8sa-radius) 0 0;
+	color: var(--at8sa-text-muted);
+	cursor: pointer;
+	font-size: 13px;
+	font-weight: 500;
+	line-height: 1.4;
+	margin-bottom: -1px;
+	padding: 9px 16px;
+}
+
+.at8sa-tab:hover {
+	color: var(--at8sa-text);
+	background: var(--at8sa-surface-alt);
+}
+
+.at8sa-tab:focus-visible {
+	outline: 2px solid var(--wp-admin-theme-color, #2271b1);
+	outline-offset: -2px;
+}
+
+.at8sa-tab[aria-selected="true"] {
+	background: var(--at8sa-surface);
+	border-color: var(--at8sa-border-strong);
+	color: var(--at8sa-text);
+	font-weight: 600;
+}
+
+.at8sa-panel[hidden] {
+	display: none;
+}
+
+/* ---------- 卡片 ---------- */
+
+.at8sa-card {
+	background: var(--at8sa-surface);
+	border: 1px solid var(--at8sa-border);
+	border-radius: var(--at8sa-radius);
+	padding: 16px 18px;
+	margin: 0 0 14px;
+}
+
+.at8sa-card > .at8sa-card-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 10px;
+}
+
+.at8sa-card-note {
+	color: var(--at8sa-text-muted);
+	font-size: 12.5px;
+	line-height: 1.6;
+	margin: 4px 0 12px;
+}
+
+/* ---------- 开关行 ---------- */
+
+.at8sa-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	gap: 10px 22px;
+	padding: 9px 0;
+	border-top: 1px solid var(--at8sa-surface-alt);
+}
+
+.at8sa-row:first-of-type {
+	border-top: none;
+	padding-top: 2px;
+}
+
+.at8sa-toggle {
+	display: flex;
+	align-items: flex-start;
+	gap: 9px;
+	flex: 1 1 320px;
+	min-width: 0;
+	cursor: pointer;
+}
+
+.at8sa-toggle input[type="checkbox"] {
+	margin: 2px 0 0;
+	flex: 0 0 auto;
+}
+
+.at8sa-toggle-text {
+	display: block;
+	font-size: 13px;
+	line-height: 1.5;
+}
+
+.at8sa-toggle-hint {
+	display: block;
+	color: var(--at8sa-text-muted);
+	font-size: 12px;
+	line-height: 1.6;
+	margin-top: 2px;
+}
+
+.at8sa-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	font-size: 12.5px;
+	color: var(--at8sa-text-muted);
+}
+
+.at8sa-field input[type="number"],
+.at8sa-field input[type="text"],
+.at8sa-field select {
+	min-width: 130px;
+}
+
+.at8sa-field--wide {
+	flex: 1 1 100%;
+}
+
+.at8sa-field textarea {
+	width: 100%;
+	min-height: 76px;
+	font-family: Consolas, Monaco, monospace;
+	font-size: 12px;
+	line-height: 1.6;
+}
+
+.at8sa-sub {
+	color: var(--at8sa-text-muted);
+	font-size: 12px;
+	line-height: 1.6;
+}
+
+/* ---------- 诊断表 ---------- */
+
+.at8sa-diag-group {
+	margin: 0 0 18px;
+}
+
+.at8sa-diag-group > h3 {
+	font-size: 13px;
+	font-weight: 600;
+	margin: 0 0 6px;
+	padding-bottom: 6px;
+	border-bottom: 1px solid var(--at8sa-border);
+}
+
+.at8sa-diag-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 12.5px;
+}
+
+.at8sa-diag-table th,
+.at8sa-diag-table td {
+	text-align: left;
+	padding: 7px 10px;
+	border-bottom: 1px solid var(--at8sa-surface-alt);
+	vertical-align: top;
+}
+
+.at8sa-diag-table th {
+	font-weight: 500;
+	color: var(--at8sa-text-muted);
+	width: 190px;
+}
+
+.at8sa-diag-table td.at8sa-diag-value {
+	font-family: Consolas, Monaco, monospace;
+	font-size: 12px;
+	word-break: break-all;
+}
+
+.at8sa-pill {
+	display: inline-block;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1.6;
+	padding: 1px 9px;
+	border: 1px solid transparent;
+}
+
+.at8sa-pill--good {
+	color: var(--at8sa-good);
+	background: var(--at8sa-good-bg);
+	border-color: #b8e0c5;
+}
+
+.at8sa-pill--warn {
+	color: var(--at8sa-warn);
+	background: var(--at8sa-warn-bg);
+	border-color: #e8d4a8;
+}
+
+.at8sa-pill--info {
+	color: var(--at8sa-info);
+	background: var(--at8sa-info-bg);
+	border-color: #c6d9ef;
+}
+
+.at8sa-pill--danger {
+	color: var(--at8sa-danger);
+	background: var(--at8sa-danger-bg);
+	border-color: #edc3c4;
+}
+
+/* ---------- 统计块 ---------- */
+
+.at8sa-stats {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	gap: 10px;
+	margin: 0 0 14px;
+}
+
+.at8sa-stat {
+	background: var(--at8sa-surface-alt);
+	border: 1px solid var(--at8sa-border);
+	border-radius: var(--at8sa-radius);
+	padding: 12px 14px;
+}
+
+.at8sa-stat-label {
+	color: var(--at8sa-text-muted);
+	font-size: 12px;
+	margin: 0 0 4px;
+}
+
+.at8sa-stat-value {
+	font-size: 19px;
+	font-weight: 600;
+	line-height: 1.3;
+	margin: 0;
+}
+
+/* ---------- 代码块 ---------- */
+
+.at8sa-code {
+	position: relative;
+	margin: 8px 0 0;
+}
+
+.at8sa-code pre {
+	background: #1d2327;
+	color: #f0f0f1;
+	border-radius: var(--at8sa-radius);
+	font-family: Consolas, Monaco, monospace;
+	font-size: 12px;
+	line-height: 1.65;
+	margin: 0;
+	max-height: 340px;
+	overflow: auto;
+	padding: 14px 16px;
+	white-space: pre;
+}
+
+.at8sa-code-actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 8px;
+}
+
+/* ---------- 操作区 ---------- */
+
+.at8sa-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	margin: 12px 0 0;
+}
+
+.at8sa-inline-msg {
+	font-size: 12.5px;
+	color: var(--at8sa-text-muted);
+}
+
+.at8sa-inline-msg.is-ok {
+	color: var(--at8sa-good);
+}
+
+.at8sa-inline-msg.is-error {
+	color: var(--at8sa-danger);
+}
+
+.at8sa-detail-list {
+	margin: 8px 0 0;
+	padding-left: 18px;
+	font-size: 12.5px;
+	line-height: 1.7;
+	color: var(--at8sa-text-muted);
+}
+
+/* ---------- 底部保存条 ---------- */
+
+.at8sa-save-bar {
+	position: sticky;
+	bottom: 0;
+	z-index: 20;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	background: var(--at8sa-surface);
+	border: 1px solid var(--at8sa-border-strong);
+	border-radius: var(--at8sa-radius);
+	margin-top: 16px;
+	padding: 12px 16px;
+	box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+}
+
+/* ---------- 危险操作 ---------- */
+
+.at8sa-danger-zone {
+	border-color: #edc3c4;
+	background: var(--at8sa-danger-bg);
+}
+
+.at8sa-danger-zone h2 {
+	color: var(--at8sa-danger);
+}
+
+/* ---------- 日志 ---------- */
+
+.at8sa-log {
+	background: #1d2327;
+	color: #d6d9dd;
+	border-radius: var(--at8sa-radius);
+	font-family: Consolas, Monaco, monospace;
+	font-size: 11.5px;
+	line-height: 1.7;
+	margin: 0;
+	max-height: 320px;
+	overflow: auto;
+	padding: 12px 14px;
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+
+.at8sa-empty {
+	color: var(--at8sa-text-muted);
+	font-size: 12.5px;
+	font-style: normal;
+	margin: 0;
+}
+
+@media screen and (max-width: 782px) {
+	.at8sa-diag-table th {
+		width: auto;
+	}
+
+	.at8sa-save-bar {
+		position: static;
+	}
+}

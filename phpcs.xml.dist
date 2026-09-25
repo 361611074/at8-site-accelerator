@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+<ruleset name="AT8 Site Accelerator">
+	<description>AT8 Site Accelerator 编码规范（基于 WordPress 标准，逐条豁免有明确理由）。</description>
+
+	<file>at8-site-accelerator.php</file>
+	<file>uninstall.php</file>
+	<file>includes/</file>
+	<file>templates/</file>
+
+	<exclude-pattern>*/vendor/*</exclude-pattern>
+	<exclude-pattern>*/tests/unit/fake-wp/*</exclude-pattern>
+	<exclude-pattern>*/languages/*</exclude-pattern>
+
+	<arg name="extensions" value="php"/>
+	<arg name="basepath" value="."/>
+	<arg name="colors"/>
+	<arg name="-p"/>
+	<arg value="sp"/>
+
+	<config name="minimum_supported_wp_version" value="5.8"/>
+	<config name="testVersion" value="7.4-"/>
+
+	<rule ref="WordPress">
+		<!-- 命名空间 + PSR-4 风格的文件名/类名是本项目的既定架构（计划书 §44），
+		     不适用 WordPress 的 class-my-class.php 命名约定。 -->
+		<exclude name="WordPress.Files.FileName"/>
+		<exclude name="WordPress.NamingConventions.ValidFunctionName"/>
+		<exclude name="WordPress.NamingConventions.ValidVariableName"/>
+
+		<!-- 变量名用下划线（$cache_root）而非驼峰，与 WordPress 核心一致。 -->
+		<exclude name="WordPress.DB.DirectDatabaseQuery"/>
+	</rule>
+
+	<!--
+		豁免说明：为什么允许直接读写文件
+		本插件就是一个缓存插件，它的核心工作就是把 HTML 写进文件系统。
+		WP_Filesystem 抽象层在这里既无收益（我们只操作自己创建的目录）
+		又有实际风险（凭证提示、FTP 回退）。所有写操作都经过
+		Support\Filesystem 的路径白名单校验。
+	-->
+	<rule ref="WordPress.WP.AlternativeFunctions">
+		<exclude name="WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents"/>
+		<exclude name="WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents"/>
+		<exclude name="WordPress.WP.AlternativeFunctions.file_system_operations_fopen"/>
+		<exclude name="WordPress.WP.AlternativeFunctions.file_system_operations_fwrite"/>
+		<exclude name="WordPress.WP.AlternativeFunctions.file_system_operations_fclose"/>
+		<exclude name="WordPress.WP.AlternativeFunctions.file_system_operations_readfile"/>
+		<exclude name="WordPress.WP.AlternativeFunctions.file_system_operations_is_writable"/>
+		<exclude name="WordPress.WP.AlternativeFunctions.parse_url_parse_url"/>
+		<exclude name="WordPress.WP.AlternativeFunctions.json_encode_json_encode"/>
+	</rule>
+
+	<!--
+		豁免说明：Redis 客户端必须自己拼协议
+		内置的 RESP 客户端刻意不依赖 phpredis 扩展，所以要用 fsockopen 直接对话。
+	-->
+	<rule ref="WordPress.WP.AlternativeFunctions.file_system_operations_fsockopen">
+		<severity>0</severity>
+	</rule>
+
+	<!-- 测试脚本允许使用 proc_open（用于在独立进程里跑 drop-in）与 var_dump 风格输出。 -->
+	<rule ref="WordPress.PHP.NoSilencedErrors">
+		<exclude-pattern>*/tests/*</exclude-pattern>
+	</rule>
+</ruleset>

@@ -98,7 +98,7 @@ at8-site-accelerator/
 php tests/unit/smoke.php
 ```
 
-覆盖 21 个分组、210 项断言，包含 drop-in 命中路径的子进程测试。
+覆盖 24 个分组、236 项断言，包含 drop-in 命中路径的子进程测试。
 
 ### 生成翻译模板
 

@@ -60,6 +60,7 @@
 | `phpcs.xml.dist` | WordPress 规范，豁免项均有理由说明 |
 | `tools/make-pot.php` | 翻译模板生成（无 WP-CLI 依赖） |
 | `tools/build-zip.php` | 白名单式打包 + 回读自检 |
+| `tools/benchmark/` | 基准测量脚本（命中率 / TTFB / 查询数 / 精准失效 / 并发）+ 干扰排除说明 |
 | `languages/at8-site-accelerator.pot` | 315 条可翻译字符串 |
 
 ---
@@ -190,8 +191,11 @@ drop-in 的命中路径不走 `BackendFactory`，所以 `RequestGuard::should_by
 
 ```
 $ php tests/unit/smoke.php
-通过：210  失败：0
+通过：236  失败：0
 全部通过。
+
+$ phpcs --standard=phpcs.xml.dist --report=summary
+0 错误 / 0 警告（41 个文件）
 ```
 
 21 个测试分组，覆盖容器、设置（含 30 项 2.x 设置迁移完整性）、缓存键与路径安全、
@@ -205,29 +209,59 @@ $ php tests/unit/smoke.php
 
 测试自带环境复位，连续运行结果一致。
 
+**真实站点验证（2026-09-26）**：在 `https://wordpress.xmm.fan/`
+（WordPress 7.1.2 / PHP 8.3.33 / nginx + HTTP/2 / 4 核 3.9G VPS /
+主题 Twenty Twenty-Five / 501 篇文章 / Redis 后端）完成：
+
+- 激活后 `wp-config.php` 写入 `WP_CACHE`、全量 `php -l` 无错、站点 HTTP 200；
+- 命中链路 `MISS-SAVED → HIT → HIT`，响应头带 `x-at8-cache-backend: redis`；
+- `purge_all()` / `purge_url()` 后目标 URL 回到 `MISS-SAVED`；
+- 安全模式连续 3 次 `BYPASS`；停用后设置与缓存目录保留、drop-in 移除、
+  重新启用后恢复正常；
+- A/B/C 三组性能对照与精准失效量化见 `docs/PERFORMANCE_BENCHMARK.md` 第七节；
+- 用 `dist/at8-site-accelerator-3.0.1.zip` 覆盖安装后复验通过。
+
+真机验证一共暴露并修复了 **6 个缺陷**（3 个致命 + 3 个功能性），
+详见 `CHANGELOG.md` 的 3.0.1 段。这些缺陷在纯单元测试与代码审查阶段都没有被发现——
+这是"必须在真实站点跑一遍"最有力的证据。
+
 ---
 
 ## 六、已知限制与未完成项
 
-### 必须由用户在真实站点完成（无法在当前环境验证）
+### 已完成（2026-09-26 真机复核）
 
-- [ ] 真实 WordPress 5.8 / 6.x 上的启用与首页命中验证
-- [ ] Elementor 编辑器保存后的前台样式验证
-- [ ] WooCommerce 购物车与结算流程验证
-- [ ] PHP 8.x 真实站点运行验证（CI 已覆盖语法与冒烟，但建议再确认）
-- [ ] 按 `docs/PERFORMANCE_BENCHMARK.md` 执行真实基准测量
+- [x] 真实 WordPress 站点上的启用与首页命中验证（WP 7.1.2）
+- [x] PHP 8.x 真实站点运行验证（PHP 8.3.33）
+- [x] 按 `docs/PERFORMANCE_BENCHMARK.md` 执行真实基准测量（A/B/C 三组对照）
+- [x] 停用 / 重新启用 / 安全模式 / 精准失效的人工复核（11 项中 9 项）
+
+### 仍需在特定环境验证
+
+- [ ] Elementor 编辑器保存后的前台样式验证（测试站未安装 Elementor）
+- [ ] WooCommerce 购物车与结算流程验证（测试站未安装 WooCommerce）
+- [ ] Lighthouse 前端指标（LCP / CLS / TBT，缺带 GUI 的浏览器环境）
+- [ ] 共享主机 + 缓存目录位于网络存储（NFS / 云盘）的 Redis 收益验证
+- [ ] 多站点（Multisite）环境
 
 ### 技术债（已识别，未处理）
 
 | 项目 | 说明 | 优先级 |
 | --- | --- | --- |
-| PHPCS 存量问题 | CI 中为非阻断，需要清理后再改为阻断 | 中 |
-| Redis 后端无真实读写测试 | 需要 CI 加 `services: redis` | 中 |
-| 无真实 WP 集成测试 | 需要 WP-CLI 搭建测试站 | 中 |
+| 无真实 WP 集成测试 | 目前靠"上传到真机手工跑"，尚未自动化 | 中 |
 | 无浏览器端测试 | 需要 Playwright | 低 |
 | 多站点未自动化测试 | 需要完整 WP 环境 | 低 |
 | REST 无限流 | 所有端点要求 `manage_options`，影响有限 | 低 |
 | 表单页 nonce 问题 | 需要用户手动加 `exclude_urls`，未自动处理 | 低（自动处理风险高于收益） |
+| CI 未覆盖 Redis 真机 | `ci.yml` 已加 `test-redis` 任务，但该文件尚未推送到远端（见下） | 中 |
+
+### 已还清的技术债
+
+| 项目 | 结果 |
+| --- | --- |
+| PHPCS 存量问题 | ✅ 535 错误 / 88 警告 → **0**，CI 的 phpcs 任务已改为阻断 |
+| Redis 后端无真实读写测试 | ✅ 真机（装 Redis）上完成命中 / 失效 / 后端切换验证 |
+| CI 缺 Redis 任务 | ✅ `ci.yml` 新增 `test-redis`（用 `redis:7-alpine`，不装 phpredis 扩展，专门验证纯 PHP RESP 客户端）——**但该文件因令牌缺 `workflow` scope 尚未推送到远端** |
 
 ### 明确不做的（并说明理由）
 
@@ -241,19 +275,33 @@ $ php tests/unit/smoke.php
 
 ## 七、下一步建议
 
-### 立即可做
+### 已完成（2026-09-26）
 
-1. 在至少一个真实站点按 `docs/RELEASE_CHECKLIST.md` 第九节人工复核；
-2. 按 `docs/PERFORMANCE_BENCHMARK.md` 执行基准测量，把数据填回该文件；
-3. 清理 PHPCS 存量问题，把 CI 中的 phpcs 任务改为阻断。
+1. ✅ 在真实站点按 `docs/RELEASE_CHECKLIST.md` 第九节完成人工复核（11 项中 9 项）；
+2. ✅ 按 `docs/PERFORMANCE_BENCHMARK.md` 执行基准测量，数据已填回第七节，
+   测量脚本沉淀在 `tools/benchmark/`；
+3. ✅ 清理 PHPCS 存量问题（535 → 0），CI 中的 phpcs 任务已改为阻断；
+4. ✅ 私有仓库 `361611074/at8-site-accelerator` 已创建并推送（72 个文件）。
+
+### 立即可做（还差一步就能闭环）
+
+5. **把 `.github/workflows/ci.yml` 补到远端**。本地文件是完整的，但 GitHub REST API
+   要求令牌带 `workflow` scope 才能写 `.github/workflows/*`，当前令牌只有
+   `gist, read:org, repo`。两条路：
+   - 重新授权并勾选 `workflow`（`gh auth refresh -s workflow`，需要能访问 `github.com`；
+     本机网络对 `github.com` 时通时断，两次设备码授权均超时失败）；
+   - 或在 GitHub 网页上新建文件 `.github/workflows/ci.yml`，内容照抄本地。
+   在此之前，CI 里的 `test-redis` 与"phpcs 阻断"两项改动都不会在流水线上生效。
+
+6. 在有 Elementor / WooCommerce 的站点上补一次真机确认（见第六节）。
 
 ### 需要用户决策后才能做
 
-4. 就 `docs/COMMERCE_OPEN_QUESTIONS.md` 的 **Q1（产品形态）** 与
+7. 就 `docs/COMMERCE_OPEN_QUESTIONS.md` 的 **Q1（产品形态）** 与
    **Q13（授权模式）** 给出决定——这两个是所有商业化工作的前提；
-5. 决定后再补 `COMMERCE_SPEC.md` / `PAYMENT_SPEC.md` / `LICENSE_SPEC.md`。
+8. 决定后再补 `COMMERCE_SPEC.md` / `PAYMENT_SPEC.md` / `LICENSE_SPEC.md`。
 
 ### 依赖外部条件
 
-6. 提供 GitHub 用户名与 PAT，以便创建私有仓库并推送；
-7. 在真实站点验证通过后再打 `v3.0.0` tag 并创建 Release。
+9. Lighthouse 前端指标需要带 GUI 的浏览器环境；
+10. Redis 后端优势的完整验证需要一个"缓存目录位于 NFS / 云盘"的站点。

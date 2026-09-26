@@ -675,6 +675,47 @@ check( 'purge_all 后页面缓存已清空', false === $backend->get( 'example.t
 check( 'purge_all 后配置目录保留', is_dir( AT8SA_CACHE_ROOT . '/config' ) );
 
 /* ---------------------------------------------------------------------------
+ * 6b. 后端一致性（关键不变量）
+ *
+ * drop-in 是按配置文件里的 `backend` 字段决定去 Redis 还是磁盘取页面的，
+ * 而失效器是按 `factory->make()` 决定去清哪个后端。两者若不一致，
+ * 用户点"清缓存"后会看到"提示成功、前台还是旧页面"。
+ * 这条断言在有没有 Redis 的机器上都必须成立。
+ * ------------------------------------------------------------------------ */
+
+section( '后端一致性' );
+
+$auto_settings = new Settings();
+$auto_settings->persist(
+	$auto_settings->sanitize(
+		array(
+			'page_cache'    => 1,
+			'cache_backend' => 'auto',
+			'cache_ttl'     => 3600,
+		)
+	)
+);
+
+$auto_factory = new BackendFactory( $auto_settings, $logger );
+$auto_config  = new Config( $auto_settings, $auto_factory );
+
+$auto_runtime    = $auto_config->runtime();
+$runtime_backend = isset( $auto_runtime['backend'] ) ? (string) $auto_runtime['backend'] : '';
+$active_name     = $auto_factory->active_name();
+$expected_name   = ( 'redis' === $runtime_backend ) ? 'Redis' : 'Disk';
+
+check(
+	'drop-in 配置的后端与失效器实际后端一致',
+	$expected_name === $active_name,
+	'config=' . $runtime_backend . ' active=' . $active_name
+);
+check(
+	'auto 模式选出的后端是 redis 或 disk',
+	in_array( $runtime_backend, array( 'redis', 'disk' ), true ),
+	'backend=' . $runtime_backend
+);
+
+/* ---------------------------------------------------------------------------
  * 7. 运行时配置与 drop-in
  * ------------------------------------------------------------------------ */
 

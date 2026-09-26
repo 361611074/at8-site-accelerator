@@ -58,7 +58,54 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
-  # 2. 编码规范（WordPress Coding Standards）
+  # 2. 带 Redis 的冒烟测试
+  #
+  # 上面那个 test 任务跑在没有 Redis 的 runner 上，覆盖的其实是"Redis 不可达 →
+  # 降级磁盘"这条路径。而 Redis 可达时的分支（后端探测、Config 写 backend=redis、
+  # 失效器打 Redis）在那边一行都没被执行过。
+  #
+  # 这不是假想的风险：2026-09-26 在真机（装了 Redis）验证时，正是因为存在这个盲区，
+  # "失效器断言的是磁盘文件、实际清的却是 Redis" 的测试缺陷一直藏到部署才发现。
+  # 现在补一个真正带 Redis 的 job，把这条路径纳入回归。
+  # ---------------------------------------------------------------------------
+  test-redis:
+    name: 冒烟测试（Redis 后端）
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+          ini-values: error_reporting=E_ALL, display_errors=On
+
+      # 插件用的是纯 PHP RESP 客户端，不依赖 phpredis 扩展——
+      # 这里刻意不装扩展，顺便验证"没有扩展也能连上"这个卖点。
+      - name: 确认 Redis 可达
+        run: |
+          set -e
+          php -r '$s = @fsockopen("127.0.0.1", 6379, $e, $m, 3); if (!$s) { fwrite(STDERR, "Redis 不可达: $m\n"); exit(1); } fwrite($s, "PING\r\n"); $r = fgets($s); fclose($s); if (false === strpos($r, "PONG")) { fwrite(STDERR, "PING 异常: $r\n"); exit(1); } echo "Redis OK (纯 PHP RESP 客户端)\n";'
+
+      - name: 冒烟测试
+        run: php tests/unit/smoke.php
+
+  # ---------------------------------------------------------------------------
+  # 3. 编码规范（WordPress Coding Standards）
   #
   # 非阻断：先把问题列出来，等存量清干净再改成阻断。
   # ---------------------------------------------------------------------------
@@ -87,7 +134,7 @@ jobs:
         run: phpcs --standard=phpcs.xml.dist --report=summary --colors
 
   # ---------------------------------------------------------------------------
-  # 3. 打包产物（打 tag 时生成，供人工下载检查）
+  # 4. 打包产物（打 tag 时生成，供人工下载检查）
   # ---------------------------------------------------------------------------
   package:
     name: 打包 Free 版 ZIP

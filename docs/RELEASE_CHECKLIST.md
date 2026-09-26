@@ -101,23 +101,39 @@
 
 ## 九、发布前人工复核（必须在真实站点做）
 
-以下项目**无法**在当前环境自动验证，发布前必须人工过一遍：
+以下项目**无法**在开发环境自动验证，发布前必须人工过一遍。
 
-- [ ] 在真实 WordPress 5.8 / 6.x 站点上启用，确认无白屏
-- [ ] 确认 `wp-content/advanced-cache.php` 已生成且带归属标记
-- [ ] 确认 `wp-config.php` 中 `WP_CACHE` 已开启
-- [ ] 访问首页两次，确认第二次响应头 `X-AT8-Cache: HIT`
-- [ ] 编辑一篇文章，确认只有相关 URL 的缓存被清除（其他页面 `X-AT8-Cache` 仍为 HIT）
-- [ ] 打开 Elementor 编辑一篇页面并保存，确认前台样式正常
-- [ ] WooCommerce 站点：确认加入购物车、进入结算页正常
-- [ ] 开启安全模式，确认所有页面都不再命中缓存
-- [ ] 停用插件，确认设置与缓存目录仍在
-- [ ] 启用插件，确认设置与缓存恢复工作
-- [ ] 在 PHP 8.x 环境上运行一次（CI 已覆盖，但建议真实站点再确认）
+### 复核记录（2026-09-26 · `https://wordpress.xmm.fan/`）
+
+环境：WordPress 7.1.2 / PHP 8.3.33 / nginx + HTTP/2 / 4 核 3.9G VPS /
+主题 Twenty Twenty-Five / 501 篇文章 / Redis 后端。
+
+| # | 项目 | 结果 | 证据 |
+| --- | --- | --- | --- |
+| 1 | 真实站点启用无白屏 | ✅ | `HTTP/2 200`，首页正常渲染 |
+| 2 | `advanced-cache.php` 已生成且带归属标记 | ✅ | 4778 字节，`grep -c "AT8 Site Accelerator"` = 1 |
+| 3 | `wp-config.php` 中 `WP_CACHE` 已开启 | ✅ | 第 98 行 `define( 'WP_CACHE', true );`，`php -l` 无语法错误，原文件已备份为 `wp-config.php.at8sa.bak` |
+| 4 | 二次访问 `X-AT8-Cache: HIT` | ✅ | 第 1 次 `MISS-SAVED` → 第 2、3 次 `HIT` |
+| 5 | 编辑 1 篇只清相关 URL | ✅ | 预热 71 条 → 清除 4 条（5.6%）；目标文章 `MISS-SAVED`，无关文章仍 `HIT`。对照组 `purge_scope=all` 清 71/71 |
+| 6 | Elementor 编辑保存后样式正常 | ⬜ **未验证** | 测试站未安装 Elementor |
+| 7 | WooCommerce 加购 / 结算正常 | ⬜ **未验证** | 测试站未安装 WooCommerce |
+| 8 | 安全模式下全部不命中 | ✅ | 开启后连续 3 次均为 `X-AT8-Cache: BYPASS` |
+| 9 | 停用后设置与缓存目录保留 | ✅ | 设置条目数不变；`wp-content/cache/at8-site-accelerator` 仍在；drop-in 已移除；`WP_CACHE` 保留（无害） |
+| 10 | 重新启用后恢复工作 | ✅ | drop-in 重建，设置完整保留，`MISS-SAVED → HIT → HIT` 正常 |
+| 11 | PHP 8.x 真实站点 | ✅ | PHP 8.3.33 |
+
+**未验证项（6 / 7）的处理**：`ElementorCompat` 与 WooCommerce 相关逻辑只做"检测到就绕过"，
+不改写业务行为，代码路径已被 236 项冒烟断言覆盖；但仍建议在上游用户的
+Elementor / WooCommerce 站点上补一次真机确认后再发正式版。
+
+### 复核时顺带发现并修复的问题
+
+- `wp-config.php` 的括号配平校验把 salt 字符串里的大括号也算进去 → 校验恒失败 → `WP_CACHE` 永远开不起来（详见 `docs/PERFORMANCE_BENCHMARK.md` 7.8）。
+- 缓存目录属主是 root 而 PHP-FPM 是 `www` → 磁盘后端静默写不进去，表现为"缓存没生效"但不报错。
 
 ## 十、发布后
 
-- [ ] 打 git tag `v3.0.0`
+- [ ] 打 git tag `v3.0.1`
 - [ ] 创建 GitHub Release 并附上 ZIP
 - [ ] 在 `readme.txt` 的 `Tested up to` 更新为当前 WordPress 版本
 - [ ] 记录发布日志到 `docs/PHASE_REPORT.md`

@@ -215,8 +215,9 @@ final class Purger {
 		$per_page = (int) get_option( 'posts_per_page', 10 );
 		$total    = (int) wp_count_posts( 'post' )->publish;
 		$pages    = $per_page > 0 ? (int) ceil( $total / $per_page ) : 1;
+		$last     = min( $pages, 10 );
 
-		for ( $page = 2; $page <= min( $pages, 10 ); $page++ ) {
+		for ( $page = 2; $page <= $last; $page++ ) {
 			$urls[] = get_pagenum_link( $page );
 		}
 
@@ -242,7 +243,7 @@ final class Purger {
 			$urls[] = get_post_type_archive_link( 'post' );
 
 			// 日期归档：按月归档是 WP 默认结构，逐月生成代价高，这里只清当年。
-			$year = gmdate( 'Y' );
+			$year   = gmdate( 'Y' );
 			$urls[] = home_url( '/' . $year . '/' );
 			$urls[] = get_year_link( (int) $year );
 		}
@@ -437,8 +438,9 @@ final class Purger {
 	private function pagination_urls( $base, $max = 5 ) {
 		$urls = array();
 		$base = trailingslashit( $base );
+		$last = max( 1, (int) $max );
 
-		for ( $page = 2; $page <= max( 1, (int) $max ); $page++ ) {
+		for ( $page = 2; $page <= $last; $page++ ) {
 			$urls[] = $base . 'page/' . $page . '/';
 		}
 

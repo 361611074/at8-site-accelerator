@@ -22,6 +22,7 @@ use AT8\SiteAccelerator\Cache\AdvancedCache;
 use AT8\SiteAccelerator\Cache\Backend\BackendFactory;
 use AT8\SiteAccelerator\Cache\CacheEngine;
 use AT8\SiteAccelerator\Cache\Config;
+use AT8\SiteAccelerator\Cache\RequestGuard;
 use AT8\SiteAccelerator\Compatibility\CachePluginDetector;
 use AT8\SiteAccelerator\Compatibility\ElementorCompat;
 use AT8\SiteAccelerator\Compatibility\WooCommerceCompat;
@@ -128,101 +129,158 @@ final class Plugin {
 	private function register_services() {
 		$c = $this->container;
 
-		$c->bind( Settings::class, function () {
-			return new Settings();
-		} );
+		$c->bind(
+			Settings::class,
+			function () {
+				return new Settings();
+			}
+		);
 
-		$c->bind( Logger::class, function ( $c ) {
-			return new Logger( $c->get( Settings::class ) );
-		} );
+		$c->bind(
+			Logger::class,
+			function ( $c ) {
+				return new Logger( $c->get( Settings::class ) );
+			}
+		);
 
-		$c->bind( BackendFactory::class, function ( $c ) {
-			return new BackendFactory( $c->get( Settings::class ), $c->get( Logger::class ) );
-		} );
+		$c->bind(
+			BackendFactory::class,
+			function ( $c ) {
+				return new BackendFactory( $c->get( Settings::class ), $c->get( Logger::class ) );
+			}
+		);
 
-		$c->bind( Config::class, function ( $c ) {
-			return new Config( $c->get( Settings::class ), $c->get( BackendFactory::class ) );
-		} );
+		$c->bind(
+			Config::class,
+			function ( $c ) {
+				return new Config( $c->get( Settings::class ), $c->get( BackendFactory::class ) );
+			}
+		);
 
-		$c->bind( AdvancedCache::class, function ( $c ) {
-			return new AdvancedCache( $c->get( Logger::class ) );
-		} );
+		$c->bind(
+			AdvancedCache::class,
+			function ( $c ) {
+				return new AdvancedCache( $c->get( Logger::class ) );
+			}
+		);
 
-		$c->bind( HtmlMinifier::class, function ( $c ) {
-			return new HtmlMinifier( $c->get( Settings::class ) );
-		} );
+		$c->bind(
+			HtmlMinifier::class,
+			function ( $c ) {
+				return new HtmlMinifier( $c->get( Settings::class ) );
+			}
+		);
 
-		$c->bind( CacheEngine::class, function ( $c ) {
-			return new CacheEngine(
-				$c->get( Settings::class ),
-				$c->get( BackendFactory::class ),
-				$c->get( Logger::class ),
-				$c->get( HtmlMinifier::class )
-			);
-		} );
+		$c->bind(
+			CacheEngine::class,
+			function ( $c ) {
+				return new CacheEngine(
+					$c->get( Settings::class ),
+					$c->get( BackendFactory::class ),
+					$c->get( Logger::class ),
+					$c->get( HtmlMinifier::class )
+				);
+			}
+		);
 
-		$c->bind( Purger::class, function ( $c ) {
-			return new Purger(
-				$c->get( Settings::class ),
-				$c->get( BackendFactory::class ),
-				$c->get( Logger::class )
-			);
-		} );
+		$c->bind(
+			Purger::class,
+			function ( $c ) {
+				return new Purger(
+					$c->get( Settings::class ),
+					$c->get( BackendFactory::class ),
+					$c->get( Logger::class )
+				);
+			}
+		);
 
-		$c->bind( PurgeActions::class, function ( $c ) {
-			return new PurgeActions(
-				$c->get( Settings::class ),
-				$c->get( Purger::class ),
-				$c->get( Logger::class )
-			);
-		} );
+		$c->bind(
+			PurgeActions::class,
+			function ( $c ) {
+				return new PurgeActions(
+					$c->get( Settings::class ),
+					$c->get( Purger::class ),
+					$c->get( Logger::class )
+				);
+			}
+		);
 
-		$c->bind( CachePluginDetector::class, function ( $c ) {
-			return new CachePluginDetector( $c->get( Settings::class ) );
-		} );
+		$c->bind(
+			CachePluginDetector::class,
+			function ( $c ) {
+				return new CachePluginDetector( $c->get( Settings::class ) );
+			}
+		);
 
-		$c->bind( BrowserCache::class, function ( $c ) {
-			return new BrowserCache( $c->get( Settings::class ) );
-		} );
+		$c->bind(
+			BrowserCache::class,
+			function ( $c ) {
+				return new BrowserCache( $c->get( Settings::class ) );
+			}
+		);
 
-		$c->bind( DatabaseCleanup::class, function ( $c ) {
-			return new DatabaseCleanup( $c->get( Settings::class ), $c->get( Logger::class ) );
-		} );
+		$c->bind(
+			DatabaseCleanup::class,
+			function ( $c ) {
+				return new DatabaseCleanup( $c->get( Settings::class ), $c->get( Logger::class ) );
+			}
+		);
 
-		$c->bind( Webp::class, function ( $c ) {
-			return new Webp( $c->get( Settings::class ), $c->get( Logger::class ) );
-		} );
+		$c->bind(
+			Webp::class,
+			function ( $c ) {
+				return new Webp( $c->get( Settings::class ), $c->get( Logger::class ) );
+			}
+		);
 
-		$c->bind( FrontendCleanup::class, function ( $c ) {
-			return new FrontendCleanup( $c->get( Settings::class ) );
-		} );
+		$c->bind(
+			FrontendCleanup::class,
+			function ( $c ) {
+				return new FrontendCleanup( $c->get( Settings::class ) );
+			}
+		);
 
-		$c->bind( LinkPreloader::class, function ( $c ) {
-			return new LinkPreloader( $c->get( Settings::class ) );
-		} );
+		$c->bind(
+			LinkPreloader::class,
+			function ( $c ) {
+				return new LinkPreloader( $c->get( Settings::class ) );
+			}
+		);
 
-		$c->bind( LazyLoad::class, function ( $c ) {
-			return new LazyLoad( $c->get( Settings::class ) );
-		} );
+		$c->bind(
+			LazyLoad::class,
+			function ( $c ) {
+				return new LazyLoad( $c->get( Settings::class ) );
+			}
+		);
 
-		$c->bind( ElementorCompat::class, function ( $c ) {
-			return new ElementorCompat( $c->get( Logger::class ) );
-		} );
+		$c->bind(
+			ElementorCompat::class,
+			function ( $c ) {
+				return new ElementorCompat( $c->get( Logger::class ) );
+			}
+		);
 
-		$c->bind( WooCommerceCompat::class, function ( $c ) {
-			return new WooCommerceCompat( $c->get( Purger::class ), $c->get( Logger::class ) );
-		} );
+		$c->bind(
+			WooCommerceCompat::class,
+			function ( $c ) {
+				return new WooCommerceCompat( $c->get( Purger::class ), $c->get( Logger::class ) );
+			}
+		);
 
-		$c->bind( Diagnostics::class, function ( $c ) {
-			return new Diagnostics(
-				$c->get( Settings::class ),
-				$c->get( BackendFactory::class ),
-				$c->get( AdvancedCache::class ),
-				$c->get( CachePluginDetector::class ),
-				$c->get( BrowserCache::class ),
-				$c->get( Webp::class )
-			);
-		} );
+		$c->bind(
+			Diagnostics::class,
+			function ( $c ) {
+				return new Diagnostics(
+					$c->get( Settings::class ),
+					$c->get( BackendFactory::class ),
+					$c->get( AdvancedCache::class ),
+					$c->get( CachePluginDetector::class ),
+					$c->get( BrowserCache::class ),
+					$c->get( Webp::class )
+				);
+			}
+		);
 	}
 
 	/**
@@ -311,7 +369,7 @@ final class Plugin {
 	 * @return void
 	 */
 	public function ensure_runtime_config() {
-		$host = isset( $_SERVER['HTTP_HOST'] ) ? (string) $_SERVER['HTTP_HOST'] : 'default';
+		$host = RequestGuard::server( 'HTTP_HOST', 'default' );
 		$host = strtolower( preg_replace( '/[^a-z0-9.\-:_]/i', '_', $host ) );
 		$file = AT8SA_CACHE_ROOT . '/config/' . ( '' === $host ? 'default' : $host ) . '.php';
 

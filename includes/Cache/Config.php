@@ -66,22 +66,22 @@ final class Config {
 		}
 
 		$config = array(
-			'enabled'        => (int) $settings->is_on( 'page_cache' ),
-			'safe_mode'      => (int) $settings->is_on( 'safe_mode' ),
-			'backend'        => $backend,
-			'salt'           => $this->factory->salt(),
-			'cache_root'     => AT8SA_CACHE_ROOT,
-			'cache_mobile'   => (int) $settings->is_on( 'cache_mobile' ),
+			'enabled'         => (int) $settings->is_on( 'page_cache' ),
+			'safe_mode'       => (int) $settings->is_on( 'safe_mode' ),
+			'backend'         => $backend,
+			'salt'            => $this->factory->salt(),
+			'cache_root'      => AT8SA_CACHE_ROOT,
+			'cache_mobile'    => (int) $settings->is_on( 'cache_mobile' ),
 			'cache_logged_in' => (int) $settings->is_on( 'cache_logged_in' ),
-			'cookie_hash'    => defined( 'COOKIEHASH' ) ? (string) COOKIEHASH : '',
-			'ttl'            => (int) $settings->get( 'cache_ttl', 3600 ),
-			'excluded_paths' => $this->excluded_paths(),
-			'bypass_cookies' => $this->bypass_cookies(),
-			'ignore_query'   => $this->ignore_query_rules(),
-			'charset'        => function_exists( 'get_bloginfo' ) ? (string) get_bloginfo( 'charset' ) : 'UTF-8',
-			'redis'          => 'redis' === $backend ? $this->redis_args() : null,
-			'debug'          => (int) $settings->is_on( 'preload_debug' ),
-			'version'        => AT8SA_VERSION,
+			'cookie_hash'     => defined( 'COOKIEHASH' ) ? (string) COOKIEHASH : '',
+			'ttl'             => (int) $settings->get( 'cache_ttl', 3600 ),
+			'excluded_paths'  => $this->excluded_paths(),
+			'bypass_cookies'  => $this->bypass_cookies(),
+			'ignore_query'    => $this->ignore_query_rules(),
+			'charset'         => function_exists( 'get_bloginfo' ) ? (string) get_bloginfo( 'charset' ) : 'UTF-8',
+			'redis'           => 'redis' === $backend ? $this->redis_args() : null,
+			'debug'           => (int) $settings->is_on( 'preload_debug' ),
+			'version'         => AT8SA_VERSION,
 		);
 
 		/**
@@ -105,7 +105,8 @@ final class Config {
 			return false;
 		}
 
-		$http_host = isset( $_SERVER['HTTP_HOST'] ) ? (string) $_SERVER['HTTP_HOST'] : '';
+		// 与 drop-in 复用同一个净化入口，保证两边算出的主机名一致。
+		$http_host = RequestGuard::server( 'HTTP_HOST' );
 
 		// WP-CLI / WP-Cron 这类非 HTTP 上下文里没有 HTTP_HOST，此时退化成从
 		// home_url() 取主机，保证写出的文件名与前台请求的主机名一致。

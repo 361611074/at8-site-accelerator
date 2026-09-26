@@ -167,10 +167,22 @@ final class RedisClient {
 					return false;
 				}
 
-				$body = '';
-				while ( strlen( $body ) < $length + 2 ) {
+				// RESP 的 bulk string 是 `$<长度>\r\n<内容>\r\n`，所以要连尾部的 CRLF 一起读完。
+				// 注意：循环条件里的 strlen() 必须每轮重算（$body 在增长），
+				// 所以这里用 while(true) + 显式 break，而不是把长度提到循环外——
+				// 提到外面会导致一次 read 不够时提前退出、拿到截断的响应。
+				$body   = '';
+				$needed = $length + 2;
+
+				while ( true ) {
+					$remaining = $needed - strlen( $body );
+
+					if ( $remaining <= 0 ) {
+						break;
+					}
+
 					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fread
-					$chunk = fread( $this->socket, ( $length + 2 ) - strlen( $body ) );
+					$chunk = fread( $this->socket, $remaining );
 
 					if ( '' === $chunk || false === $chunk ) {
 						break;

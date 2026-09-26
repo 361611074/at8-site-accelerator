@@ -392,7 +392,7 @@ final class DatabaseCleanup {
 		$count = 0;
 
 		foreach ( $this->tables() as $table ) {
-			// 表名来自 $wpdb->tables()，非用户输入，无注入面。
+			// 表名由 WordPress 的 tables() 接口给出，不来自用户输入，没有注入面。
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared
 			$wpdb->query( 'OPTIMIZE TABLE `' . esc_sql( $table ) . '`' );
 			++$count;

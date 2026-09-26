@@ -51,12 +51,12 @@ final class Activator {
 		$result['directories'] = self::create_directories();
 
 		// 2. 迁移。
-		$settings              = $container->get( Settings::class );
-		$result['migrated']    = $settings->migrate_from_legacy();
+		$settings           = $container->get( Settings::class );
+		$result['migrated'] = $settings->migrate_from_legacy();
 		$settings->flush_cache();
 
 		// 3. 运行时配置。
-		$config = $container->get( Config::class );
+		$config           = $container->get( Config::class );
 		$result['config'] = $config->write( $config->runtime() );
 
 		// 4. drop-in。
@@ -69,9 +69,9 @@ final class Activator {
 		}
 
 		// 5. WP_CACHE。
-		$wp_cache = $dropin->enable_wp_cache();
-		$result['wp_cache']       = $wp_cache['ok'];
-		$result['wp_cache_note']  = $wp_cache['message'];
+		$wp_cache                = $dropin->enable_wp_cache();
+		$result['wp_cache']      = $wp_cache['ok'];
+		$result['wp_cache_note'] = $wp_cache['message'];
 
 		// 清理 2.x 遗留缓存，避免新旧两套目录并存。
 		foreach ( array( WP_CONTENT_DIR . '/cache/site-accelerator' ) as $legacy ) {

@@ -152,11 +152,11 @@ final class SettingsPage {
 				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 				'nonce'   => wp_create_nonce( Ajax::NONCE ),
 				'i18n'    => array(
-					'working'   => __( '处理中…', 'at8-site-accelerator' ),
-					'failed'    => __( '请求失败，请重试。', 'at8-site-accelerator' ),
-					'confirmDb' => __( '数据库清理不可撤销。确认按当前勾选项执行？', 'at8-site-accelerator' ),
+					'working'    => __( '处理中…', 'at8-site-accelerator' ),
+					'failed'     => __( '请求失败，请重试。', 'at8-site-accelerator' ),
+					'confirmDb'  => __( '数据库清理不可撤销。确认按当前勾选项执行？', 'at8-site-accelerator' ),
 					'confirmAll' => __( '确定清空整站缓存？', 'at8-site-accelerator' ),
-					'copied'    => __( '已复制到剪贴板。', 'at8-site-accelerator' ),
+					'copied'     => __( '已复制到剪贴板。', 'at8-site-accelerator' ),
 				),
 			)
 		);
@@ -168,12 +168,12 @@ final class SettingsPage {
 	 * 为什么要清空：TTL、后端、排除规则一变，旧缓存条目的语义就不成立了，
 	 * 留着它们只会制造"设置改了但页面没变"的困惑。
 	 *
-	 * @param mixed $old 旧值。
-	 * @param mixed $new 新值。
+	 * @param mixed $old       旧值（本回调不需要，仅为对齐钩子签名）。
+	 * @param mixed $submitted 新值（同上）。
 	 * @return void
 	 */
-	public function on_settings_updated( $old, $new ) {
-		unset( $old, $new );
+	public function on_settings_updated( $old, $submitted ) {
+		unset( $old, $submitted );
 
 		/** @var Settings $settings */
 		$settings = $this->dep( 'settings' );
@@ -215,7 +215,15 @@ final class SettingsPage {
 		$settings = $this->dep( 'settings' );
 		$settings->persist( $settings->defaults() );
 
-		wp_safe_redirect( add_query_arg( array( 'page' => self::SLUG, 'at8sa_reset' => '1' ), admin_url( 'admin.php' ) ) );
+		wp_safe_redirect(
+			add_query_arg(
+				array(
+					'page'        => self::SLUG,
+					'at8sa_reset' => '1',
+				),
+				admin_url( 'admin.php' )
+			)
+		);
 		exit;
 	}
 
@@ -235,11 +243,11 @@ final class SettingsPage {
 		$backend = $factory->make();
 
 		$data = array(
-			'settings'      => $settings->all(),
-			'boolean_keys'  => $settings->boolean_keys(),
-			'backend'       => $backend,
-			'backend_name'  => $backend ? $backend->name() : __( '未生效', 'at8-site-accelerator' ),
-			'backend_stats' => $backend ? $backend->stats() : array(
+			'settings'        => $settings->all(),
+			'boolean_keys'    => $settings->boolean_keys(),
+			'backend'         => $backend,
+			'backend_name'    => $backend ? $backend->name() : __( '未生效', 'at8-site-accelerator' ),
+			'backend_stats'   => $backend ? $backend->stats() : array(
 				'count' => 0,
 				'bytes' => 0,
 			),
@@ -268,13 +276,13 @@ final class SettingsPage {
 	 */
 	private function tabs() {
 		return array(
-			'overview'  => __( '概览', 'at8-site-accelerator' ),
-			'cache'     => __( '页面缓存', 'at8-site-accelerator' ),
-			'purge'     => __( '失效与预加载', 'at8-site-accelerator' ),
-			'optimize'  => __( '优化', 'at8-site-accelerator' ),
-			'database'  => __( '数据库', 'at8-site-accelerator' ),
-			'compat'    => __( '兼容与诊断', 'at8-site-accelerator' ),
-			'tools'     => __( '工具', 'at8-site-accelerator' ),
+			'overview' => __( '概览', 'at8-site-accelerator' ),
+			'cache'    => __( '页面缓存', 'at8-site-accelerator' ),
+			'purge'    => __( '失效与预加载', 'at8-site-accelerator' ),
+			'optimize' => __( '优化', 'at8-site-accelerator' ),
+			'database' => __( '数据库', 'at8-site-accelerator' ),
+			'compat'   => __( '兼容与诊断', 'at8-site-accelerator' ),
+			'tools'    => __( '工具', 'at8-site-accelerator' ),
 		);
 	}
 
@@ -282,10 +290,10 @@ final class SettingsPage {
 	 * 渲染模板（模板内可直接使用 $data 中的键）。
 	 *
 	 * @param string $file 模板文件名。
-	 * @param array  $data 数据。
+	 * @param array  $data 数据；由下面 include 进来的模板文件消费，本方法体内看不到使用点。
 	 * @return void
 	 */
-	private function render_template( $file, array $data ) {
+	private function render_template( $file, array $data ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- $data 在 include 的模板里被读取（settings-page.php 第 20 行起），静态分析看不到。
 		$path = AT8SA_PATH . 'templates/' . $file;
 
 		if ( ! is_readable( $path ) ) {

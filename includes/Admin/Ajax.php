@@ -406,7 +406,10 @@ final class Ajax {
 	public function dispatch_import_settings() {
 		$this->guard();
 
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing
+		// 这是 JSON 导入入口：payload 本身就是一段 JSON 文本，任何"净化"都会破坏它。
+		// 安全性由后续三层保证：json_decode 严格解析 → 必须是数组且含 settings →
+		// Settings::sanitize() 逐键按类型重建（未知键直接丢弃）。
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		$raw = isset( $_POST['payload'] ) ? wp_unslash( $_POST['payload'] ) : '';
 
 		$data = json_decode( (string) $raw, true );

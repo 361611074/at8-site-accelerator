@@ -59,6 +59,11 @@ final class RedisBackend implements BackendInterface {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param string $host   主机。
+	 * @param string $uri    归一化 URI。
+	 * @param bool   $mobile 是否移动端变体。
+	 * @return string|false
 	 */
 	public function get( $host, $uri, $mobile = false ) {
 		if ( ! $this->client->connect() ) {
@@ -72,6 +77,13 @@ final class RedisBackend implements BackendInterface {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param string $host   主机。
+	 * @param string $uri    归一化 URI。
+	 * @param string $html   HTML 内容。
+	 * @param int    $ttl    存活秒数。
+	 * @param bool   $mobile 是否移动端变体。
+	 * @return bool
 	 */
 	public function set( $host, $uri, $html, $ttl, $mobile = false ) {
 		if ( ! $this->client->connect() ) {
@@ -90,6 +102,10 @@ final class RedisBackend implements BackendInterface {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param string $host 主机。
+	 * @param string $uri  归一化 URI。
+	 * @return int 删除条目数。
 	 */
 	public function delete_url( $host, $uri ) {
 		if ( ! $this->client->connect() ) {
@@ -112,6 +128,10 @@ final class RedisBackend implements BackendInterface {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param string $host 主机。
+	 * @param array  $uris 归一化 URI 列表。
+	 * @return int 删除条目数。
 	 */
 	public function delete_urls( $host, array $uris ) {
 		if ( ! $this->client->connect() ) {

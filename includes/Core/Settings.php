@@ -211,18 +211,18 @@ final class Settings {
 	/**
 	 * 读取单项设置。
 	 *
-	 * @param string $key     键名。
-	 * @param mixed  $default 缺省值；为 null 时回退到默认值表。
+	 * @param string $key      键名。
+	 * @param mixed  $fallback 键不存在时的回退值。
 	 * @return mixed
 	 */
-	public function get( $key, $default = null ) {
+	public function get( $key, $fallback = null ) {
 		$all = $this->all();
 
 		if ( array_key_exists( $key, $all ) ) {
 			return $all[ $key ];
 		}
 
-		return $default;
+		return $fallback;
 	}
 
 	/**
@@ -400,9 +400,11 @@ final class Settings {
 		return array_key_exists( $key, $all ) ? $all[ $key ] : $fallback;
 	}
 
-	/* ---------------------------------------------------------------------
+	/*
+	---------------------------------------------------------------------
 	 * 迁移
-	 * ------------------------------------------------------------------ */
+	 * ------------------------------------------------------------------
+	 */
 
 	/**
 	 * 2.x → 3.0 设置迁移。幂等，可在每次升级时安全调用。

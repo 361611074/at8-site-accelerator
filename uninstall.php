@@ -26,8 +26,10 @@ if ( is_array( $at8sa_settings ) && isset( $at8sa_settings['keep_data_on_uninsta
 // 无论是否保留数据，都要先停止运行：移除 drop-in 与定时任务。
 $at8sa_dropin = WP_CONTENT_DIR . '/advanced-cache.php';
 
-if ( is_file( $at8sa_dropin ) ) {
-	$at8sa_head = (string) @file_get_contents( $at8sa_dropin, false, null, 0, 2048 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents
+if ( is_readable( $at8sa_dropin ) ) {
+	// 只读文件头 2KB：drop-in 里的归属标记在开头，没必要把整个文件读进来。
+	// 用 is_readable() 先判断，就不用 @ 抑制错误了。
+	$at8sa_head = (string) file_get_contents( $at8sa_dropin, false, null, 0, 2048 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 
 	if ( false !== strpos( $at8sa_head, 'AT8 Site Accelerator' ) ) {
 		@unlink( $at8sa_dropin ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged

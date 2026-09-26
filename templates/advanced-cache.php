@@ -30,7 +30,7 @@ require_once $at8sa_path . 'includes/Cache/RequestGuard.php';
 // 它同时决定配置文件叫什么（这里）和缓存目录叫什么（DiskBackend 侧）。
 // 两边各写一份正则，早晚会因为改了其中一处而"配置读得到、缓存找不到"。
 $at8sa_host = \AT8\SiteAccelerator\Cache\CachePath::normalize_host(
-	isset( $_SERVER['HTTP_HOST'] ) ? (string) $_SERVER['HTTP_HOST'] : ''
+	\AT8\SiteAccelerator\Cache\RequestGuard::server( 'HTTP_HOST' )
 );
 
 $at8sa_config_dir  = WP_CONTENT_DIR . '/cache/at8-site-accelerator/config/';

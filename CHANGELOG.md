@@ -47,13 +47,67 @@
 * **结论**：这不是生产缺陷——`Config::runtime()` 与 `Purger` 都走同一个 `redis_probe()`，
   drop-in 读的 `backend` 与失效器清的后端天然一致。
 
+### 修复 4：`bump_cache_version()` 不失效已解析的后端实例
+
+* **现象**：清空缓存后统计「缓存条目数」返回 0，但 `redis-cli` 里明明有 71 个新键；
+  精准失效测试因此量不出任何被清除的条目。
+* **根因**：缓存盐 `site_token()|v<版本>` 是后端实例的**构造参数**，
+  而 `BackendFactory` 把已构造的实例缓存在 `$this->resolved` 里。
+  `bump_cache_version()` 只递增了 option，实例仍绑在旧盐上，
+  于是后续读写全部落在旧命名空间——旧键没删、新键没人读。
+* **修复**：版本变更后把 `$this->resolved` 置空，下次 `make()` 用新盐重建。
+
+### 修复 5：WP-CLI 下改配置对前台不生效
+
+* **现象**：`wp` 命令行把 `cache_backend` 切成 `redis`，脚本报成功，
+  但前台响应头依然是 `x-at8-cache-backend: disk`；配置文件里
+  `default.php` 是新的、`<host>.php` 是旧的。
+* **根因**：`Config::write()` 用 `$_SERVER['HTTP_HOST']` 决定写哪个主机文件。
+  WP-CLI / WP-Cron 这类非 HTTP 上下文没有 `HTTP_HOST`，只写出了 `default.php`；
+  而 drop-in 在前台优先读 `<host>.php` → CLI 里的改动永远到不了 drop-in。
+* **修复**：`HTTP_HOST` 为空时退化为从 `home_url()` 取主机名；
+  并顺带刷新目录里其它已存在的主机配置文件（跳过 `default.php` / `index.php`）。
+
+### 修复 6：`html_minify_inline` 是个死开关
+
+* **现象**：设置页有这个开关、默认值表里有这个键，但**代码里从未读取过它**。
+* **修复**：实现保守的内联 CSS 空白折叠（`<style>` 内连续空白折成一个空格，
+  引号内字符串原样跳过，内联 JS 一律不动——JS 的自动分号插入依赖换行）。
+* **诚实说明**：真机实测该项收益约 0%。区块主题的内联 `<style>` 由 WordPress
+  样式引擎生成，本身就是单空格排版，没有可折叠的空白。设置页文案已如实说明。
+
+### 代码规范：PHPCS 存量清零，CI 改为阻断
+
+* 引入 `wp-coding-standards/wpcs` 3.4.1 + `phpcsstandards/phpcsextra`，
+  在真机（PHP 8.3.33）上跑全量检查：**535 错误 / 88 警告 → 0**。
+* 修正 `phpcs.xml.dist` 两处失效配置：
+  * `<arg name="-p"/>` 在 phpcs 3.x 下会被拼成 `---p` 直接报错，应为 `<arg value="p"/>`；
+  * WPCS 3.x 把若干嗅探从 `file_system_operations_*` 改名为 `<函数名>_<函数名>`，
+    旧豁免名不再命中（`file_get_contents` / `unlink` / `rmdir` / `rename` 均受影响）。
+* 真实修复（非豁免）：
+  * **`RequestGuard` 新增统一的超全局净化入口 `server()`**，去掉 `NUL` 与控制字符
+    （`REQUEST_URI` 里的 `NUL` 会让下游字符串函数提前截断，从而绕过 `/wp-admin` 前缀判断），
+    并让 drop-in、`Config::write()`、`Plugin::ensure_runtime_config()` 三处共用，
+    保证同一个 `HTTP_HOST` 在三条路径上算出同一个主机名。
+  * `RedisClient` 的 RESP bulk string 读取改用 `while (true)` + 显式 break，
+    避免把 `strlen()` 提到循环外（那样会在一次 read 不足时提前退出、拿到截断响应）。
+  * `Purger` 两处 `for` 循环边界里的 `min()` / `max()` 提到循环外。
+  * 保留字参数名 `$class` / `$default` / `$new` 改名。
+  * `uninstall.php` 用 `is_readable()` 替代 `@file_get_contents` 抑制。
+* 带书面理由的豁免（不是"关掉检查"）：中文注释不适用 ASCII 句号/大写开头规则、
+  `/** @var Type $var */` 类型标注不算缺描述、缓存插件必须直接读写文件、
+  `rename()` 是原子写的必需品（`WP_Filesystem::move()` 会失去原子性）。
+* CI 的 `phpcs` 任务去掉 `continue-on-error: true`，从 3.0.1 起新增违规会让流水线变红。
+
 ### 验证
 
-* 冒烟测试：**208 通过 / 2 失败 → 223 通过 / 0 失败**（新增 15 条断言，其中含 salt 含括号的回归用例）。
+* 冒烟测试：**208 通过 / 2 失败 → 236 通过 / 0 失败**（新增 28 条断言，含 salt 含括号的回归用例）。
+* PHPCS：**535 错误 / 88 警告 → 0 错误 / 0 警告**（41 个文件全绿）。
 * 真机端到端：`wp-config.php` 第 98 行写入 `define( 'WP_CACHE', true );`、
-  `php -l` 无错、站点 HTTP 200；drop-in 命中链路
+  全量 `php -l` 无错、站点 HTTP 200；drop-in 命中链路
   `MISS-SAVED → HIT → HIT`；`purge_all()` 清 3 条并递增 `cache_version` 后回到 `MISS-SAVED`；
   `purge_url()` 精准失效同样回到 `MISS-SAVED`。
+* 性能基准：见 `docs/PERFORMANCE_BENCHMARK.md` 第七节（A/B/C 三组对照 + 可复现脚本）。
 
 ---
 

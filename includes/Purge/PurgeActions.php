@@ -164,7 +164,7 @@ final class PurgeActions {
 	/**
 	 * 统一的文章失效入口。
 	 *
-	 * @param WP_Post $post 文章。
+	 * @param \WP_Post $post 文章。
 	 * @return void
 	 */
 	private function maybe_purge_post( \WP_Post $post ) {

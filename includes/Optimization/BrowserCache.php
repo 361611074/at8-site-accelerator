@@ -269,6 +269,9 @@ final class BrowserCache {
 	 * @return string nginx|apache|litespeed|unknown
 	 */
 	public function server_type() {
+		// 这个值只用于 strpos 判断，返回值是下面四个固定常量之一，
+		// 不会被回显、不会拼进 SQL / 路径，所以无需额外净化。
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash
 		$software = isset( $_SERVER['SERVER_SOFTWARE'] ) ? strtolower( (string) $_SERVER['SERVER_SOFTWARE'] ) : '';
 
 		if ( false !== strpos( $software, 'nginx' ) ) {

@@ -173,7 +173,8 @@ final class LinkPreloader {
 	 *
 	 * @return void
 	 */
-	public function output_dns_prefetch() {		if ( ! $this->settings->is_on( 'dns_prefetch' ) ) {
+	public function output_dns_prefetch() {
+		if ( ! $this->settings->is_on( 'dns_prefetch' ) ) {
 			return;
 		}
 

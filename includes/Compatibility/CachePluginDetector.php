@@ -66,9 +66,9 @@ final class CachePluginDetector {
 				'file' => 'w3-total-cache/w3-total-cache.php',
 			),
 			'wp-super-cache'    => array(
-				'name' => 'WP Super Cache',
-				'type' => 'full-page-cache',
-				'file' => 'wp-super-cache/wp-cache.php',
+				'name'   => 'WP Super Cache',
+				'type'   => 'full-page-cache',
+				'file'   => 'wp-super-cache/wp-cache.php',
 				'dropin' => 'advanced-cache.php',
 			),
 			'autoptimize'       => array(
@@ -87,9 +87,9 @@ final class CachePluginDetector {
 				'file' => 'perfmatters/perfmatters.php',
 			),
 			'cache-enabler'     => array(
-				'name' => 'Cache Enabler',
-				'type' => 'full-page-cache',
-				'file' => 'cache-enabler/cache-enabler.php',
+				'name'   => 'Cache Enabler',
+				'type'   => 'full-page-cache',
+				'file'   => 'cache-enabler/cache-enabler.php',
 				'dropin' => 'advanced-cache.php',
 			),
 			'swift-performance' => array(

@@ -242,9 +242,9 @@ final class CachePath {
 	 * @return string 形如 `example.com/blog/post` 或 `example.com/blog/post/q-1a2b3c4d`。
 	 */
 	public static function relative_dir( $host, $uri, $mobile = false ) {
-		$host   = self::normalize_host( $host );
-		$split  = self::split_uri( $uri );
-		$rel    = $host . '/' . self::path_segments( $split['path'] );
+		$host  = self::normalize_host( $host );
+		$split = self::split_uri( $uri );
+		$rel   = $host . '/' . self::path_segments( $split['path'] );
 
 		if ( '' !== $split['query'] ) {
 			$rel .= '/q-' . substr( md5( $split['query'] ), 0, 10 );

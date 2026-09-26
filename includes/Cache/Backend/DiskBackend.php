@@ -55,6 +55,11 @@ final class DiskBackend implements BackendInterface {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param string $host   主机。
+	 * @param string $uri    归一化 URI。
+	 * @param bool   $mobile 是否移动端变体。
+	 * @return string|false
 	 */
 	public function get( $host, $uri, $mobile = false ) {
 		$file = CachePath::disk_file( $this->root, $host, $uri, $mobile );
@@ -81,6 +86,13 @@ final class DiskBackend implements BackendInterface {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param string $host   主机。
+	 * @param string $uri    归一化 URI。
+	 * @param string $html   HTML 内容。
+	 * @param int    $ttl    存活秒数（本后端用文件 mtime 承载，不单独存元数据）。
+	 * @param bool   $mobile 是否移动端变体。
+	 * @return bool
 	 */
 	public function set( $host, $uri, $html, $ttl, $mobile = false ) {
 		$file = CachePath::disk_file( $this->root, $host, $uri, $mobile );
@@ -110,6 +122,10 @@ final class DiskBackend implements BackendInterface {
 	 * 它的分页缓存（以及所有其它参数变体），属于误伤——缓存被多清一次只是性能损失，
 	 * 但会让"精准失效"退化成"范围失效"，失去本项目的核心卖点。
 	 * 需要连带清掉分页时，由 Purger::related_urls() 显式把分页 URL 一并列出。
+	 *
+	 * @param string $host 主机。
+	 * @param string $uri  归一化 URI。
+	 * @return int 删除条目数。
 	 */
 	public function delete_url( $host, $uri ) {
 		$dir = CachePath::disk_dir( $this->root, $host, $uri );
@@ -135,6 +151,10 @@ final class DiskBackend implements BackendInterface {
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * @param string $host 主机。
+	 * @param array  $uris 归一化 URI 列表。
+	 * @return int 删除条目数。
 	 */
 	public function delete_urls( $host, array $uris ) {
 		$deleted = 0;

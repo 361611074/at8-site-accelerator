@@ -68,6 +68,47 @@ final class RequestGuard {
 	}
 
 	/**
+	 * 读取并净化一个 `$_SERVER` 值。
+	 *
+	 * 为什么不能直接用 `sanitize_text_field()` / `wp_unslash()`：
+	 * 本类在 drop-in 阶段（`advanced-cache.php`）就会执行，那时 WordPress 还没加载，
+	 * 这些函数根本不存在。更关键的是——`RequestGuard::uri()` 同时被 drop-in 和
+	 * `CacheEngine` 调用，两边**必须算出完全一样的缓存键**，否则同一个 URL 会写出
+	 * 两份缓存、命中率永远上不去。所以这里刻意只用纯 PHP，不依赖 WP 函数。
+	 *
+	 * 净化内容：去掉 NUL 与控制字符。`REQUEST_URI` 里混入 NUL 会让下游字符串函数
+	 * 提前截断，从而绕过 `/wp-admin` 这类前缀匹配；顺带去掉首尾空白，
+	 * 防止 `GET ` 之类的变体绕过请求方法判断。
+	 *
+	 * 公开是为了让 `advanced-cache.php` 与 `Config::write()` 复用同一个净化入口——
+	 * 两边必须对同一个 `HTTP_HOST` 得出同一个主机名，否则会出现
+	 * "配置写进了 a.php、drop-in 却去读 b.php" 这种只在真机上才暴露的问题。
+	 *
+	 * @param string $key      超全局键名。
+	 * @param string $fallback 缺失或类型非法时的回退值。
+	 * @return string
+	 */
+	public static function server( $key, $fallback = '' ) {
+		// 本方法就是净化点，下面的 preg_replace 会去掉控制字符；
+		// drop-in 阶段 WordPress 尚未加载，wp_unslash() 并不存在，也无法用 sanitize_* 系列。
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash
+		if ( ! isset( $_SERVER[ $key ] ) || ! is_scalar( $_SERVER[ $key ] ) ) {
+			return $fallback;
+		}
+
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash
+		$value = preg_replace( '/[\x00-\x1F\x7F]/', '', (string) $_SERVER[ $key ] );
+
+		if ( ! is_string( $value ) ) {
+			return $fallback;
+		}
+
+		$value = trim( $value );
+
+		return '' === $value ? $fallback : $value;
+	}
+
+	/**
 	 * 当前请求是否必须绕过缓存。
 	 *
 	 * @param array $config 运行时配置（由 Config::runtime() 生成）。
@@ -86,13 +127,13 @@ final class RequestGuard {
 		}
 
 		// 只缓存幂等的 GET。
-		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( (string) $_SERVER['REQUEST_METHOD'] ) : 'GET';
+		$method = strtoupper( self::server( 'REQUEST_METHOD', 'GET' ) );
 
 		if ( 'GET' !== $method ) {
 			return true;
 		}
 
-		$uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '/';
+		$uri = self::server( 'REQUEST_URI', '/' );
 
 		// 路径黑名单。
 		$excluded = isset( $config['excluded_paths'] ) && is_array( $config['excluded_paths'] )
@@ -132,7 +173,7 @@ final class RequestGuard {
 	 * @return bool
 	 */
 	public static function is_mobile() {
-		$ua = isset( $_SERVER['HTTP_USER_AGENT'] ) ? strtolower( (string) $_SERVER['HTTP_USER_AGENT'] ) : '';
+		$ua = strtolower( self::server( 'HTTP_USER_AGENT' ) );
 
 		if ( '' === $ua ) {
 			return false;
@@ -170,10 +211,10 @@ final class RequestGuard {
 	 * @return string
 	 */
 	public static function host() {
-		$host = isset( $_SERVER['HTTP_HOST'] ) ? (string) $_SERVER['HTTP_HOST'] : '';
+		$host = self::server( 'HTTP_HOST' );
 
 		if ( '' === $host ) {
-			$host = isset( $_SERVER['SERVER_NAME'] ) ? (string) $_SERVER['SERVER_NAME'] : 'localhost';
+			$host = self::server( 'SERVER_NAME', 'localhost' );
 		}
 
 		return CachePath::normalize_host( $host );
@@ -186,8 +227,8 @@ final class RequestGuard {
 	 * @return string
 	 */
 	public static function uri( array $config ) {
-		$raw    = isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '/';
-		$extra  = isset( $config['ignore_query'] ) && is_array( $config['ignore_query'] ) ? $config['ignore_query'] : array();
+		$raw   = self::server( 'REQUEST_URI', '/' );
+		$extra = isset( $config['ignore_query'] ) && is_array( $config['ignore_query'] ) ? $config['ignore_query'] : array();
 
 		return CachePath::normalize_uri( $raw, $extra );
 	}

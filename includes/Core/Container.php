@@ -78,7 +78,7 @@ final class Container {
 			return null;
 		}
 
-		$factory            = $this->factories[ $id ];
+		$factory               = $this->factories[ $id ];
 		$this->resolved[ $id ] = call_user_func( $factory, $this );
 
 		return $this->resolved[ $id ];

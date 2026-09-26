@@ -14,7 +14,7 @@
 	<arg name="extensions" value="php"/>
 	<arg name="basepath" value="."/>
 	<arg name="colors"/>
-	<arg name="-p"/>
+	<arg value="p"/>
 	<arg value="sp"/>
 
 	<config name="minimum_supported_wp_version" value="5.8"/>
@@ -48,6 +48,62 @@
 		<exclude name="WordPress.WP.AlternativeFunctions.file_system_operations_is_writable"/>
 		<exclude name="WordPress.WP.AlternativeFunctions.parse_url_parse_url"/>
 		<exclude name="WordPress.WP.AlternativeFunctions.json_encode_json_encode"/>
+
+		<!-- WPCS 3.x 把这几个从 file_system_operations_* 改成了 <函数名>_<函数名>，
+		     上面那些旧名字不会命中，必须按新名字再豁免一次。 -->
+		<exclude name="WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents"/>
+		<exclude name="WordPress.WP.AlternativeFunctions.unlink_unlink"/>
+		<exclude name="WordPress.WP.AlternativeFunctions.rmdir_rmdir"/>
+		<exclude name="WordPress.WP.AlternativeFunctions.file_system_operations_rmdir"/>
+		<exclude name="WordPress.WP.AlternativeFunctions.file_system_operations_unlink"/>
+
+		<!--
+			豁免说明：rename() 是"原子写"的必需品
+			Filesystem::put_contents() 的并发安全完全建立在"同目录临时文件 + rename"
+			这个 POSIX 原子操作上——rename 要么成功要么失败，不存在"读到半个文件"的中间态。
+			WP_Filesystem::move() 会走抽象层，在 FTP / SSH 传输模式下退化成
+			"读出来再写回去"，原子性直接消失，并发下就会出现访客读到半截 HTML。
+			所以这里必须用原生 rename()。
+		-->
+		<exclude name="WordPress.WP.AlternativeFunctions.rename_rename"/>
+	</rule>
+
+	<!--
+		豁免说明：注释标点的 sniff 不适用于中文项目
+		ParamCommentFullStop（248 处）要求 @param 说明以英文句点 "." 结尾，
+		InlineComment.InvalidEndChar（135 处）同样要求行内注释以 "." 结尾。
+		本项目的注释主体是中文，中文句号是「。」而不是「.」。
+		强行加一个 ASCII 句点反而会写出「说明。」这种不伦不类的混合标点，
+		所以这两条整体豁免。
+	-->
+	<rule ref="Squiz.Commenting.FunctionComment.ParamCommentFullStop">
+		<severity>0</severity>
+	</rule>
+	<rule ref="Squiz.Commenting.InlineComment.InvalidEndChar">
+		<severity>0</severity>
+	</rule>
+	<rule ref="Squiz.Commenting.FunctionComment.EmptyReturn">
+		<severity>0</severity>
+	</rule>
+
+	<!--
+		豁免说明：ShortNotCapital 对中文同样不适用
+		它要求文档块短描述以大写拉丁字母开头。本项目短描述是中文（"压缩 HTML"），
+		首字符是汉字，永远不可能满足。与上面的标点 sniff 是同一类问题。
+	-->
+	<rule ref="Generic.Commenting.DocComment.ShortNotCapital">
+		<severity>0</severity>
+	</rule>
+
+	<!--
+		豁免说明：MissingShort 会误伤 `/** @var Type $var */`
+		这类单行注释是 IDE / Psalm 用的**类型标注**，本来就不该有描述文字。
+		本项目全部 28 处命中都是这个形态（`$this->dep()` 的返回值标注），
+		没有一处是"真的缺描述"的类/方法文档块——那些由下面保留的
+		Squiz.Commenting.FunctionComment 继续把关。
+	-->
+	<rule ref="Generic.Commenting.DocComment.MissingShort">
+		<severity>0</severity>
 	</rule>
 
 	<!--

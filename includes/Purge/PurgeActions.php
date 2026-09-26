@@ -105,9 +105,9 @@ final class PurgeActions {
 	/**
 	 * save_post / publish_post 回调。
 	 *
-	 * @param int     $post_id 文章 ID。
-	 * @param WP_Post $post    文章对象。
-	 * @param bool    $update  是否更新。
+	 * @param int           $post_id 文章 ID。
+	 * @param \WP_Post|null $post    文章对象。
+	 * @param bool          $update  是否更新。
 	 * @return void
 	 */
 	public function on_save_post( $post_id, $post = null, $update = false ) {
@@ -127,9 +127,9 @@ final class PurgeActions {
 	/**
 	 * transition_post_status 回调。
 	 *
-	 * @param string  $new_status 新状态。
-	 * @param string  $old_status 旧状态。
-	 * @param WP_Post $post       文章。
+	 * @param string        $new_status 新状态。
+	 * @param string        $old_status 旧状态。
+	 * @param \WP_Post|null $post       文章。
 	 * @return void
 	 */
 	public function on_transition( $new_status, $old_status, $post = null ) {
@@ -192,8 +192,8 @@ final class PurgeActions {
 		/**
 		 * 过滤是否对该文章执行失效。
 		 *
-		 * @param bool    $should 是否失效。
-		 * @param WP_Post $post   文章。
+		 * @param bool     $should 是否失效。
+		 * @param \WP_Post $post   文章。
 		 */
 		if ( ! apply_filters( 'at8sa_should_purge_post', true, $post ) ) {
 			return;

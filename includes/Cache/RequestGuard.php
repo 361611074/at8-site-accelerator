@@ -50,19 +50,40 @@ final class RequestGuard {
 	}
 
 	/**
-	 * 内置必须绕过的 Cookie 前缀（会话 / 购物车 / 密码保护）。
+	 * 内置必须绕过的 Cookie 规则（密码保护 / 评论者 / 购物车会话）。
+	 *
+	 * **规则语法**（见 `cookie_matches()`）：以 `*` 结尾 = 前缀匹配；
+	 * 否则 = Cookie 名必须完全相等。
+	 *
+	 * 这段代码修过两个连在一起的缺陷，改之前请先读完：
+	 *
+	 * **缺陷 1（内容泄漏）**：`wp-postpass_`、`comment_author_`、
+	 * `wp_woocommerce_session_` 曾经写成不带 `*` 的裸前缀，于是退化成
+	 * "精确等于 `wp-postpass_`"。而真实 Cookie 名是 `wp-postpass_<COOKIEHASH>`，
+	 * 永远匹配不上 → 密码保护页面会被缓存并端给**没输密码**的访客。
+	 *
+	 * **缺陷 2（开关失效）**：`wordpress_logged_in_*` / `wordpress_sec_*`
+	 * 曾经也列在本表里。但登录态本来就由 `has_auth_cookie()` 负责，而它受
+	 * `cache_logged_in` 开关控制。两张表同时管同一件事的结果是：
+	 * 一旦把前缀补成能真正匹配，`cache_logged_in=1`（"缓存登录用户"）
+	 * 就永远被本表拦下，开关变成死开关。
+	 *
+	 * 所以现在的职责划分是**单一归属**：
+	 * - 登录态 Cookie → 只由 `has_auth_cookie()` 管，受 `cache_logged_in` 控制；
+	 * - 其它会话 Cookie → 只由本表管，无条件绕过（它们代表"这份内容因人而异"，
+	 *   不是"是不是登录用户"的问题，不给开关）。
 	 *
 	 * @return array
 	 */
 	public static function default_bypass_cookies() {
 		return array(
-			'wordpress_logged_in_',
-			'wordpress_sec_',
-			'wp-postpass_',
-			'comment_author_',
+			// 前缀类：名字后面还会拼 <COOKIEHASH>，必须带 `*`，否则等于没写。
+			'wp-postpass_*',
+			'comment_author_*',
+			'wp_woocommerce_session_*',
+			// 精确名类：Cookie 名就是这几个字，加 `*` 反而会误伤同前缀的其它 Cookie。
 			'woocommerce_items_in_cart',
 			'woocommerce_cart_hash',
-			'wp_woocommerce_session_',
 			'edd_items_in_cart',
 		);
 	}

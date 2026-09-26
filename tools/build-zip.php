@@ -171,8 +171,13 @@ $at8sa_forbidden = array(
 	'/.github/',
 	'/dist/',
 	'/.gitignore',
+	'/.gitattributes',
 	'/phpcs.xml',
+	'/phpstan.neon',
+	'/phpunit.xml',
 	'/composer.json',
+	'/composer.lock',
+	'/vendor/',
 	'/package.json',
 	'/.DS_Store',
 );

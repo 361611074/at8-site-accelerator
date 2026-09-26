@@ -66,7 +66,8 @@ Elementor 编辑器保存请求（`is_editor_save_request()`）与
 
 同时 `RequestGuard` 的路径黑名单包含 `/cart`、`/checkout`、`/my-account`、`/add-to-cart`，
 Cookie 黑名单包含 `woocommerce_items_in_cart`、`woocommerce_cart_hash`、
-`wp_woocommerce_session_`——**drop-in 阶段就能拦住**，不必等到 WordPress 加载完。
+`wp_woocommerce_session_*`（`*` 为前缀匹配，真实 Cookie 名带 `<COOKIEHASH>` 后缀）
+——**drop-in 阶段就能拦住**，不必等到 WordPress 加载完。
 
 ### 精准失效
 

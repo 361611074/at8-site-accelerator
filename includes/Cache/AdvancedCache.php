@@ -388,10 +388,6 @@ final class AdvancedCache {
 			return true;
 		}
 
-		if ( ! is_array( $tokens ) ) {
-			return true;
-		}
-
 		$depth = 0;
 
 		foreach ( $tokens as $token ) {

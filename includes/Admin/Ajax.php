@@ -96,8 +96,17 @@ final class Ajax {
 	/**
 	 * 取依赖。
 	 *
+	 * 依赖键由 `Plugin::boot_admin()` 一次性全量注册，所以正常路径下永远命中；
+	 * 返回 null 只是给单元测试与将来按需注册留的退路。
+	 *
+	 * 因此下面各处理器分两类写法：
+	 * - 带 `! $x` 判空的（清空缓存 / 库清理 / drop-in 装卸）：`@var` 标注为 `X|null`，
+	 *   判空是真检查，不是摆设；
+	 * - 不判空的（启用 WP_CACHE / .htaccess / 日志等）：`@var` 标注为非空，
+	 *   依赖上面那条装配不变式。
+	 *
 	 * @param string $key 键。
-	 * @return mixed
+	 * @return mixed 依赖实例；未注册时 null。
 	 */
 	private function dep( $key ) {
 		return isset( $this->deps[ $key ] ) ? $this->deps[ $key ] : null;
@@ -111,7 +120,7 @@ final class Ajax {
 	public function dispatch_purge_all() {
 		$this->guard();
 
-		/** @var Purger $purger */
+		/** @var Purger|null $purger */
 		$purger = $this->dep( 'purger' );
 
 		if ( ! $purger ) {
@@ -147,7 +156,7 @@ final class Ajax {
 			wp_send_json_error( array( 'message' => __( '请提供要清理的 URL。', 'at8-site-accelerator' ) ) );
 		}
 
-		/** @var Purger $purger */
+		/** @var Purger|null $purger */
 		$purger = $this->dep( 'purger' );
 		$count  = $purger ? $purger->purge_url( $url ) : 0;
 
@@ -169,7 +178,7 @@ final class Ajax {
 	public function dispatch_db_preview() {
 		$this->guard();
 
-		/** @var DatabaseCleanup $cleanup */
+		/** @var DatabaseCleanup|null $cleanup */
 		$cleanup = $this->dep( 'db_cleanup' );
 
 		if ( ! $cleanup ) {
@@ -187,7 +196,7 @@ final class Ajax {
 	public function dispatch_db_run() {
 		$this->guard();
 
-		/** @var DatabaseCleanup $cleanup */
+		/** @var DatabaseCleanup|null $cleanup */
 		$cleanup = $this->dep( 'db_cleanup' );
 
 		if ( ! $cleanup ) {
@@ -228,7 +237,7 @@ final class Ajax {
 	public function dispatch_install_dropin() {
 		$this->guard();
 
-		/** @var AdvancedCache $dropin */
+		/** @var AdvancedCache|null $dropin */
 		$dropin = $this->dep( 'advanced_cache' );
 
 		if ( ! $dropin || ! $dropin->install() ) {
@@ -254,7 +263,7 @@ final class Ajax {
 	public function dispatch_remove_dropin() {
 		$this->guard();
 
-		/** @var AdvancedCache $dropin */
+		/** @var AdvancedCache|null $dropin */
 		$dropin = $this->dep( 'advanced_cache' );
 
 		if ( ! $dropin || ! $dropin->uninstall() ) {

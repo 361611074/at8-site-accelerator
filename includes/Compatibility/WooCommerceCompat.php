@@ -116,7 +116,17 @@ final class WooCommerceCompat {
 			return false;
 		}
 
-		if ( is_cart() || is_checkout() || is_account_page() ) {
+		if ( is_cart() ) {
+			return true;
+		}
+
+		// 逐个函数判存在，而不是"赌 WooCommerce 一定把三个函数一起定义"。
+		// 子插件 / 主题把某个函数 undeclare 掉时，单判 is_cart() 会直接白屏。
+		if ( function_exists( 'is_checkout' ) && is_checkout() ) {
+			return true;
+		}
+
+		if ( function_exists( 'is_account_page' ) && is_account_page() ) {
 			return true;
 		}
 
@@ -201,5 +211,9 @@ final class WooCommerceCompat {
 		}
 
 		$this->purger->purge_urls( $urls );
+
+		// 商店页/分类页的失效范围直接决定"库存改了但前台还是售罄"这类投诉的
+		// 排查难度，记一条便于对账。
+		$this->logger->debug( 'WooCommerce 商店页失效', array( 'urls' => count( $urls ) ) );
 	}
 }

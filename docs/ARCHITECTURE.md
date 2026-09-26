@@ -12,6 +12,7 @@ at8-site-accelerator/
 │   ├── Core/                     启动与设置
 │   │   ├── Container.php             极简 DI 容器（惰性单例）
 │   │   ├── Settings.php              设置中枢：默认值 / 清洗 / 迁移
+│   │   ├── SettingsSync.php          设置变更 → 运行时同步（前后台 + CLI + Cron 通用）
 │   │   ├── Plugin.php                主类：登记服务、分阶段 boot
 │   │   ├── Activator.php             激活：建目录 → 迁移 → 写配置 → 装 drop-in
 │   │   └── Deactivator.php           停用：只摘 drop-in + 取消定时任务
@@ -175,8 +176,40 @@ site_token() = COOKIEHASH（未定义时回退 md5(home_url())）
 ```
 
 - `site_token` 解决**同服务器多站点隔离**；
-- `cache_version` 解决**"删不干净"**：整站失效时先递增版本号，旧键立即不可达，
-  即使后端有残留也不会被读到。这比单纯 flush 更硬。
+- `cache_version` 解决**"删不干净"**：整站失效时先 flush 当前盐、**再**递增版本号，
+  旧键立即不可达，即使 flush 半途失败也不会被读到。这比单纯 flush 更硬。
+
+> **顺序不能反**（3.0.1 修正）：后端实例的盐是**构造参数**，
+> 先 `bump_cache_version()` 会让随后的 `make()` 返回新盐实例，
+> `flush()` 便打在新命名空间上什么也删不到——旧盐的索引集合
+> （`SADD` 建的、无 TTL）会被永久孤立在 Redis 里，且 `purge_all()` 的条目数恒为 0。
+> 反过来则两全：正常路径删干净，异常路径靠换盐兜底。
+
+## 三点五、设置变更如何到达运行时
+
+`Core\SettingsSync` 是**唯一**的"设置变更 → 运行时同步"入口，挂在
+`Plugin::boot_shared()` 上（前后台 + WP-CLI + WP-Cron 都会执行）：
+
+```
+update_option( 'at8sa_settings' )            ← 后台表单 / AJAX 导入 / REST / WP-CLI / 其它插件
+        │
+        ▼  update_option_{$option} 动作
+Core\SettingsSync::sync()
+        ├─ Settings::flush_cache()           ① 先丢设置缓存（否则读到旧值）
+        ├─ BackendFactory::reset_probe()     ② 再丢 Redis 探测结果
+        ├─ Config::write( Config::runtime() )③ 然后才生成配置
+        ├─ AdvancedCache::install()          ④ 按需重装 drop-in
+        └─ Purger::purge_all()               ⑤ 清掉语义已变的旧条目
+```
+
+**为什么必须放这里**（3.0.1 修正）：这套逻辑原先挂在 `Admin\SettingsPage::boot()` 上，
+而那只在 `is_admin()` 为真时执行——于是 WP-CLI / WP-Cron / 其它插件改设置
+**完全不生效**（真机受控实验：连改 6 次 `cache_backend`，运行时配置始终是旧值）。
+
+**兜底**：钩子只能覆盖走 `update_option()` 的路径。`Plugin::ensure_runtime_config()`
+挂在 `init` 上，用 `Config::needs_refresh()` 比对设置指纹，
+能发现直接改库（`$wpdb->update`、`wp option import`、迁移脚本）造成的漂移。
+指纹取自 autoload 选项，读它不产生额外查询；而命中的请求在 drop-in 阶段就 `exit` 了，压根到不了这里。
 
 ## 四、失效策略
 
@@ -237,17 +270,22 @@ $container->has( $id );
 
 | 层 | 文件 | 行数 |
 | --- | ---: | ---: |
-| Core | 5 | 1,043 |
-| Cache | 5 | 1,550 |
-| Cache/Backend | 4 | 811 |
-| Purge | 2 | 800 |
-| Optimization | 7 | 1,812 |
-| Compatibility | 3 | 624 |
+| Core | 6 | 1,280 |
+| Cache | 5 | 1,816 |
+| Cache/Backend | 4 | 893 |
+| Purge | 2 | 817 |
+| Optimization | 7 | 1,906 |
+| Compatibility | 3 | 650 |
 | Diagnostics | 1 | 451 |
-| Admin | 4 | 1,055 |
+| Admin | 4 | 1,035 |
 | REST | 3 | 403 |
-| Support | 3 | 807 |
-| 入口 + 卸载 + 模板 | 4 | 904 |
-| **插件本体合计** | **41** | **≈10,388** |
-| 测试 | 3 | 2,237 |
-| 工具 | 2 | 350 |
+| Support | 3 | 819 |
+| 入口 + 卸载 + 模板 | 4 | 1,047 |
+| **插件本体合计** | **42** | **11,117** |
+| 测试（冒烟 + PHPUnit + PHPStan 桩） | 19 | 6,552 |
+| 工具（打包 / 翻译模板） | 2 | 403 |
+| 前端资源（CSS + JS） | 3 | 1,227 |
+
+> 插件本体 42 个 PHP 文件，与 PHPCS 的扫描文件数一致。
+> 测试代码量约为本体的一半——这是刻意的投入，3.0.1 期间
+> 每一条真机缺陷都是先补上能复现它的测试、再修代码。

@@ -198,9 +198,15 @@ final class CachePluginDetector {
 	/**
 	 * 是否应当建议用户进入安全模式。
 	 *
+	 * 已经开着安全模式就不再建议——重复提示只会让用户怀疑开关没生效。
+	 *
 	 * @return bool
 	 */
 	public function suggests_safe_mode() {
+		if ( $this->settings->is_on( 'safe_mode' ) ) {
+			return false;
+		}
+
 		return $this->has_high_risk_conflict();
 	}
 

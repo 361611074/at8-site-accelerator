@@ -169,6 +169,8 @@ final class Webp {
 		$image = $this->load( $path, $extension );
 
 		if ( ! $image ) {
+			$this->logger->debug( 'WebP 转换失败：原图无法解码', array( 'file' => $path ) );
+
 			return false;
 		}
 
@@ -177,12 +179,16 @@ final class Webp {
 		imagedestroy( $image );
 
 		if ( ! $ok ) {
+			$this->logger->debug( 'WebP 编码失败', array( 'file' => $path ) );
+
 			return false;
 		}
 
 		// 体积反而变大：删掉副本，避免"优化"变成负优化。
 		if ( filesize( $target ) >= filesize( $path ) ) {
 			@unlink( $target ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+
+			$this->logger->debug( 'WebP 体积未变小，已放弃副本', array( 'file' => $path ) );
 
 			return false;
 		}

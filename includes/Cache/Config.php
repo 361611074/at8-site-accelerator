@@ -82,6 +82,8 @@ final class Config {
 			'redis'           => 'redis' === $backend ? $this->redis_args() : null,
 			'debug'           => (int) $settings->is_on( 'preload_debug' ),
 			'version'         => AT8SA_VERSION,
+			// 设置指纹：供 needs_refresh() 判断落盘配置是否已过期。
+			'settings_hash'   => $this->settings_hash(),
 		);
 
 		/**
@@ -105,23 +107,7 @@ final class Config {
 			return false;
 		}
 
-		// 与 drop-in 复用同一个净化入口，保证两边算出的主机名一致。
-		$http_host = RequestGuard::server( 'HTTP_HOST' );
-
-		// WP-CLI / WP-Cron 这类非 HTTP 上下文里没有 HTTP_HOST，此时退化成从
-		// home_url() 取主机，保证写出的文件名与前台请求的主机名一致。
-		// 否则会写成 default.php，而 drop-in 在前台（有 HTTP_HOST）优先读
-		// <host>.php —— 于是 CLI 里的配置改动永远到不了 drop-in。
-		// 真机实测：wp-cli 把后端切成 redis，脚本报成功，前台响应头却仍是 disk。
-		if ( '' === $http_host && function_exists( 'home_url' ) ) {
-			$parsed = wp_parse_url( home_url() );
-
-			if ( ! empty( $parsed['host'] ) ) {
-				$http_host = (string) $parsed['host'];
-			}
-		}
-
-		$host = CachePath::normalize_host( $http_host );
+		$host = $this->config_host();
 		$body = "<?php\n"
 			. "// AT8 Site Accelerator 运行时配置 —— 由插件自动生成，请勿手工编辑。\n"
 			. "// 修改设置后插件会自动重写本文件。\n"
@@ -151,6 +137,81 @@ final class Config {
 		}
 
 		return $ok;
+	}
+
+	/**
+	 * 落盘的运行时配置是否已过期（需要重写）。
+	 *
+	 * 为什么除了 `update_option_{$option}` 钩子之外还要这一层：
+	 * 钩子只能覆盖"走 `update_option()`"的路径。现实里还存在绕过它的写入方式——
+	 * 直接 `$wpdb->update()`、`wp option import`、站点迁移脚本、DB 层面的手工修改。
+	 * 这些情况下钩子不触发，配置就永远停在旧值上。
+	 *
+	 * 这里用设置指纹做兜底：每个请求（插件已加载时）比一次哈希，
+	 * 一旦对不上就重写。成本极低——`at8sa_settings` 是 autoload 选项，
+	 * 读它不产生额外查询；命中的请求更是在 drop-in 阶段就 `exit` 了，压根到不了这里。
+	 *
+	 * @return bool
+	 */
+	public function needs_refresh() {
+		$file = AT8SA_CACHE_ROOT . '/config/' . $this->config_host() . '.php';
+
+		if ( ! is_readable( $file ) ) {
+			return true;
+		}
+
+		$stored = include $file;
+
+		if ( ! is_array( $stored ) || ! isset( $stored['settings_hash'] ) ) {
+			// 旧版本写下的配置没有指纹字段，一律视为过期，借机补上。
+			return true;
+		}
+
+		return (string) $stored['settings_hash'] !== $this->settings_hash();
+	}
+
+	/**
+	 * 运行时配置对应的主机名（决定写哪个配置文件）。
+	 *
+	 * `write()` 与 `needs_refresh()` 必须用同一套归一化，否则会"写 A 读 B"。
+	 *
+	 * @return string
+	 */
+	private function config_host() {
+		// 与 drop-in 复用同一个净化入口，保证两边算出的主机名一致。
+		$http_host = RequestGuard::server( 'HTTP_HOST' );
+
+		// WP-CLI / WP-Cron 这类非 HTTP 上下文里没有 HTTP_HOST，此时退化成从
+		// home_url() 取主机，保证写出的文件名与前台请求的主机名一致。
+		// 否则会写成 default.php，而 drop-in 在前台（有 HTTP_HOST）优先读
+		// <host>.php —— 于是 CLI 里的配置改动永远到不了 drop-in。
+		// 真机实测：wp-cli 把后端切成 redis，脚本报成功，前台响应头却仍是 disk。
+		if ( '' === $http_host && function_exists( 'home_url' ) ) {
+			$parsed = wp_parse_url( home_url() );
+
+			if ( ! empty( $parsed['host'] ) ) {
+				$http_host = (string) $parsed['host'];
+			}
+		}
+
+		return CachePath::normalize_host( $http_host );
+	}
+
+	/**
+	 * 设置指纹。
+	 *
+	 * 只取"会影响运行时行为"的那部分设置，避免改了无关开关也触发重写。
+	 * `all()` 读的是 autoload 选项且带实例级缓存，因此调用是廉价的。
+	 *
+	 * @return string
+	 */
+	private function settings_hash() {
+		$settings = $this->settings->all();
+
+		// 排序保证同一组设置永远得到同一个指纹（数组顺序不应影响判定）。
+		ksort( $settings );
+
+		return md5( (string) wp_json_encode( $settings ) );
 	}
 
 	/**

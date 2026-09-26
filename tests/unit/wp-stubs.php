@@ -37,6 +37,15 @@ define( 'AT8SA_VERSION', '3.0.1' );
 define( 'AT8SA_CACHE_ROOT', WP_CONTENT_DIR . '/cache/at8-site-accelerator' );
 define( 'AT8SA_CACHE_ROOT_URL', WP_CONTENT_URL . '/cache/at8-site-accelerator' );
 
+/*
+ * 测试专用的 Redis 逻辑库。
+ *
+ * 插件默认用 2 号库。测试若不覆盖这个常量，在**开发者本机**（Redis 上可能正跑着
+ * 真实站点）执行冒烟/单元测试就会把线上缓存清掉——一次 `purge_all()` 就够。
+ * 15 号库是测试保留库，并在每个用例前后清扫，绝不做 FLUSHDB。
+ */
+define( 'AT8SA_REDIS_DB', 15 );
+
 if ( ! is_dir( WP_CONTENT_DIR . '/cache' ) ) {
 	mkdir( WP_CONTENT_DIR . '/cache', 0777, true );
 }
@@ -61,7 +70,22 @@ function get_option( $name, $default = false ) {
 
 function update_option( $name, $value, $autoload = null ) {
 	unset( $autoload );
+
+	$exists = array_key_exists( $name, $GLOBALS['at8sa_test_options'] );
+	$old    = $exists ? $GLOBALS['at8sa_test_options'][ $name ] : false;
+
+	// 与 WP 一致：值没变就既不写库、也不触发钩子。
+	// 这个细节必须复刻——依赖 update_option 副作用的代码（如 SettingsSync）
+	// 若在桩里"永远触发"，就会得到比真实环境更乐观的结论。
+	if ( $exists && $old === $value ) {
+		return false;
+	}
+
 	$GLOBALS['at8sa_test_options'][ $name ] = $value;
+
+	do_action( "update_option_{$name}", $old, $value );
+	do_action( 'updated_option', $name, $old, $value );
+
 	return true;
 }
 
@@ -127,8 +151,43 @@ function remove_filter( $hook, $callback, $priority = 10 ) {
 	return true;
 }
 
+/**
+ * 触发动作钩子。
+ *
+ * 必须真实回调，不能空实现——否则"钩子挂没挂上"在测试里永远为真，
+ * 依赖钩子的缺陷（真机上：设置变更后运行时配置没重建）就完全测不出来。
+ * 实测教训：这个缺陷正是因为旧桩把 do_action() 写成 no-op 才漏过去的。
+ *
+ * @return null
+ */
 function do_action( $hook ) {
-	unset( $hook );
+	$args = func_get_args();
+	array_shift( $args );
+
+	if ( empty( $GLOBALS['at8sa_test_actions'][ $hook ] ) ) {
+		return null;
+	}
+
+	$entries = $GLOBALS['at8sa_test_actions'][ $hook ];
+	$order   = array();
+
+	foreach ( $entries as $index => $entry ) {
+		$order[ $index ] = (int) $entry[1];
+	}
+
+	asort( $order );
+
+	foreach ( array_keys( $order ) as $index ) {
+		$entry = $entries[ $index ];
+
+		if ( ! is_callable( $entry[0] ) ) {
+			continue;
+		}
+
+		// 与 WP 一致：只传注册时声明的参数个数。
+		call_user_func_array( $entry[0], array_slice( $args, 0, (int) $entry[2] ) );
+	}
+
 	return null;
 }
 

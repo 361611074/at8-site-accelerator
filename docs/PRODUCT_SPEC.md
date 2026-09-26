@@ -51,9 +51,13 @@
 `/wp-comments-post.php`、`preview=true`、`elementor-preview`、`customize.php`、
 `/feed`、`/cart`、`/checkout`、`/my-account`、`/add-to-cart`、`?s=`、`&s=`。
 
-内置绕过 Cookie：`wordpress_logged_in_`、`wordpress_sec_`、`wp-postpass_`、
-`comment_author_`、`woocommerce_items_in_cart`、`woocommerce_cart_hash`、
-`wp_woocommerce_session_`、`edd_items_in_cart`。
+内置绕过 Cookie（`*` 结尾 = 前缀匹配，否则要求 Cookie 名完全一致）：
+`wp-postpass_*`、`comment_author_*`、`wp_woocommerce_session_*`、
+`woocommerce_items_in_cart`、`woocommerce_cart_hash`、`edd_items_in_cart`。
+
+登录态 Cookie（`wordpress_logged_in_*` / `wordpress_sec_*`）**刻意不在此列表内**，
+由 `has_auth_cookie()` + 「缓存登录用户」开关（`cache_logged_in`）单独控制。
+若把它放进本表，`cache_logged_in` 会变成永远无效的死开关。
 
 内置忽略查询参数：`utm_*`、`fbclid`、`gclid`、`gclsrc`、`dclid`、`msclkid`、
 `mc_*`、`igshid`、`twclid`、`yclid`、`_ga`、`_gl`、`wbraid`、`gbraid`、

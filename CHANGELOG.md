@@ -57,7 +57,7 @@
   于是后续读写全部落在旧命名空间——旧键没删、新键没人读。
 * **修复**：版本变更后把 `$this->resolved` 置空，下次 `make()` 用新盐重建。
 
-### 修复 5：WP-CLI 下改配置对前台不生效
+### 修复 5：WP-CLI 下改配置对前台不生效（**只修了一半，见修复 7**）
 
 * **现象**：`wp` 命令行把 `cache_backend` 切成 `redis`，脚本报成功，
   但前台响应头依然是 `x-at8-cache-backend: disk`；配置文件里
@@ -67,6 +67,10 @@
   而 drop-in 在前台优先读 `<host>.php` → CLI 里的改动永远到不了 drop-in。
 * **修复**：`HTTP_HOST` 为空时退化为从 `home_url()` 取主机名；
   并顺带刷新目录里其它已存在的主机配置文件（跳过 `default.php` / `index.php`）。
+* **⚠️ 这条修复是不完整的**：它只让 `Config::write()` 写对**文件**，
+  却没有让它在 CLI 下被**调用**。真正的触发问题见下方「修复 7」——
+  修复 7 之前，WP-CLI 改设置时运行时配置根本不会被重写，本条的修复无从生效。
+  文档如实记录这个疏漏，避免后来者以为 CLI 场景已经覆盖。
 
 ### 修复 6：`html_minify_inline` 是个死开关
 
@@ -75,6 +79,91 @@
   引号内字符串原样跳过，内联 JS 一律不动——JS 的自动分号插入依赖换行）。
 * **诚实说明**：真机实测该项收益约 0%。区块主题的内联 `<style>` 由 WordPress
   样式引擎生成，本身就是单空格排版，没有可折叠的空白。设置页文案已如实说明。
+
+### 修复 7：设置同步只在后台生效，CLI / Cron / 其它插件改设置全都不生效（严重）
+
+* **发现方式**：补 PHPUnit 与 PHPStan 之后做真机 HTTP 验证，发现设置改动"看着成功、实际没动"。
+  在真机上做受控实验：连改 6 次 `cache_backend`（`disk`/`redis`/`auto` 轮换），
+  `cache/at8-site-accelerator/config/<host>.php` 里的 `'backend'` **始终是旧值**。
+* **根因**：这条链路的三个动作——刷新设置缓存、重写 drop-in 运行时配置、清理缓存——
+  原先挂在 `Admin\SettingsPage::boot()` 上，而 `SettingsPage` 只在 `is_admin()` 为真时被启动。
+  于是所有非后台上下文改设置都只改了数据库、没改运行时配置：
+  * `wp option update at8sa_settings …`（WP-CLI）
+  * `update_option( 'at8sa_settings', … )`（其它插件 / 主题 / 迁移脚本）
+  * WP-Cron、外部 REST 客户端
+* **修复**：把监听器提取成独立服务 `Core\SettingsSync`，改挂到 `Plugin::boot_shared()`
+  （前后台 + CLI + Cron 都会执行），并让 `Admin\SettingsPage` 交出这个职责，
+  避免两处各写一份、再次漂移。
+* **验证**：真机受控实验从"6 次全不生效"变为"每次立即生效"；
+  新增 PHPUnit `SettingsSyncTest`（7 个用例）与冒烟测试的源码级架构守卫
+  （监听器不得再出现在任何后台类里）。
+
+### 修复 8：运行时配置不会自愈，绕过 `update_option()` 的写入永远不生效
+
+* **根因**：修复 7 只能覆盖走 `update_option()` 的路径。现实里还存在绕过它的写入方式——
+  直接 `$wpdb->update()`、`wp option import`、站点迁移脚本、DB 层手工修改。
+  这些情况下钩子不触发；而原有的兜底 `Plugin::ensure_runtime_config()`
+  **只在配置文件缺失时**才重写，文件在但内容陈旧就永远不管。
+* **修复**：`Config` 新增 `needs_refresh()`——把设置算成指纹写进运行时配置，
+  每个请求（插件已加载时）比一次；对不上就重写。成本极低：
+  `at8sa_settings` 是 autoload 选项，读它不产生额外查询，
+  而命中的请求在 drop-in 阶段就 `exit` 了，压根到不了这里。
+* **顺带修掉一处重复实现**：`Plugin::ensure_runtime_config()` 原先自己写了一份
+  主机名归一化正则，与 `Config::write()` 里的 `CachePath::normalize_host()` **并不等价**，
+  属于"写 A 文件、查 B 文件"的隐患。现已统一到 `Config::config_host()` 一处。
+
+### 修复 9：`purge_all()` 先换盐再 flush，导致 Redis 索引集合无限堆积（资源泄漏）
+
+* **根因**：后端实例的缓存盐（`site_token|v<版本>`）是**构造参数**。
+  `purge_all()` 先 `bump_cache_version()` 再 `make()`，拿到的是**新盐**的实例，
+  于是 `flush()` 去删新盐命名空间——那里本来就是空的，什么都没删到。
+  后果是旧盐的索引集合 `at8sa:<盐>|__index` 被永久孤立：
+  它是 `SADD` 建的、**没有 TTL**，会一直堆在 Redis 里，
+  每个版本留一份"该版本全部缓存键"的清单。
+  真机测试机上连续调试后残留了 `v10`~`v36` 共 **21 个**这样的孤儿索引集合。
+* **附带影响**：`stats()` 在新盐上统计，`purge_all()` 恒返回 0，
+  日志里的"失效条目数"完全失真（用户点"清缓存"永远看到 0 条）。
+* **修复**：调整顺序为**先 flush 当前盐，再递增版本盐**。
+  正常路径下 flush 把当前盐的索引集合与条目真正删掉（Redis 后端还会 SCAN 兜底）；
+  异常路径下换盐依旧兜底——即便 flush 因权限/连接问题半途失败，
+  旧键也已在语义上不可达，访客不会命中陈旧页。两全，且顺带修好了条目数统计。
+* **防御加固**：`RedisBackend::flush()` 额外清扫本站点**历史版本**遗留的孤儿索引集合
+  （按 `at8sa:<站点令牌>|*|__index` 精确匹配，前缀带 `|` 分隔符，
+  不会误伤同 Redis 上其它站点）。这样即便将来顺序再被改错，也不会无限堆积。
+* **验证**：真机 `purge_all()` 返回值从 `0` 变为真实条目数；失效后
+  `redis-cli --scan --pattern 'at8sa:*'` 计数为 0、孤儿索引集合为 0。
+  新增 `RedisBackendTest`（6 个用例，含孤儿清扫与跨站点隔离）与 `PurgerTest`（6 个用例）。
+
+### 修复 10：同一个响应头因代码路径不同给出不同大小写
+
+* **现象**：`X-AT8-Cache-Backend` 由 drop-in 命中路径给出时是 `redis`/`disk`（配置里的原始字符串），
+  由插件侧给出时是 `Redis`/`Disk`（`BackendInterface::name()`）。
+  同一个诊断字段出现两种取值，排查时容易误判。
+* **修复**：drop-in 模板改为与 `name()` 对齐输出 `Redis`/`Disk`。
+
+### 测试基础设施：补上 PHPUnit、PHPStan 与 Redis 覆盖
+
+* **新增 PHPUnit 9.6 套件**（`tests/phpunit/`，208 个用例 / 550 条断言）：
+  基类在每个用例前后双向重置桩全局状态与 `$_SERVER` / `$_COOKIE` 快照，
+  避免"单跑绿、全跑红"。
+* **新增 PHPStan level 5**（`phpstan.neon.dist`，0 错误，豁免仅 1 条且附理由）。
+  首跑 49 个错误全部逐条分类处置：真代码修 10、真文档修 9、改为消费依赖属性 4、
+  真实潜在 Bug 2、测试自身缺陷 7、配置局限 1。
+  "恒真/恒假"类噪音用 `treatPhpDocTypesAsCertain: false` 从根上关掉，
+  而不是逐条 `ignoreErrors`——PHPDoc 对 WordPress 插件是**契约**不是运行时保证，
+  数据大量来自 `apply_filters`、数据库脏数据与任意客户端，防御性判空必须留着。
+* **修正 WordPress 桩的两个不忠实之处**（这是漏掉修复 7 的直接原因）：
+  * `do_action()` 原是空实现 → 改为真实回调已注册的钩子。
+    空实现会让"钩子挂没挂上"在测试里恒为真，依赖钩子的缺陷完全测不出来。
+  * `update_option()` 原是无条件写 + 不触发钩子 → 改为与 WP 一致：
+    值没变时返回 `false` 且不触发 `update_option_{$option}` / `updated_option`。
+* **修正测试环境的 Redis 库号**：新增 `AT8SA_REDIS_DB = 15`（`tests/unit/wp-stubs.php`）。
+  插件默认用 2 号库，测试若不覆盖这个常量，在**开发者本机**执行冒烟/单元测试
+  就会把线上缓存清掉——一次 `purge_all()` 就够。
+* **CI 新增 3 个阻断式任务**：`phpunit`（PHP 7.4 / 8.3 矩阵）、`phpstan`（level 5）、
+  以及把 Redis 任务从"只跑冒烟"升级为"冒烟 + PHPUnit"，
+  并额外断言**跳过数为 0**——否则 `RedisBackendTest` 会静默 skip，覆盖形同虚设。
+  `package` 任务的 `needs` 相应补上 `test-redis`。
 
 ### 代码规范：PHPCS 存量清零，CI 改为阻断
 
@@ -101,13 +190,34 @@
 
 ### 验证
 
-* 冒烟测试：**208 通过 / 2 失败 → 236 通过 / 0 失败**（新增 28 条断言，含 salt 含括号的回归用例）。
-* PHPCS：**535 错误 / 88 警告 → 0 错误 / 0 警告**（41 个文件全绿）。
-* 真机端到端：`wp-config.php` 第 98 行写入 `define( 'WP_CACHE', true );`、
-  全量 `php -l` 无错、站点 HTTP 200；drop-in 命中链路
-  `MISS-SAVED → HIT → HIT`；`purge_all()` 清 3 条并递增 `cache_version` 后回到 `MISS-SAVED`；
-  `purge_url()` 精准失效同样回到 `MISS-SAVED`。
+四道闸门全部为阻断式，结果如下（真机 PHP 8.3.33）：
+
+| 闸门 | 结果 |
+| --- | --- |
+| PHPCS（WordPress 规范） | **0 错误 / 0 警告**（42 个文件） |
+| PHPStan level 5 | **0 错误**（豁免仅 1 条，附理由） |
+| 冒烟测试 | **248 通过 / 0 失败**（3.0.0 时为 208 通过 / 2 失败） |
+| PHPUnit | **208 用例 / 550 断言，全通过** |
+| 全量 `php -l` | 无错 |
+| 打包自检 | 49 文件、153.0 KB、无开发文件泄漏 |
+
+真机端到端（`https://wordpress.xmm.fan/`，WordPress + nginx + Redis）：
+
+* `wp-config.php` 第 98 行写入 `define( 'WP_CACHE', true );`，站点 HTTP 200。
+* drop-in 命中链路 `MISS-SAVED → HIT → HIT`，HIT 携带
+  `Cache-Control: public, max-age=3600` 与 `X-AT8-Cache-Backend: Redis`。
+* **设置变更即时生效**：`cache_backend` 在 `disk`/`redis`/`auto` 间切换，
+  运行时配置每次同步（修复 7 前是 6 次全不生效）。
+* **Cookie 语义**：8 类绕过 Cookie（登录态、密码保护、评论者、WooCommerce 购物车、EDD）
+  全部 `BYPASS`；无关 Cookie 不误伤。`cache_logged_in=1` 时登录态可缓存，
+  但密码保护页面**依然**拦截（原先这个开关是死的）。
+* **双后端**：Redis 与磁盘各自 `MISS-SAVED → HIT`，磁盘布局
+  `<host>/__root/index.html`。
+* **失效**：`purge_all()` 返回真实条目数（修复 9 前恒为 0），
+  失效后 Redis 数据键 0 个、孤儿索引集合 0 个。
 * 性能基准：见 `docs/PERFORMANCE_BENCHMARK.md` 第七节（A/B/C 三组对照 + 可复现脚本）。
+* 可复现脚本：`tests/unit/smoke.php`（冒烟）、`vendor/bin/phpunit`（单元）、
+  `tools/build-zip.php`（打包自检）。
 
 ---
 
@@ -125,7 +235,10 @@
 * **双后端**：`RedisBackend`（纯 PHP RESP 客户端，不依赖 `phpredis` 扩展）与 `DiskBackend`（目录即 URL）。
 * **自动降级**：`cache_backend=auto` 时优先 Redis，不可达则降级磁盘；探测结果用 transient 缓存（可达 1 小时 / 不可达 1 分钟），避免每请求一次 `fsockopen` 超时。
 * **目录布局**：`cache/at8-site-accelerator/<host>/<path>/index.html`，移动端变体在 `__m/index.html`，带查询串的在 `q-<hash>/index.html`。
-* **缓存版本盐**：`site_token()|v<版本号>`。整站失效时先递增版本号再 flush，旧键立即不可达——比单纯删除更硬的安全网。
+* **缓存版本盐**：`site_token()|v<版本号>`。整站失效时**先 flush 当前盐、再递增版本号**——
+  顺序不能反：后端实例的盐是构造参数，先换盐会让 flush 打在新命名空间上什么也删不到，
+  旧盐的索引集合（`SADD` 建的、无 TTL）就会被永久孤立。反过来则两全：
+  正常路径删干净，异常路径靠换盐兜底，旧键立即不可达。
 * **原子写**：临时文件 + `rename`，避免并发读到半个文件。
 * **drop-in 命中路径**：`templates/advanced-cache.php` 在 WordPress 初始化前直接输出缓存并 `exit`。
 

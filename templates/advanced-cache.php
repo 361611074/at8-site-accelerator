@@ -103,7 +103,9 @@ if ( false === $at8sa_html || '' === $at8sa_html ) {
 if ( ! headers_sent() ) {
 	header( 'Content-Type: text/html; charset=' . ( isset( $at8sa_config['charset'] ) ? $at8sa_config['charset'] : 'UTF-8' ) );
 	header( 'X-AT8-Cache: HIT' );
-	header( 'X-AT8-Cache-Backend: ' . $at8sa_backend );
+	// 显示名与 BackendInterface::name() 对齐：同一个响应头不该因为
+	// "这次命中由 drop-in 还是插件侧处理"而给出不同大小写的值。
+	header( 'X-AT8-Cache-Backend: ' . ( 'redis' === $at8sa_backend ? 'Redis' : 'Disk' ) );
 	header( 'Cache-Control: public, max-age=' . max( 0, $at8sa_ttl ) );
 
 	if ( ! empty( $at8sa_config['cache_mobile'] ) ) {

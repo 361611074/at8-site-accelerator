@@ -78,9 +78,9 @@ final class ElementorCompat {
 	/**
 	 * 安排异步重建 Elementor CSS。
 	 *
-	 * @param int     $post_id 文章 ID。
-	 * @param WP_Post $post    文章。
-	 * @param bool    $update  是否更新。
+	 * @param int           $post_id 文章 ID。
+	 * @param \WP_Post|null $post    文章。
+	 * @param bool          $update  是否更新。
 	 * @return void
 	 */
 	public function maybe_schedule_css_rebuild( $post_id, $post = null, $update = false ) {
@@ -120,7 +120,7 @@ final class ElementorCompat {
 					fastcgi_finish_request();
 				}
 
-				self::rebuild_post_css( $post_id );
+				$this->rebuild_post_css( $post_id );
 			}
 		);
 	}
@@ -134,7 +134,7 @@ final class ElementorCompat {
 	 * @param int $post_id 文章 ID。
 	 * @return bool
 	 */
-	public static function rebuild_post_css( $post_id ) {
+	public function rebuild_post_css( $post_id ) {
 		if ( ! class_exists( '\Elementor\Plugin' ) ) {
 			return false;
 		}
@@ -154,10 +154,16 @@ final class ElementorCompat {
 
 			return true;
 		} catch ( \Throwable $e ) {
-			// 失败不阻断发布主流程。
-			if ( function_exists( 'error_log' ) ) {
-				error_log( 'AT8SA: Elementor CSS rebuild failed for post ' . (int) $post_id . ': ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-			}
+			// 失败不阻断发布主流程。走 Logger 而不是裸 error_log()：
+			// Logger 会按 log_enabled / log_level 决定是否落盘，并做密钥脱敏
+			// （计划书 §78 / §79）。裸 error_log() 两样都没有。
+			$this->logger->error(
+				'Elementor CSS 重建失败',
+				array(
+					'post_id' => (int) $post_id,
+					'reason'  => $e->getMessage(),
+				)
+			);
 
 			return false;
 		}

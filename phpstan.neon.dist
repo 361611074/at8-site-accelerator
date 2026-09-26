@@ -1,0 +1,94 @@
+# PHPStan 配置（计划书 §130 Free Release Gate 要求）。
+#
+# 为什么用 phpstan-wordpress 扩展而不是裸 PHPStan：
+# 插件的每一行都在调 WordPress 函数（get_option / add_action / wp_send_json_*），
+# 裸 PHPStan 会把它们全判成"未定义函数"，于是只能靠 ignoreErrors 大段屏蔽，
+# 屏蔽之后静态分析就退化成摆设。扩展提供 WP 函数与类的签名，检查才有意义。
+includes:
+	- vendor/szepeviktor/phpstan-wordpress/extension.neon
+
+parameters:
+	# 级别 5：会检查方法/函数参数类型、返回值类型、未定义方法。
+	# 不直接上 8 级的原因——WP 的很多 API 返回类型本身是 mixed（get_option 等），
+	# 上到 8 级会产生大量"无法推断"的噪声，反而掩盖真问题。级别 5 已能抓出
+	# "参数个数不对""方法名拼错""把 null 当数组用"这类会导致白屏的错误。
+	level: 5
+
+	phpVersion: 70400
+
+	paths:
+		- at8-site-accelerator.php
+		- uninstall.php
+		- includes
+		- templates
+		- tests/unit/smoke.php
+
+	excludePaths:
+		# 冒烟测试运行时生成的伪造 wp-content，每次执行都重建。
+		- tests/unit/fake-wp/*
+		# WP 函数桩：里面大量刻意的不完整实现，不属于产品代码。
+		- tests/unit/wp-stubs.php
+		# drop-in 模板里的 {{AT8SA_PATH}} 是安装时替换的占位符，
+		# 单独分析会因为语法不完整而失败。
+		- templates/advanced-cache.php
+
+	bootstrapFiles:
+		- tests/phpstan/bootstrap.php
+		# WooCommerce 类桩。phpstan-wordpress 只引导 wordpress-stubs，
+		# 不认识 WC_Product 这类符号，不加载的话兼容层会报 class.notFound。
+		#
+		# 只加载核心桩（4.4MB），不加载 woocommerce-packages-stubs.php——
+		# 那个是 WC Blocks 等周边包的声明，本插件用不到，白占内存。
+		- vendor/php-stubs/woocommerce-stubs/woocommerce-stubs.php
+
+	# 额外类桩。
+	#
+	# 用 scanFiles 而不是 stubFiles：stubFiles 是用来**覆盖已有声明**的，
+	# 而 GdImage 在 phpVersion 70400 基线下根本不存在，属于"新增声明"。
+	# 用 stubFiles 的话 PHPStan 仍然报 class.notFound（实测过）。
+	scanFiles:
+		- tests/phpstan/stubs/gd.php
+
+	# COOKIEHASH 由 WP 在 wp-includes/default-constants.php 里按站点 URL 动态算出，
+	# 某些早期上下文（如 drop-in）里可能尚未定义，所以产品代码里
+	# `defined( 'COOKIEHASH' ) && COOKIEHASH` 这个双保险是必要的。
+	# 不声明成 dynamic 的话，PHPStan 会把它当成"值已知的常量"，
+	# 于是那句判空被判成"恒真"。phpstan-wordpress 对 COOKIE_DOMAIN
+	# 做的就是这件事，这里照着补一个。
+	dynamicConstantNames:
+		- COOKIEHASH
+
+	# ------------------------------------------------------------------------
+	# 关键取舍：为什么把 treatPhpDocTypesAsCertain 关掉
+	# ------------------------------------------------------------------------
+	#
+	# 打开（默认 true）时，PHPStan 会把 PHPDoc 里的类型当成**运行时的保证**，
+	# 于是所有 `is_array()` / `is_string()` / `if ( ! $x )` 这类防御性检查
+	# 都会被判成"恒真/恒假"。
+	#
+	# 但对 WordPress 插件来说 PHPDoc 是**契约**，不是保证：
+	#   - 插件的数据大量来自过滤器（`apply_filters`），第三方代码可以返回任何类型；
+	#   - 对象来自数据库反序列化（`wp_get_attachment_metadata()` 的 `sizes` 可能是脏数据）；
+	#   - 请求数据来自任意客户端。
+	# 把这些检查删掉去迎合分析器，是拿线上稳定性换一个好看的报表。
+	#
+	# 关掉之后，检查保留、告警消失——这才是这个参数的设计用途。
+	# 注意它**不会**掩盖真正的类型错误（class.notFound / argument.type /
+	# method.notFound 等一律照报），本文件下方那 3 条豁免就是证据。
+	treatPhpDocTypesAsCertain: false
+
+	# 报告格式：CI 里用 table，本地排查时可用 --error-format=json。
+	errorFormat: table
+
+	# 豁免项一律写在这里，每条都要有理由。原则是：
+	# 能改代码解决的一律改代码，只有"分析器/桩本身的局限"才允许豁免。
+	ignoreErrors:
+		# Webp::load() 的返回类型写的是 `resource|\GdImage|false`，这是**准确的**：
+		# PHP 7.4 的 GD 返回 resource，8.0+ 返回 GdImage 对象，插件两个版本都支持
+		# （测试站跑的就是 8.3）。但分析基线是 phpVersion: 70400，在该基线下
+		# imagecreatefrompng() 被声明为只返回 resource，于是 GdImage 这一支
+		# 被判成"永不返回"。这是基线与运行时范围的固有矛盾，不是代码缺陷。
+		-
+			message: '#never returns GdImage so it can be removed from the return type#'
+			identifier: return.unusedType
+			path: includes/Optimization/Webp.php

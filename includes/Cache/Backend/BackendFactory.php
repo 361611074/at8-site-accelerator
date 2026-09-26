@@ -84,7 +84,7 @@ final class BackendFactory {
 		if ( 'redis' === $mode ) {
 			$redis = $this->make_redis();
 
-			if ( $redis && $redis->available() ) {
+			if ( $redis->available() ) {
 				$this->resolved = $redis;
 
 				return $this->resolved;
@@ -100,7 +100,7 @@ final class BackendFactory {
 		if ( $this->redis_probe() ) {
 			$redis = $this->make_redis();
 
-			if ( $redis && $redis->available() ) {
+			if ( $redis->available() ) {
 				$this->resolved = $redis;
 
 				return $this->resolved;
@@ -189,7 +189,7 @@ final class BackendFactory {
 		}
 
 		$redis = $this->make_redis();
-		$ok    = $redis && $redis->available();
+		$ok    = $redis->available();
 
 		$this->set_probe( $ok );
 
@@ -226,6 +226,9 @@ final class BackendFactory {
 
 	/**
 	 * 构造 Redis 后端。
+	 *
+	 * 恒定返回实例、不返回 null —— 连接是惰性的（`RedisBackend::available()`
+	 * 才真正拨号），所以"构造成功"与"Redis 可达"是两件事，不要在这里混。
 	 *
 	 * @return RedisBackend
 	 */

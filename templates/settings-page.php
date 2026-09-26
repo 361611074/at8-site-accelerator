@@ -74,10 +74,10 @@ $at8sa_number = function ( $key, $label, $min, $max, $step = 1 ) use ( $at8sa_se
 		<span><?php echo esc_html( $label ); ?></span>
 		<input type="number"
 			name="at8sa_settings[<?php echo esc_attr( $key ); ?>]"
-			value="<?php echo esc_attr( (int) $at8sa_settings[ $key ] ); ?>"
-			min="<?php echo esc_attr( $min ); ?>"
-			max="<?php echo esc_attr( $max ); ?>"
-			step="<?php echo esc_attr( $step ); ?>" />
+			value="<?php echo esc_attr( (string) (int) $at8sa_settings[ $key ] ); ?>"
+			min="<?php echo esc_attr( (string) $min ); ?>"
+			max="<?php echo esc_attr( (string) $max ); ?>"
+			step="<?php echo esc_attr( (string) $step ); ?>" />
 	</label>
 	<?php
 };
@@ -305,7 +305,7 @@ $at8sa_cache_on = ! empty( $at8sa_settings['page_cache'] );
 				</div>
 
 				<?php $at8sa_textarea( 'exclude_urls', __( '排除 URL 关键词（每行一个，命中即不缓存）', 'at8-site-accelerator' ), __( '内置已排除 wp-admin、wp-login、wp-json、xmlrpc.php、preview、admin-ajax、feed、?s= 等。此处只填你额外需要的。', 'at8-site-accelerator' ) ); ?>
-				<?php $at8sa_textarea( 'bypass_cookies', __( '遇到这些 Cookie 时绕过缓存（每行一个，支持前缀*）', 'at8-site-accelerator' ), __( '内置已包含 wordpress_logged_in_、wordpress_sec_、wp-postpass_、woocommerce_* 等。', 'at8-site-accelerator' ) ); ?>
+				<?php $at8sa_textarea( 'bypass_cookies', __( '遇到这些 Cookie 时绕过缓存（每行一个）', 'at8-site-accelerator' ), __( '以 * 结尾表示前缀匹配（如 wp-postpass_* 命中 wp-postpass_abc123）；不带 * 则要求 Cookie 名完全一致。内置已包含 wp-postpass_*、comment_author_*、wp_woocommerce_session_*、woocommerce_cart_hash、woocommerce_items_in_cart 等。登录态 Cookie 由上方「缓存登录用户」开关单独控制，不在此列表内。', 'at8-site-accelerator' ) ); ?>
 				<?php $at8sa_textarea( 'ignore_query', __( '忽略的 Query 参数（每行一个，支持前缀*）', 'at8-site-accelerator' ), __( '内置已自动忽略 UTM、fbclid、gclid、msclkid 等营销参数，避免同一页面因追踪参数产生大量碎片缓存。填 * 表示忽略全部 query（谨慎）。', 'at8-site-accelerator' ) ); ?>
 			</div>
 		</section>

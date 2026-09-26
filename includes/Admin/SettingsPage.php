@@ -10,16 +10,7 @@
 
 namespace AT8\SiteAccelerator\Admin;
 
-use AT8\SiteAccelerator\Cache\AdvancedCache;
-use AT8\SiteAccelerator\Cache\Backend\BackendFactory;
-use AT8\SiteAccelerator\Cache\Config;
-use AT8\SiteAccelerator\Compatibility\CachePluginDetector;
 use AT8\SiteAccelerator\Core\Settings;
-use AT8\SiteAccelerator\Diagnostics\Diagnostics;
-use AT8\SiteAccelerator\Optimization\BrowserCache;
-use AT8\SiteAccelerator\Optimization\DatabaseCleanup;
-use AT8\SiteAccelerator\Purge\Purger;
-use AT8\SiteAccelerator\Support\Logger;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -68,15 +59,21 @@ final class SettingsPage {
 		add_action( 'admin_menu', array( $this, 'register_menu' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
-		add_action( 'update_option_' . Settings::OPTION, array( $this, 'on_settings_updated' ), 10, 2 );
 		add_action( 'admin_post_at8sa_reset_settings', array( $this, 'handle_reset' ) );
 		add_filter( 'plugin_action_links_' . AT8SA_BASENAME, array( $this, 'action_links' ) );
+
+		// 注意：设置变更后的运行时同步**不在这里**。
+		// 它挂在 Core\SettingsSync 上（boot_shared），这样 WP-CLI / WP-Cron /
+		// 其它插件里改设置也能生效——挂在这里的话只有后台生效。
 	}
 
 	/**
 	 * 在"插件"列表页给本插件加一个直达"设置"的链接。
 	 *
-	 * @param array $links 现有链接。
+	 * `plugin_action_links_*` 是过滤器，第三方插件完全可以把值改成非数组，
+	 * 所以这里声明成 mixed 并自己做类型兜底，而不是假定 WP 一定传数组。
+	 *
+	 * @param mixed $links 现有链接（正常为 string[]）。
 	 * @return array
 	 */
 	public function action_links( $links ) {
@@ -160,43 +157,6 @@ final class SettingsPage {
 				),
 			)
 		);
-	}
-
-	/**
-	 * 设置保存后的副作用：重写 drop-in 配置、重置探测、清空缓存。
-	 *
-	 * 为什么要清空：TTL、后端、排除规则一变，旧缓存条目的语义就不成立了，
-	 * 留着它们只会制造"设置改了但页面没变"的困惑。
-	 *
-	 * @param mixed $old       旧值（本回调不需要，仅为对齐钩子签名）。
-	 * @param mixed $submitted 新值（同上）。
-	 * @return void
-	 */
-	public function on_settings_updated( $old, $submitted ) {
-		unset( $old, $submitted );
-
-		/** @var Settings $settings */
-		$settings = $this->dep( 'settings' );
-		$settings->flush_cache();
-
-		/** @var BackendFactory $factory */
-		$factory = $this->dep( 'factory' );
-		$factory->reset_probe();
-
-		/** @var Config $config_builder */
-		$config_builder = $this->dep( 'config' );
-		$config_builder->write( $config_builder->runtime() );
-
-		/** @var AdvancedCache $dropin */
-		$dropin = $this->dep( 'advanced_cache' );
-
-		if ( $settings->is_on( 'advanced_cache' ) ) {
-			$dropin->install();
-		}
-
-		/** @var Purger $purger */
-		$purger = $this->dep( 'purger' );
-		$purger->purge_all();
 	}
 
 	/**

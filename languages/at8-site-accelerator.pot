@@ -296,6 +296,10 @@ msgstr ""
 msgid "仅错误"
 msgstr ""
 
+#: templates/settings-page.php
+msgid "以 * 结尾表示前缀匹配（如 wp-postpass_* 命中 wp-postpass_abc123）；不带 * 则要求 Cookie 名完全一致。内置已包含 wp-postpass_*、comment_author_*、wp_woocommerce_session_*、woocommerce_cart_hash、woocommerce_items_in_cart 等。登录态 Cookie 由上方「缓存登录用户」开关单独控制，不在此列表内。"
+msgstr ""
+
 #: includes/Admin/SettingsPage.php
 msgid "优化"
 msgstr ""
@@ -374,10 +378,6 @@ msgstr ""
 
 #: templates/settings-page.php
 msgid "内容更新时，插件会算出受影响的 URL 集合（文章页、首页、文章类型归档、所属分类与父分类、作者归档、分页），只删除这些页面的缓存。"
-msgstr ""
-
-#: templates/settings-page.php
-msgid "内置已包含 wordpress_logged_in_、wordpress_sec_、wp-postpass_、woocommerce_* 等。"
 msgstr ""
 
 #: templates/settings-page.php
@@ -1165,7 +1165,7 @@ msgid "这里的操作不可撤销，且默认全部关闭。请先点「预览�
 msgstr ""
 
 #: templates/settings-page.php
-msgid "遇到这些 Cookie 时绕过缓存（每行一个，支持前缀*）"
+msgid "遇到这些 Cookie 时绕过缓存（每行一个）"
 msgstr ""
 
 #: templates/settings-page.php

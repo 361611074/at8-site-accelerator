@@ -84,23 +84,38 @@ final class Purger {
 	/**
 	 * 整站失效。
 	 *
-	 * 顺序很关键：**先递增缓存版本盐**，再 flush。这样即便 flush 因权限/连接问题
-	 * 半途失败，旧键也已经在语义上不可达，访客不会命中陈旧页。
+	 * 顺序很关键：**先 flush 当前盐，再递增缓存版本盐**。
+	 *
+	 * 为什么不能反过来（曾经就是反的，真机实测到后果）：
+	 * 后端实例的盐是构造参数，`bump_cache_version()` 之后 `make()` 拿到的是**新盐**
+	 * 的实例，于是 `flush()` 去删新盐命名空间——那里本来就是空的，什么也没删到。
+	 * 结果是旧盐的索引集合 `at8sa:<盐>|__index` 被永久孤立：它是 `SADD` 建的、
+	 * **没有 TTL**，会一直堆在 Redis 里，每个版本留一份"该版本全部缓存键"的清单。
+	 * 测试机上连续调试留下的 v10~v36 共 21 个孤儿索引集合就是这么来的。
+	 * 顺带还有个副作用：`stats()` 在新盐上统计，`purge_all()` 永远返回 0，
+	 * 日志里的"失效条目数"完全失真。
+	 *
+	 * 反过来则两全：先 flush 把当前盐的索引集合与条目真正删掉（Redis 后端还会
+	 * SCAN 兜底），再递增版本盐——即便 flush 因权限/连接问题半途失败，
+	 * 旧键也已经在语义上不可达，访客不会命中陈旧页。
 	 *
 	 * @return int 删除条目数（磁盘后端为删除的页面文件数，无法精确统计时为 0）。
 	 */
 	public function purge_all() {
-		$this->factory->bump_cache_version();
-
 		$backend = $this->factory->make();
 		$count   = 0;
 
 		if ( $backend ) {
+			// BackendInterface::stats() 的契约是 array{count:int,bytes:int}，
+			// 键一定存在，不需要 isset 兜底。
 			$stats = $backend->stats();
-			$count = isset( $stats['count'] ) ? (int) $stats['count'] : 0;
+			$count = (int) $stats['count'];
 
 			$backend->flush();
 		}
+
+		// flush 之后再换盐：正常路径下没有残留，异常路径下换盐兜底。
+		$this->factory->bump_cache_version();
 
 		$this->purge_legacy_dirs();
 		$this->factory->reset_probe();
@@ -309,8 +324,8 @@ final class Purger {
 		return array(
 			'active'          => true,
 			'backend'         => $backend->name(),
-			'cached_pages'    => isset( $stats['count'] ) ? (int) $stats['count'] : 0,
-			'cache_bytes'     => isset( $stats['bytes'] ) ? (int) $stats['bytes'] : 0,
+			'cached_pages'    => (int) $stats['count'],
+			'cache_bytes'     => (int) $stats['bytes'],
 			'cache_version'   => $this->factory->cache_version(),
 			'redis_reachable' => $this->factory->redis_probe(),
 		);

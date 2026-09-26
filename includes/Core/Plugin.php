@@ -22,7 +22,6 @@ use AT8\SiteAccelerator\Cache\AdvancedCache;
 use AT8\SiteAccelerator\Cache\Backend\BackendFactory;
 use AT8\SiteAccelerator\Cache\CacheEngine;
 use AT8\SiteAccelerator\Cache\Config;
-use AT8\SiteAccelerator\Cache\RequestGuard;
 use AT8\SiteAccelerator\Compatibility\CachePluginDetector;
 use AT8\SiteAccelerator\Compatibility\ElementorCompat;
 use AT8\SiteAccelerator\Compatibility\WooCommerceCompat;
@@ -206,6 +205,19 @@ final class Plugin {
 		);
 
 		$c->bind(
+			SettingsSync::class,
+			function ( $c ) {
+				return new SettingsSync(
+					$c->get( Settings::class ),
+					$c->get( BackendFactory::class ),
+					$c->get( Config::class ),
+					$c->get( AdvancedCache::class ),
+					$c->get( Purger::class )
+				);
+			}
+		);
+
+		$c->bind(
 			CachePluginDetector::class,
 			function ( $c ) {
 				return new CachePluginDetector( $c->get( Settings::class ) );
@@ -319,7 +331,11 @@ final class Plugin {
 		$c->get( ElementorCompat::class )->boot();
 		$c->get( WooCommerceCompat::class )->boot();
 
-		// 运行时配置的兜底生成：文件缺失时补写，保证 drop-in 能读到。
+		// 设置变更 → 运行时同步。必须放这里（而不是 boot_admin）：
+		// 设置也可能在 WP-CLI / WP-Cron / 其它插件里被改，那些上下文没有后台。
+		$c->get( SettingsSync::class )->boot();
+
+		// 运行时配置的兜底：缺失或已过期就补写，保证 drop-in 读到的是最新配置。
 		add_action( 'init', array( $this, 'ensure_runtime_config' ), 99 );
 	}
 
@@ -366,18 +382,18 @@ final class Plugin {
 	/**
 	 * 确保 drop-in 运行时配置文件存在且为最新。
 	 *
+	 * "为最新"的判定交给 `Config::needs_refresh()`：它比对设置指纹，
+	 * 因此能覆盖 `update_option()` 之外的各种写入路径（直接改库、导入选项等）。
+	 *
 	 * @return void
 	 */
 	public function ensure_runtime_config() {
-		$host = RequestGuard::server( 'HTTP_HOST', 'default' );
-		$host = strtolower( preg_replace( '/[^a-z0-9.\-:_]/i', '_', $host ) );
-		$file = AT8SA_CACHE_ROOT . '/config/' . ( '' === $host ? 'default' : $host ) . '.php';
+		$config = $this->container->get( Config::class );
 
-		if ( is_readable( $file ) ) {
+		if ( ! $config->needs_refresh() ) {
 			return;
 		}
 
-		$config = $this->container->get( Config::class );
 		$config->write( $config->runtime() );
 	}
 }

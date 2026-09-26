@@ -2,62 +2,72 @@
 
 版本：`3.0.1`
 测试日期：2026-09-26
-测试环境：Linux + PHP 8.3.33（真实站点服务器）
-测试命令：`php tests/unit/smoke.php`
+测试环境：Linux + PHP 8.3.33 + nginx + Redis（真实站点服务器 `wordpress.xmm.fan`）
 
 ---
 
 ## 一、结论
 
-```
-通过：236  失败：0
-全部通过。
-```
+四道闸门全部为**阻断式**，任何一道变红就不允许发版。
+
+| 闸门 | 命令 | 结果 |
+| --- | --- | --- |
+| 代码规范 | `vendor/bin/phpcs --report=summary` | **0 错误 / 0 警告**（42 个文件） |
+| 静态分析 | `vendor/bin/phpstan analyse --memory-limit=2G` | **0 错误**（level 5，豁免仅 1 条） |
+| 冒烟测试 | `php tests/unit/smoke.php` | **248 通过 / 0 失败**（26 组，0 跳过） |
+| 单元测试 | `vendor/bin/phpunit` | **208 用例 / 550 断言，全通过** |
+| 语法检查 | `find . -name '*.php' \| xargs -n1 php -l` | 无输出（全部通过） |
+| 打包自检 | `php tools/build-zip.php` | 49 文件 / 153.0 KB，无开发文件泄漏 |
 
 连续运行两次结果一致（测试自带环境复位，可重复）。
 
-同一次运行还跑了两项静态检查：
-
-```
-$ phpcs --standard=phpcs.xml.dist --report=summary
-0 错误 / 0 警告（41 个文件）
-
-$ find . -name '*.php' | xargs -n1 php -l
-（无输出 = 全部通过）
-```
+真机端到端另有一轮 HTTP 功能验证（见第七节），42 项断言全部通过。
 
 ---
 
 ## 二、测试策略
 
-### 为什么是"冒烟测试"而不是 PHPUnit
-
-插件的绝大多数代码路径**无法在真实 WordPress 之外运行**——
-它们依赖 `template_redirect`、`save_post`、`ob_start` 回调、
-`advanced-cache.php` 的早期执行时机。
-
-但这不代表不能测。真正会在生产环境造成白屏的，是这几类问题：
-
-1. 方法不存在 / 参数个数不匹配（PHP 里是 `E_ERROR`，直接白屏）；
-2. 命名空间写错、`use` 引用不存在；
-3. 输出缓冲回调返回了错误类型；
-4. 模板里用了不存在的 WordPress 函数。
-
-这些**全部可以在没有 WordPress 的环境里抓出来**：
-`tests/unit/wp-stubs.php` 提供了约 836 行的 WordPress 函数桩
-（选项、瞬态、钩子系统、转义、URL、条件函数、后台 UI、`$wpdb`），
-然后真实地 `new` 出每一个类并调用关键方法。
-
-这是发布前的最后一道粗筛，不是单元测试框架的替代品。
-
-### 三层防护
+### 四层分工，互不替代
 
 | 层 | 手段 | 抓什么 |
 | --- | --- | --- |
-| 1 | `php -l` 全部文件 | 语法错误 |
-| 2 | `node --check` 全部 JS | 前端语法错误 |
-| 3 | `tests/unit/smoke.php` | 实例化致命错误、返回值类型、逻辑正确性、安全静态检查 |
+| 1 | `php -l` 全部 PHP / `node --check` 全部 JS | 语法错误 |
+| 2 | `tests/unit/smoke.php`（248 项） | **整条链路还活着**：38 个类能否实例化、安装/停用/卸载/drop-in 命中路径能否跑通 |
+| 3 | `tests/phpunit/`（208 用例） | **逻辑对不对**：单个类的行为、边界、数据提供器矩阵 |
 | 4 | `tests/unit/dropin-hit.php`（子进程） | drop-in 真实执行结果 |
+
+第 2 层与第 3 层刻意不重复。冒烟测试的价值在"广"——它把每个类都 `new` 一遍并调用关键方法，
+抓的是"某个类根本加载不起来"这类 `E_ERROR`（在 PHP 里直接白屏）。
+单元测试的价值在"深"——失败信息精确到方法，覆盖边界值与组合矩阵。
+
+两者都要有。3.0.1 期间两边各抓到了对方完全没覆盖的缺陷：
+
+* 冒烟测试抓不到、PHPUnit 抓到的：内置绕过 Cookie 表里前缀漏写 `*`，
+  导致 `wp-postpass_` 永远匹配不上，**密码保护页面会被缓存给未输密码的访客**。
+* PHPUnit 抓不到、真机 HTTP 验证抓到的：设置同步只在后台生效，
+  WP-CLI / Cron 改设置完全不生效（见第四节第 13 条）。
+
+### 为什么可以在没有 WordPress 的环境里跑
+
+`tests/unit/wp-stubs.php` 提供约 900 行 WordPress 函数桩
+（选项、瞬态、钩子、转义、URL、条件函数、后台 UI、`$wpdb`），
+然后真实地 `new` 出每一个类并调用关键方法。
+
+**桩必须忠实，否则测试会给出比真实环境更乐观的结论。** 3.0.1 修正了桩的两处不忠实之处：
+
+| 桩 | 原先 | 问题 | 现在 |
+| --- | --- | --- | --- |
+| `do_action()` | 空实现，`return null` | "钩子挂没挂上"在测试里**恒为真**，依赖钩子的缺陷完全测不出来 | 真实按优先级回调已注册的钩子，并按 `accepted_args` 截断参数 |
+| `update_option()` | 无条件写库、不触发钩子 | 依赖 `update_option_{$option}` 副作用的代码永远"看起来是对的" | 与 WP 一致：值没变时返回 `false` 且不触发 `update_option_{$option}` / `updated_option` |
+
+这两处正是漏掉"修复 7"（设置同步只在后台生效）的直接原因。
+
+### 测试环境的 Redis 库号
+
+`tests/unit/wp-stubs.php` 里把 `AT8SA_REDIS_DB` 固定为 **15**。
+插件默认用 2 号库——测试若不覆盖这个常量，在**开发者本机**执行测试
+就会把线上缓存清掉（一次 `purge_all()` 就够）。15 号库是测试保留库，
+每个用例前后清扫，且绝不做 `FLUSHDB`。
 
 ### drop-in 为什么要单开子进程
 
@@ -74,34 +84,36 @@ $ find . -name '*.php' | xargs -n1 php -l
 
 ---
 
-## 三、覆盖范围（24 组 / 236 项）
+## 三、冒烟测试覆盖范围（26 组 / 248 项）
 
 | 组 | 断言数 | 覆盖内容 |
 | --- | ---: | --- |
 | 容器 | 3 | 登记解析、单例、未登记返回 null |
-| 设置 | 23 | 默认值完整性、布尔键覆盖、清洗（钳制/枚举/白名单/去标签）、2.x 迁移幂等、**`Config::write()` 在无 `HTTP_HOST` 时退化到 `home_url()`** |
+| 设置 | 23 | 默认值完整性、布尔键覆盖、清洗（钳制/枚举/白名单/去标签）、2.x 迁移幂等、`Config::write()` 在无 `HTTP_HOST` 时退化到 `home_url()` |
 | 缓存键与路径安全 | 18 | UTM 剥离、参数顺序归一化、通配规则、**6 组路径穿越载荷**、主机归一化、Redis 键不含协议 |
-| 请求准入 | 17 | GET/POST、11 条黑名单路径、登录 Cookie、购物车 Cookie、安全模式、UA 判定、**超全局净化入口** |
+| 请求准入 | 22 | GET/POST、11 条黑名单路径、登录 Cookie、**8 类绕过 Cookie 前缀回归**、安全模式、UA 判定、超全局净化入口 |
 | 磁盘后端 | 16 | 读写、TTL、移动端变体、查询串变体、精准删除、站外 URL 不删、统计、目录守卫 |
-| 失效器 | 8 | 精准失效、站外 URL 不触发、版本盐递增、整站清空保留 config（**固定 `cache_backend=disk`，不依赖宿主机是否有 Redis**） |
-| 后端一致性 | 5 | **`Config::runtime()['backend']` 与 `factory->active_name()` 必须一致**；`bump_cache_version()` 后旧实例立即作废 |
-| 运行时配置与 drop-in | 19 | 必要键、**不含密钥字段**、不含站点内容、写入回读、drop-in 安装/识别/卸载、归属标记 |
-| wp-config.php / WP_CACHE 开关 | 13 | **含大括号 salt 的回归用例**、可逆性三方向（插入/删除/替换）、幂等、停用精确还原原文 |
-| HTML 压缩 | 11 | 过短跳过、体积变小、`pre`/`script`/`textarea` 内容保留、IE 条件注释保留、**内联 CSS 折叠（引号内不折叠、JS 换行保留）** |
+| 失效器 | 8 | 精准失效、站外 URL 不触发、版本盐递增、整站清空保留 config（固定 `cache_backend=disk`，不依赖宿主机是否有 Redis） |
+| 后端一致性 | 5 | `Config::runtime()['backend']` 与 `factory->active_name()` 必须一致；`bump_cache_version()` 后旧实例立即作废 |
+| **设置变更同步（架构守卫）** | 4 | **监听器必须挂在 `Core\SettingsSync`（由 `boot_shared` 启动），不得出现在任何后台类里**；兜底逻辑必须走 `Config::needs_refresh()` 而不是自己拼主机名 |
+| **运行时配置过期检测** | 3 | 配置带设置指纹；刚写完不算过期；**绕过 `update_option()` 直接改库后判定为过期** |
+| 运行时配置与 drop-in | 19 | 必要键、不含密钥字段、不含站点内容、写入回读、drop-in 安装/识别/卸载、归属标记 |
+| wp-config.php / WP_CACHE 开关 | 13 | 含大括号 salt 的回归用例、可逆性三方向（插入/删除/替换）、幂等、停用精确还原原文 |
+| HTML 压缩 | 11 | 过短跳过、体积变小、`pre`/`script`/`textarea` 内容保留、IE 条件注释保留、内联 CSS 折叠（引号内不折叠、JS 换行保留） |
 | 懒加载 | 9 | 首屏 eager、后续 lazy、`decoding`、已有属性不覆盖、`data-no-lazy` 尊重、`data:` 跳过、iframe、关闭跳过首屏后的行为 |
 | 链接预取 | 9 | 策略开关、视口触发、上限与冷却、同域限制 |
 | 浏览器缓存 | 6 | nginx/Apache 规则、标记块配对、TTL 区间、服务器类型识别 |
 | 兼容检测 | 10 | 冲突扫描、结构完整性、flush |
-| 诊断 | 11 | 8 个分组齐全、**不含密码/密钥/评分字段** |
-| 缓存引擎 | 6 | boot、store 返回类型与指纹、**GET 写入成功**、空响应不写、**非 GET 不写** |
+| 诊断 | 11 | 8 个分组齐全、不含密码/密钥/评分字段 |
+| 缓存引擎 | 6 | boot、store 返回类型与指纹、GET 写入成功、空响应不写、非 GET 不写 |
 | 日志脱敏 | 6 | 长十六进制串、Bearer token、Cookie 字段、`[redacted]` 占位、清空 |
 | 文件系统边界 | 6 | 根内/根外/系统路径/穿越路径判定、越界删除被拒、越界目录未被删 |
-| 设置页模板渲染 | 8 | 无致命错误、表单、7 个标签页、7 个面板、无 PHP 标签泄漏、值已转义、**字段名全部指向已登记设置键** |
+| 设置页模板渲染 | 8 | 无致命错误、表单、7 个标签页、7 个面板、无 PHP 标签泄漏、值已转义、字段名全部指向已登记设置键 |
 | 完整启动流程 | 3 | 前台启动、后台启动、钩子注册数量 |
-| 生命周期 | 7 | 激活无错误、写版本、建目录、建 config、停用无错误、drop-in 已移除、**设置仍保留** |
+| 生命周期 | 7 | 激活无错误、写版本、建目录、建 config、停用无错误、drop-in 已移除、设置仍保留 |
 | 卸载脚本 | 4 | 拒绝直接访问、尊重保留数据开关、只删自己的 drop-in、不使用 FLUSHDB |
 | 安全静态检查 | 7 | ABSPATH 守卫、无 eval/FLUSHDB/extract、无硬编码密钥、无命令执行函数、REST 权限回调 |
-| drop-in 命中路径 | 11 | 见下节 |
+| drop-in 命中路径 | 10 | 见下节 |
 
 ### drop-in 子进程测试（10 项）
 
@@ -121,10 +133,57 @@ $ find . -name '*.php' | xargs -n1 php -l
 
 ---
 
-## 四、测试过程中发现并修复的问题
+## 四、单元测试覆盖范围（12 个类 / 208 用例 / 550 断言）
 
-这一节是测试的价值所在。以下问题全部是**跑测试才暴露的**，
+| 测试类 | 用例 | 覆盖内容 |
+| --- | ---: | --- |
+| `CachePath` | 38 | URL 归一化、查询串剥离与哈希变体、磁盘目录布局、移动端变体、Redis 键格式、主机归一化、路径穿越防护 |
+| `RequestGuard` | 36 | 绕过条件矩阵（数据提供器）、黑名单路径、Cookie 规则（前缀/精确名）、安全模式、超全局净化 |
+| `Settings` | 26 | 默认值、清洗（钳制/枚举/白名单）、缺键保留、迁移幂等、布尔键一致性 |
+| `BrowserCache` | 21 | 服务器识别、规则生成、标记块配对、TTL 区间、HTML 不缓存开关 |
+| `Filesystem` | 19 | 根内/根外判定、原子写、目录守卫、递归删除边界 |
+| `DiskBackend` | 16 | 读写、TTL、变体隔离、精准删除、统计 |
+| `LazyLoad` | 15 | 首屏/后续、已有属性、排除规则、iframe、`data:` 跳过 |
+| `HtmlMinifier` | 12 | 体积缩减、`pre`/`script`/`textarea` 保留、注释保留、内联 CSS 折叠 |
+| `SettingsSync` | 7 | 钩子注册（含 `accepted_args`）、配置落盘、**绕过实例缓存后仍读到新值**、**`update_option()` 端到端触发同步**、值未变不触发、清理旧条目 |
+| `ConfigStaleness` | 6 | 缺失/刚写完/设置变更/无指纹字段四种判定、指纹稳定性与区分度、写与读的主机名一致性 |
+| `RedisBackend` | 6 | 读写往返、索引集合维护、flush 清理当前盐、**孤儿索引集合清扫**、**跨站点隔离**、空盐安全退避 |
+| `Purger` | 6 | **`purge_all()` 返回真实条目数**、清空后端、版本恰好递增一次、重写运行时配置、精准失效范围、站外 URL 不涉及 |
+
+`RedisBackend` 的 6 个用例在 Redis 不可达时 `markTestSkipped` 显式跳过。
+CI 的 `test-redis` 任务不仅带 `services: redis`，还额外断言**跳过数为 0**——
+否则这些用例会静默 skip，覆盖形同虚设。
+
+---
+
+## 五、静态分析（PHPStan level 5）
+
+首跑 **49 个错误**，逐条分类处置，最终 0 错误。分类如下：
+
+| 类别 | 数量 | 处置 |
+| --- | ---: | --- |
+| 真代码缺陷 | 10 | 已被 PHPDoc 收窄的冗余判空、确定存在的数组偏移上的 `isset()`、死代码 |
+| 真文档缺陷 | 9 | `WP_Post` / `WC_Product` 未写反斜杠被解析成插件自己的命名空间；`@param array` 与实际 `mixed` 不符；`@var` 未标 `|null` 导致判空被判死 |
+| 改为消费依赖属性 | 4 | `CachePluginDetector::$settings`、`ElementorCompat`/`WooCommerceCompat`/`Webp` 的 `$logger` 改为真实使用（同时提升可观测性） |
+| 真实潜在 Bug | 2 | `is_cart()` 存在不代表 `is_checkout()` 存在；`rebuild_post_css()` 用 `self::` 调非静态方法 |
+| 测试自身缺陷 | 7 | 3 处恒真/空洞断言 + 4 处类型推断问题 |
+| 配置局限 | 1 | `GdImage` 在 7.4 基线下不存在（用 `scanFiles` 而非 `stubFiles` 提供） |
+
+"恒真/恒假"类噪音用 `treatPhpDocTypesAsCertain: false` 从**根上**关掉，
+而不是逐条 `ignoreErrors`。这不是在关检查，而是承认
+**PHPDoc 对 WordPress 插件是契约、不是运行时保证**——
+数据大量来自 `apply_filters`、数据库脏数据与任意客户端，防御性判空必须留着。
+
+`ignoreErrors` 全项目只有 1 条，且写明了理由（见 `phpstan.neon.dist`）。
+
+---
+
+## 六、测试过程中发现并修复的问题
+
+这一节是测试的价值所在。以下问题全部是**跑测试或真机验证才暴露的**，
 静态检查和人工阅读都没发现。
+
+### 冒烟测试阶段（3.0.0 期间）
 
 | # | 问题 | 后果 | 修复 |
 | --- | --- | --- | --- |
@@ -141,34 +200,64 @@ $ find . -name '*.php' | xargs -n1 php -l
 | 11 | 桩缺 `esc_html_e()` / `ARRAY_A` | 模板渲染直接 Fatal，整轮测试中断 | 补齐桩 |
 | 12 | 桩 `submit_button()` 里 `unset($wrap)` 后又用 `$wrap` | 每次渲染产生 Notice | 移除误删 |
 
-**第 3 条是本次测试最大的收获**：一个 `/` 的差别，
+**第 3 条是这一阶段最大的收获**：一个 `/` 的差别，
 导致"预览文章看到的是缓存的旧版本"这个用户投诉量极高的经典 bug。
+
+### 补 PHPUnit / PHPStan / 真机验证阶段（3.0.1 期间）
+
+| # | 问题 | 后果 | 发现方式 | 修复 |
+| --- | --- | --- | --- | --- |
+| 13 | 内置绕过 Cookie 表里 `wp-postpass_`、`comment_author_`、`wp_woocommerce_session_` 写成**裸前缀**，而匹配函数只在规则以 `*` 结尾时才做前缀匹配 | **密码保护页面会被缓存并端给未输密码的访客**（安全缺陷） | PHPUnit `RequestGuardTest` 的数据提供器矩阵 | 补齐 `*` |
+| 14 | 上一条修好后连带暴露：`wordpress_logged_in_*` 同时被 `has_auth_cookie()` 与绕过表管理 | `cache_logged_in=1` 永远被拦下，**开关是死的** | PHPUnit 回归用例 | 从绕过表移除，改为**单一归属**（登录态只由 `has_auth_cookie()` 管） |
+| 15 | 设置同步链路的三个动作挂在 `Admin\SettingsPage::boot()`，而它只在 `is_admin()` 时启动 | **WP-CLI / WP-Cron / 其它插件改设置完全不生效**。真机受控实验：连改 6 次 `cache_backend`，运行时配置始终是旧值 | 真机 HTTP 验证 | 提取为 `Core\SettingsSync`，挂到 `boot_shared()` |
+| 16 | `Plugin::ensure_runtime_config()` 只在配置文件**缺失**时重写，且自己写了一份与 `Config::write()` **不等价**的主机名归一化正则 | 绕过 `update_option()` 的写入永不生效；"写 A 文件、查 B 文件" | 代码审查 + 真机实验 | 新增 `Config::needs_refresh()` 指纹自愈；主机名归一化统一到 `Config::config_host()` |
+| 17 | `purge_all()` 先 `bump_cache_version()` 再 `make()`，flush 打在新盐命名空间上 | 旧盐的索引集合（`SADD` 建的、**无 TTL**）被永久孤立，Redis 内存无限堆积。测试机上残留 `v10`~`v36` 共 **21 个** | 真机 `redis-cli --scan` + 代码推演 | 改为**先 flush 当前盐、再换盐**；并在 `RedisBackend::flush()` 额外清扫历史孤儿 |
+| 18 | 同一条 `purge_all()` 的副作用：`stats()` 在新盐上统计 | "失效条目数"恒为 0，用户点"清缓存"永远看到 0 条 | 真机验证 | 随第 17 条一并修复，真机返回值从 `0` 变为真实条目数 |
+| 19 | drop-in 与插件侧对同一个响应头 `X-AT8-Cache-Backend` 输出不同大小写（`redis` vs `Redis`） | 同一诊断字段两种取值，排查时容易误判 | 真机 HTTP 验证 | drop-in 模板改为与 `BackendInterface::name()` 对齐 |
+| 20 | WordPress 桩的 `do_action()` 是空实现、`update_option()` 不触发钩子 | "钩子挂没挂上"在测试里恒为真，**是漏掉第 15 条的直接原因** | 复盘第 15 条时定位 | 两处桩改为忠实实现 |
+| 21 | 测试环境的 Redis 库号未覆盖，默认落在插件的 2 号库 | 在开发者本机跑测试会清掉**线上缓存** | 真机验证时意识到 | `wp-stubs.php` 固定 `AT8SA_REDIS_DB = 15` |
 
 ---
 
-## 五、未覆盖的部分（诚实说明）
+## 七、真机端到端验证（42 项 / 全部通过）
+
+环境：`https://wordpress.xmm.fan/`（WordPress + nginx + Redis，PHP 8.3.33）
+
+| 组 | 项数 | 关键结论 |
+| --- | ---: | --- |
+| 设置变更 → 运行时配置同步 | 5 | `cache_backend` 在 `disk`/`redis`/`auto` 间切换**每次立即生效**（修复前 6 次全不生效）；`cache_ttl` 同步 |
+| Redis 后端主路径 | 8 | `MISS-SAVED → HIT`；落盘 1 个数据键；HIT 后键数不变；只留 1 个索引集合；`Cache-Control: public, max-age=3600` |
+| Cookie 语义 | 9 | 8 类绕过 Cookie 全部 `BYPASS`（含登录态、密码保护、评论者、WooCommerce 购物车、EDD）；无关 Cookie 不误伤 |
+| `cache_logged_in` 开关 | 3 | `=1` 时登录态可缓存（原先死开关），但**密码保护页面依然拦截** |
+| 请求方法 / 后台 / 查询串 | 5 | POST、`wp-admin`、`wp-login.php`、`wp-json` 全部 `BYPASS`；查询串生成独立变体 |
+| 磁盘后端 | 8 | `MISS-SAVED → HIT`；布局 `<host>/__root/index.html`；disk 后端下 Cookie 拦截同样生效 |
+| 整站失效 | 4 | `purge_all()` 返回真实条目数（修复前恒为 0）；失效后 Redis 数据键 0 个、**孤儿索引集合 0 个** |
+
+可复现脚本见仓库根目录的验证流程说明；`tools/build-zip.php` 的自检确保发布包里不含测试与开发文件。
+
+---
+
+## 八、未覆盖的部分（诚实说明）
 
 | 项目 | 原因 | 计划 |
 | --- | --- | --- |
-| 真实 WordPress 集成测试 | 需要完整 WP + 数据库环境 | Phase 3 后续：WP-CLI 搭建测试站，跑端到端场景 |
-| Redis 后端真实读写 | CI 无 Redis 实例 | CI 中增加 `services: redis` 并跑真实读写 |
-| 多 PHP 版本矩阵 | 本地只有 PHP 7.3 | 已配置 CI 矩阵（7.4 / 8.0 / 8.1 / 8.2 / 8.3） |
-| 多站点（Multisite） | 需要完整 WP | 人工验证 + 后续自动化 |
-| 浏览器端行为（懒加载、预取） | 需要真实浏览器 | Playwright 端到端（Phase 3 后续） |
-| 性能基准（命中率、TTFB） | 需要真实流量与压测工具 | 见 `PERFORMANCE_BENCHMARK.md` 的测量方案 |
-
-> 本地只有 PHP 7.3.4 可用。代码在 7.3 上通过全部检查，
-> 而 7.3 的语法比目标基线 7.4 更严格（没有箭头函数、类型化属性、`??=` 等），
-> 因此"能过 7.3"是"能在 7.4+ 运行"的充分条件。
-> PHP 8.x 的兼容性由 CI 矩阵覆盖。
+| 多站点（Multisite） | 需要完整 WP 多站点环境 | 人工验证 + 后续自动化 |
+| 浏览器端行为（懒加载、预取） | 需要真实浏览器 | Playwright 端到端 |
+| 高并发下的缓存击穿 | 需要压测工具 | 见 `PERFORMANCE_BENCHMARK.md` 的测量方案 |
+| 各版本 WordPress 全矩阵 | 真机只装了当前版本 | 由 CI 的 PHP 矩阵 + 人工抽查覆盖 |
+| 第三方缓存插件共存 | 需要逐一安装验证 | `CachePluginDetector` 已做静态识别与提示，实际共存待逐个站点验证 |
+| 支付 / 授权链路（Pro） | Phase 4 起才开发 | 见 `COMMERCE_OPEN_QUESTIONS.md` |
 
 ---
 
-## 六、如何运行
+## 九、如何运行
 
 ```bash
-# 全部测试（含 drop-in 子进程）
+# 四道闸门（与 CI 完全一致）
+vendor/bin/phpcs --report=summary
+vendor/bin/phpstan analyse --memory-limit=2G --no-progress
 php tests/unit/smoke.php
+vendor/bin/phpunit --configuration phpunit.xml.dist
 
 # 单独跑 drop-in 夹具
 php tests/unit/dropin-hit.php hit
@@ -181,4 +270,6 @@ php tools/make-pot.php && git diff --stat languages/
 php tools/build-zip.php
 ```
 
-测试不依赖 Composer、不依赖 PHPUnit、不依赖网络。
+冒烟测试不依赖 Composer、不依赖网络；PHPUnit 与 PHPStan 需要
+`composer update` 安装开发依赖（`vendor/` 刻意不入版本控制，分发时不带）。
+Redis 相关用例在 Redis 不可达时显式跳过，其余全部可离线运行。

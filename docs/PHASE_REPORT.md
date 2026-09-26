@@ -189,41 +189,58 @@ drop-in 的命中路径不走 `BackendFactory`，所以 `RequestGuard::should_by
 
 ## 五、测试结果
 
+四道闸门全部为阻断式（对应计划书 §130 Release Gate）：
+
 ```
 $ php tests/unit/smoke.php
-通过：236  失败：0
+通过：248  失败：0
 全部通过。
 
-$ phpcs --standard=phpcs.xml.dist --report=summary
-0 错误 / 0 警告（41 个文件）
+$ vendor/bin/phpunit
+OK (208 tests, 550 assertions)
+
+$ vendor/bin/phpstan analyse --memory-limit=2G
+[OK] No errors
+
+$ vendor/bin/phpcs --report=summary
+0 错误 / 0 警告（42 个文件）
 ```
 
-21 个测试分组，覆盖容器、设置（含 30 项 2.x 设置迁移完整性）、缓存键与路径安全、
-请求准入、后端、失效、运行时配置、drop-in、压缩、懒加载、链接预取、
-浏览器缓存、兼容检测、诊断、缓存引擎、日志脱敏、文件系统边界、
-模板渲染、启动流程、生命周期、卸载脚本、安全静态检查。
+26 个冒烟分组，覆盖容器、设置（含 30 项 2.x 设置迁移完整性）、缓存键与路径安全、
+请求准入、后端、失效、后端一致性、**设置变更同步的架构守卫**、**运行时配置过期检测**、
+运行时配置、drop-in、压缩、懒加载、链接预取、浏览器缓存、兼容检测、诊断、
+缓存引擎、日志脱敏、文件系统边界、模板渲染、启动流程、生命周期、卸载脚本、安全静态检查。
 
 其中 **10 项是 drop-in 的真实执行测试**（独立子进程），
 覆盖命中、移动端变体、未命中放行、POST 放行、预览放行、安全模式放行、
 配置缺失放行、插件目录缺失静默退化。
 
+PHPUnit 12 个测试类覆盖单个类的行为与边界：`CachePath`(38)、`RequestGuard`(36)、
+`Settings`(26)、`BrowserCache`(21)、`Filesystem`(19)、`DiskBackend`(16)、
+`LazyLoad`(15)、`HtmlMinifier`(12)、`SettingsSync`(7)、`ConfigStaleness`(6)、
+`RedisBackend`(6)、`Purger`(6)。`RedisBackend` 在 Redis 不可达时显式跳过，
+CI 的 `test-redis` 任务额外断言跳过数为 0。
+
 测试自带环境复位，连续运行结果一致。
 
-**真实站点验证（2026-09-26）**：在 `https://wordpress.xmm.fan/`
+**真实站点验证（2026-09-26，两轮）**：在 `https://wordpress.xmm.fan/`
 （WordPress 7.1.2 / PHP 8.3.33 / nginx + HTTP/2 / 4 核 3.9G VPS /
 主题 Twenty Twenty-Five / 501 篇文章 / Redis 后端）完成：
 
 - 激活后 `wp-config.php` 写入 `WP_CACHE`、全量 `php -l` 无错、站点 HTTP 200；
-- 命中链路 `MISS-SAVED → HIT → HIT`，响应头带 `x-at8-cache-backend: redis`；
-- `purge_all()` / `purge_url()` 后目标 URL 回到 `MISS-SAVED`；
+- 命中链路 `MISS-SAVED → HIT → HIT`，响应头带 `X-AT8-Cache-Backend: Redis`；
 - 安全模式连续 3 次 `BYPASS`；停用后设置与缓存目录保留、drop-in 移除、
   重新启用后恢复正常；
 - A/B/C 三组性能对照与精准失效量化见 `docs/PERFORMANCE_BENCHMARK.md` 第七节；
-- 用 `dist/at8-site-accelerator-3.0.1.zip` 覆盖安装后复验通过。
+- 用 `dist/at8-site-accelerator-3.0.1.zip` 覆盖安装后复验通过；
+- 第二轮补做的 HTTP 功能验证共 42 项断言全部通过（设置同步、Cookie 语义、
+  双后端、整站失效、孤儿索引集合），明细见 `docs/RELEASE_CHECKLIST.md` 第九节。
 
-真机验证一共暴露并修复了 **6 个缺陷**（3 个致命 + 3 个功能性），
-详见 `CHANGELOG.md` 的 3.0.1 段。这些缺陷在纯单元测试与代码审查阶段都没有被发现——
+真机验证两轮一共暴露并修复了 **10 个缺陷**（含 1 个安全缺陷、2 个资源/生效类严重缺陷），
+详见 `CHANGELOG.md` 的 3.0.1 段。其中多数在纯单元测试与代码审查阶段都没有被发现——
 这是"必须在真实站点跑一遍"最有力的证据。
+反过来，补 PHPUnit 之后立刻抓出了一个冒烟测试完全没覆盖的**安全缺陷**
+（密码保护页面会被缓存给未输密码的访客），说明"广"和"深"两层缺一不可。
 
 ---
 
@@ -235,6 +252,12 @@ $ phpcs --standard=phpcs.xml.dist --report=summary
 - [x] PHP 8.x 真实站点运行验证（PHP 8.3.33）
 - [x] 按 `docs/PERFORMANCE_BENCHMARK.md` 执行真实基准测量（A/B/C 三组对照）
 - [x] 停用 / 重新启用 / 安全模式 / 精准失效的人工复核（11 项中 9 项）
+- [x] **补齐 PHPUnit 单元测试套件（208 用例 / 550 断言）**
+- [x] **补齐 PHPStan 静态分析（level 5，0 错误，豁免仅 1 条且附理由）**
+- [x] **CI 新增 `phpunit` / `phpstan` 两个阻断式任务，并把 Redis 任务升级为"冒烟 + 单元"**
+- [x] **HTTP 功能验证 42 项断言全部通过（设置同步 / Cookie 语义 / 双后端 / 整站失效）**
+- [x] **修正 WordPress 桩的两处不忠实之处**（`do_action()` 空实现、`update_option()` 不触发钩子）
+- [x] **测试环境 Redis 库号隔离到 15 号库**，不再有清掉线上缓存的风险
 
 ### 仍需在特定环境验证
 
@@ -260,8 +283,10 @@ $ phpcs --standard=phpcs.xml.dist --report=summary
 | 项目 | 结果 |
 | --- | --- |
 | PHPCS 存量问题 | ✅ 535 错误 / 88 警告 → **0**，CI 的 phpcs 任务已改为阻断 |
-| Redis 后端无真实读写测试 | ✅ 真机（装 Redis）上完成命中 / 失效 / 后端切换验证 |
-| CI 缺 Redis 任务 | ✅ `ci.yml` 新增 `test-redis`（用 `redis:7-alpine`，不装 phpredis 扩展，专门验证纯 PHP RESP 客户端）——**但该文件因令牌缺 `workflow` scope 尚未推送到远端** |
+| Redis 后端无真实读写测试 | ✅ 真机（装 Redis）上完成命中 / 失效 / 后端切换验证；并新增 `RedisBackendTest`（6 用例）在 CI 的 Redis 任务中真实执行 |
+| CI 缺 Redis 任务 | ✅ `ci.yml` 新增 `test-redis`（用 `redis:7-alpine`，不装 phpredis 扩展，专门验证纯 PHP RESP 客户端），并升级为"冒烟 + PHPUnit"、额外断言跳过数为 0 |
+| 缺 PHPUnit / PHPStan | ✅ 已补齐：PHPUnit 208 用例 / 550 断言、PHPStan level 5 零错误，均接入 CI 阻断 |
+| 测试可能清掉线上 Redis 缓存 | ✅ 测试库号隔离到 15 号（`AT8SA_REDIS_DB`） |
 
 ### 明确不做的（并说明理由）
 
@@ -281,27 +306,33 @@ $ phpcs --standard=phpcs.xml.dist --report=summary
 2. ✅ 按 `docs/PERFORMANCE_BENCHMARK.md` 执行基准测量，数据已填回第七节，
    测量脚本沉淀在 `tools/benchmark/`；
 3. ✅ 清理 PHPCS 存量问题（535 → 0），CI 中的 phpcs 任务已改为阻断；
-4. ✅ 私有仓库 `361611074/at8-site-accelerator` 已创建并推送（72 个文件）。
+4. ✅ 私有仓库 `361611074/at8-site-accelerator` 已创建并推送（72 个文件）；
+5. ✅ 补齐 PHPUnit 单元测试套件与 PHPStan 静态分析，四道闸门全部通过
+   （对应计划书 §130 Release Gate）；
+6. ✅ 第二轮真机 HTTP 功能验证 42 项断言全部通过，并据此修掉 4 个新缺陷
+   （含 Redis 索引集合无限堆积、设置同步只在后台生效）。
 
 ### 立即可做（还差一步就能闭环）
 
-5. **把 `.github/workflows/ci.yml` 补到远端**。本地文件是完整的，但 GitHub REST API
+7. **把 `.github/workflows/ci.yml` 补到远端**。本地文件是完整的，但 GitHub REST API
    要求令牌带 `workflow` scope 才能写 `.github/workflows/*`，当前令牌只有
    `gist, read:org, repo`。两条路：
    - 重新授权并勾选 `workflow`（`gh auth refresh -s workflow`，需要能访问 `github.com`；
      本机网络对 `github.com` 时通时断，两次设备码授权均超时失败）；
    - 或在 GitHub 网页上新建文件 `.github/workflows/ci.yml`，内容照抄本地。
-   在此之前，CI 里的 `test-redis` 与"phpcs 阻断"两项改动都不会在流水线上生效。
-
-6. 在有 Elementor / WooCommerce 的站点上补一次真机确认（见第六节）。
+   在此之前，CI 里的 `test-redis`、`phpunit`、`phpstan` 与"phpcs 阻断"四项改动
+   都不会在流水线上生效。
+8. 在有 Elementor / WooCommerce 的站点上补一次真机确认（见第六节）。
 
 ### 需要用户决策后才能做
 
-7. 就 `docs/COMMERCE_OPEN_QUESTIONS.md` 的 **Q1（产品形态）** 与
+9. 就 `docs/COMMERCE_OPEN_QUESTIONS.md` 的 **Q1（产品形态）** 与
    **Q13（授权模式）** 给出决定——这两个是所有商业化工作的前提；
-8. 决定后再补 `COMMERCE_SPEC.md` / `PAYMENT_SPEC.md` / `LICENSE_SPEC.md`。
+10. 决定后再补 `COMMERCE_SPEC.md` / `PAYMENT_SPEC.md` / `LICENSE_SPEC.md`。
 
 ### 依赖外部条件
 
-9. Lighthouse 前端指标需要带 GUI 的浏览器环境；
-10. Redis 后端优势的完整验证需要一个"缓存目录位于 NFS / 云盘"的站点。
+11. Lighthouse 前端指标需要带 GUI 的浏览器环境；
+12. Redis 后端优势的完整验证需要一个"缓存目录位于 NFS / 云盘"的站点；
+13. Phase 6-8（Commerce Server + 4 条支付渠道）需要真实的
+    Stripe / PayPal / 支付宝 / 微信 Sandbox 凭证才能出具计划书 §138 要求的支付证据。

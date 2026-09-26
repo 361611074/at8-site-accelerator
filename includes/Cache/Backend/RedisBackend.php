@@ -58,6 +58,32 @@ final class RedisBackend implements BackendInterface {
 	}
 
 	/**
+	 * 站点令牌（盐去掉 `|v<版本>` 后缀）。
+	 *
+	 * @return string
+	 */
+	private function site_token() {
+		$parts = explode( '|', $this->salt );
+
+		return (string) $parts[0];
+	}
+
+	/**
+	 * 本站点**所有版本**索引集合的通配。
+	 *
+	 * 用于清扫历史孤儿：旧版本的索引集合虽然已不可达，但它是 `SADD` 建的、
+	 * 没有 TTL，不清就会永远留在 Redis 里。
+	 *
+	 * 前缀里带了 `|` 分隔符，因此不会误伤同 Redis 上其它站点
+	 * （令牌是 32 位十六进制，不存在"一个是另一个的前缀且后接 `|`"的情况）。
+	 *
+	 * @return string
+	 */
+	private function orphan_index_pattern() {
+		return 'at8sa:' . $this->site_token() . '|*|__index';
+	}
+
+	/**
 	 * {@inheritDoc}
 	 *
 	 * @param string $host   主机。
@@ -180,16 +206,11 @@ final class RedisBackend implements BackendInterface {
 		}
 
 		$index = $this->index_key();
-		$keys  = $this->client->smembers( $index );
 
-		if ( ! is_array( $keys ) ) {
-			$keys = array();
-		}
-
-		foreach ( array_chunk( $keys, 200 ) as $chunk ) {
-			if ( ! empty( $chunk ) ) {
-				$this->client->del( $chunk );
-			}
+		// smembers() 内部已把异常回包归一化成空数组，这里不必再判类型；
+		// array_chunk() 也不会产出空分片，所以分片内无需再判空。
+		foreach ( array_chunk( $this->client->smembers( $index ), 200 ) as $chunk ) {
+			$this->client->del( $chunk );
 		}
 
 		$this->client->del( $index );
@@ -198,9 +219,15 @@ final class RedisBackend implements BackendInterface {
 		$scanned = $this->client->scan( CachePath::redis_pattern( $this->salt ) );
 
 		foreach ( array_chunk( (array) $scanned, 200 ) as $chunk ) {
-			if ( ! empty( $chunk ) ) {
-				$this->client->del( $chunk );
-			}
+			$this->client->del( $chunk );
+		}
+
+		// 再兜一层：清掉本站点**历史版本**遗留的孤儿索引集合。
+		// 这些集合已不可达，但 SADD 没有 TTL，不清就永久占着 Redis。
+		$orphans = $this->client->scan( $this->orphan_index_pattern() );
+
+		foreach ( array_chunk( (array) $orphans, 200 ) as $chunk ) {
+			$this->client->del( $chunk );
 		}
 
 		return true;
@@ -234,7 +261,7 @@ final class RedisBackend implements BackendInterface {
 		$keys = $this->client->smembers( $this->index_key() );
 
 		return array(
-			'count' => is_array( $keys ) ? count( $keys ) : 0,
+			'count' => count( $keys ),
 			'bytes' => 0,
 		);
 	}

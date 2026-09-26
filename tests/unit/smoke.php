@@ -55,6 +55,20 @@ function section( $title ) {
 	echo "\n=== {$title} ===\n";
 }
 
+/**
+ * 显式跳过一段断言（环境不具备时）。
+ *
+ * 为什么不写成 `check( '...', true )`：那是一个恒真断言，
+ * 会把"没测"伪装成"测过了"，正是本项目专门清理过的反模式。
+ * 跳过就是跳过，打印出来，不进通过/失败计数。
+ *
+ * @param string $reason 跳过原因。
+ * @return void
+ */
+function skip( $reason ) {
+	echo "  [SKIP] {$reason}\n";
+}
+
 function expect_throw( $label, callable $fn ) {
 	try {
 		$fn();
@@ -281,6 +295,13 @@ check( '文本被去标签', false === strpos( $dirty['exclude_urls'], '<script'
 // 2.x 迁移
 // 这里刻意把 2.x 的**全部 30 个设置键**都塞进去，逐个核对迁移后是否有值、
 // 以及是否有"旧开关搬过来却没人消费"的遗漏（用户明确要求兼容旧设置）。
+/**
+ * 2.x 旧设置。值来自数据库（option），本质是 mixed——
+ * 标注成 array<string, mixed> 而不是让 PHPStan 从字面量推断出联合字面量类型，
+ * 否则下面按"数组/字符串/数字"三分支比较时会被判成"某分支恒不可达"。
+ *
+ * @var array<string, mixed> $legacy_keys
+ */
 $legacy_keys = array(
 	'page_cache'             => 0,
 	'cache_ttl'              => 7200,
@@ -349,7 +370,7 @@ foreach ( $legacy_keys as $key => $value ) {
 	$got = $fresh->get( $new_key );
 
 	if ( is_array( $value ) ) {
-		if ( array_values( $value ) !== array_values( (array) $got ) ) {
+		if ( $value !== array_values( (array) $got ) ) {
 			$lost[] = $key . '（数组值不一致）';
 		}
 	} elseif ( is_string( $value ) && ! is_numeric( $value ) ) {
@@ -561,6 +582,34 @@ check(
 	} )
 );
 
+// 前缀型 Cookie 必须逐个验证。
+// 这一组是补上的回归用例：内置表里 wp-postpass_ / comment_author_ /
+// wp_woocommerce_session_ 曾经漏写结尾的 `*`，于是退化成"精确匹配"，
+// 真实 Cookie 名（带 <COOKIEHASH> 后缀）永远匹配不上——密码保护页面
+// 会被缓存并端给没输密码的访客。冒烟测试当时只测了精确名 Cookie，没拦住。
+foreach ( array(
+	'密码保护 wp-postpass_*'          => 'wp-postpass_' . COOKIEHASH,
+	'评论者 comment_author_*'         => 'comment_author_' . COOKIEHASH,
+	'WooCommerce 会话 wp_woocommerce_session_*' => 'wp_woocommerce_session_' . COOKIEHASH,
+	'EDD 购物车 edd_items_in_cart'    => 'edd_items_in_cart',
+) as $label => $cookie_name ) {
+	check(
+		'前缀 Cookie 绕过：' . $label,
+		with_request( array( 'REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/' ), array( $cookie_name => 'x' ), function () use ( $config ) {
+			return RequestGuard::should_bypass( $config );
+		} )
+	);
+}
+
+// 反向用例：与内置前缀"像但不是"的 Cookie 不能被误伤，
+// 否则会把本该共享的缓存全部打穿（命中率归零）。
+check(
+	'非前缀同名 Cookie 不误伤',
+	! with_request( array( 'REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/' ), array( 'wp-postpass' => 'x' ), function () use ( $config ) {
+		return RequestGuard::should_bypass( $config );
+	} )
+);
+
 check(
 	'safe_mode 全局关闭缓存',
 	with_request( array( 'REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/' ), array(), function () use ( $config ) {
@@ -734,6 +783,98 @@ check(
 check( 'bump 返回递增后的版本号', $version_next === (int) $salt_factory->cache_version() );
 
 /* ---------------------------------------------------------------------------
+ * 6c. 设置变更同步：架构守卫
+ *
+ * 真机实测到的缺陷：`update_option_<option>` 监听器原先挂在 `SettingsPage::boot()` 上，
+ * 而那只在 `is_admin()` 为真时执行。于是 WP-CLI / WP-Cron / 其它插件里改设置
+ * 完全不生效——连改 6 次 cache_backend，前台响应头始终走旧后端。
+ *
+ * 这里用源码级守卫把"与上下文无关"这条不变式钉住：
+ * 监听器只能出现在 Core\SettingsSync（由 boot_shared 启动），
+ * 不得再出现在任何后台类里。
+ * ------------------------------------------------------------------------ */
+
+section( '设置变更同步（架构守卫）' );
+
+$sync_class_src = (string) file_get_contents( AT8SA_PATH . 'includes/Core/SettingsSync.php' );
+$plugin_src     = strip_php_comments( (string) file_get_contents( AT8SA_PATH . 'includes/Core/Plugin.php' ) );
+$admin_page_src = strip_php_comments( (string) file_get_contents( AT8SA_PATH . 'includes/Admin/SettingsPage.php' ) );
+
+check(
+	'SettingsSync 监听 update_option_<option>',
+	false !== strpos( $sync_class_src, "'update_option_'" )
+);
+
+check(
+	'Plugin::boot_shared() 启动了 SettingsSync',
+	(bool) preg_match( '/SettingsSync::class\s*\)\s*->boot\s*\(/', $plugin_src )
+);
+
+check(
+	'SettingsPage 不再自己监听 update_option_<option>',
+	false === strpos( $admin_page_src, 'update_option_' ),
+	'后台专属的 boot() 里挂这个钩子，会让 CLI / Cron 场景改设置失效'
+);
+
+check(
+	'运行时配置兜底只依赖 needs_refresh()，不自己拼主机名',
+	(bool) preg_match( '/needs_refresh\s*\(\s*\)/', $plugin_src )
+		&& false === strpos( $plugin_src, 'strtolower( preg_replace(' ),
+	'自己拼一份主机名归一化，迟早和 Config::write() 漂移成"写 A 读 B"'
+);
+
+/* ---------------------------------------------------------------------------
+ * 6d. 运行时配置的过期检测
+ *
+ * `update_option_{$option}` 钩子覆盖不到直接改库（$wpdb->update、wp option import、
+ * 迁移脚本、DB 层手工修改）。needs_refresh() 用设置指纹兜底。
+ * ------------------------------------------------------------------------ */
+
+section( '运行时配置过期检测' );
+
+$stale_settings = new Settings();
+$stale_settings->persist(
+	$stale_settings->sanitize(
+		array(
+			'page_cache'    => 1,
+			'cache_backend' => 'disk',
+			'cache_ttl'     => 3600,
+		)
+	)
+);
+
+$stale_factory = new BackendFactory( $stale_settings, $logger );
+$stale_config  = new Config( $stale_settings, $stale_factory );
+$stale_runtime = $stale_config->runtime();
+
+check( '运行时配置带设置指纹', isset( $stale_runtime['settings_hash'] ) );
+
+$stale_config->write( $stale_runtime );
+
+// 每次都新建实例：真实场景里 needs_refresh() 在**新请求**中执行，
+// 那时 Settings 是全新的、缓存反映的是当前库值。
+$fresh_config = new Config( new Settings(), new BackendFactory( new Settings(), $logger ) );
+
+check( '刚写完不算过期', false === $fresh_config->needs_refresh() );
+
+// 绕过 update_option() 直接改库：钩子不触发，只有指纹能发现。
+$stale_raw              = get_option( Settings::OPTION );
+$stale_raw['cache_ttl'] = 1234;
+$GLOBALS['at8sa_test_options'][ Settings::OPTION ] = $stale_raw;
+
+$drifted_config = new Config( new Settings(), new BackendFactory( new Settings(), $logger ) );
+
+check(
+	'设置被直接改库后判定为过期',
+	$drifted_config->needs_refresh(),
+	'指纹没生效的话，"改了设置不生效"会永远存在'
+);
+
+// 恢复，避免影响后续章节。
+$stale_raw['cache_ttl'] = 3600;
+$GLOBALS['at8sa_test_options'][ Settings::OPTION ] = $stale_raw;
+
+/* ---------------------------------------------------------------------------
  * 7. 运行时配置与 drop-in
  * ------------------------------------------------------------------------ */
 
@@ -786,7 +927,9 @@ if ( null !== $saved_http_host ) {
 
 $dropin = new AdvancedCache( $logger );
 
-check( 'drop-in 初始未安装', false === $dropin->is_installed() || true ); // 环境可能已有，只做调用验证
+// 不断言"一定未安装"——环境里可能本来就有 drop-in。
+// 断言的是"查询本身可用且返回布尔"，这才是本用例要守的契约。
+check( 'drop-in 安装状态可查询', is_bool( $dropin->is_installed() ) );
 $install_result = $dropin->install();
 check( 'drop-in 安装调用成功', true === $install_result );
 
@@ -1129,7 +1272,17 @@ section( '兼容检测' );
 $detector = new CachePluginDetector( $clean );
 $conflicts = $detector->scan( true );
 
-check( '扫描返回数组', is_array( $conflicts ) );
+// scan() 的返回类型在静态层面已确定是数组，所以"是不是数组"没有断言价值。
+// 真正值得守的是**每一项的结构契约**：后台提示与诊断页都直接读这三个键。
+$conflict_shape_ok = true;
+
+foreach ( $conflicts as $conflict ) {
+	if ( ! isset( $conflict['name'], $conflict['type'], $conflict['severity'] ) ) {
+		$conflict_shape_ok = false;
+	}
+}
+
+check( '冲突项结构完整（name/type/severity）', $conflict_shape_ok );
 check( '已知插件清单不少于 8 项', count( $detector->known_plugins() ) >= 8, count( $detector->known_plugins() ) );
 
 foreach ( array( 'WP Rocket', 'LiteSpeed Cache', 'W3 Total Cache', 'WP Super Cache', 'Autoptimize', 'FlyingPress', 'Perfmatters', 'Cache Enabler' ) as $name ) {
@@ -1185,10 +1338,17 @@ $live_settings->persist(
 $live_factory = new BackendFactory( $live_settings, $logger );
 $engine       = new CacheEngine( $live_settings, $live_factory, $logger, $minifier );
 
-check( 'boot 不抛异常', true === ( function () use ( $engine ) {
+// 用显式 try/catch 抓异常，而不是"闭包恒返回 true"——
+// 后者一旦测试框架改成不把致命错误当失败，这条用例就会静默变成永真断言。
+$boot_ok = true;
+
+try {
 	$engine->boot();
-	return true;
-} )() );
+} catch ( \Throwable $e ) {
+	$boot_ok = false;
+}
+
+check( 'boot 不抛异常', $boot_ok );
 
 $GLOBALS['at8sa_minify_done'] = null;
 

@@ -3,22 +3,26 @@
 > 对应开发计划书 §87（发布产物）、§133（Phase 交付物）。
 > 每次发布新版本前逐项勾选，**不允许跳过**。
 
-版本：`3.0.0`
-类型：Free 版首发
+版本：`3.0.1`
+类型：真机验证修复版
 
 ---
 
-## 一、代码质量
+## 一、代码质量（四道闸门，全部阻断式）
 
 - [x] 全部 PHP 文件通过 `php -l`
 - [x] 全部 JS 文件通过 `node --check`
-- [x] `php tests/unit/smoke.php` → 198 通过 / 0 失败
+- [x] `php tests/unit/smoke.php` → **248 通过 / 0 失败**（26 组，0 跳过）
+- [x] `vendor/bin/phpunit` → **208 用例 / 550 断言，全通过**
+- [x] `vendor/bin/phpstan analyse` → **0 错误**（level 5，豁免仅 1 条且附理由）
+- [x] `vendor/bin/phpcs --report=summary` → **0 错误 / 0 警告**（42 个文件）
 - [x] 连续运行两次结果一致（测试自带环境复位）
 - [x] 所有 `use` 引用可解析（无指向不存在类的 import）
-- [x] 无未使用的类 / 常量 / 设置项（本轮已清理 `ServiceProviderInterface`、`AT8SA_MIN_CACHE_ROOT`、`AT8SA_CACHE_ROOT_URL`、`http2_push`）
+- [x] 无未使用的类 / 常量 / 设置项（本轮已清理 `ServiceProviderInterface`、`AT8SA_MIN_CACHE_ROOT`、`AT8SA_CACHE_ROOT_URL`、`http2_push`，以及 `SettingsPage` 的 8 个未使用 import）
 - [x] 每个设置项都有实际消费方（无"点了没反应"的开关）
 - [x] CSS 中无 `!important`
 - [x] 前端 JS 不依赖 jQuery（`admin.js`、`preloader.js` 均为原生）
+- [x] CI 的 `package` 任务依赖全部质量闸门（`test` / `test-redis` / `phpunit` / `phpstan`）
 
 ## 二、安全
 
@@ -51,7 +55,7 @@
 
 - [x] 所有用户可见文案使用 `__()` / `esc_html__()` / `esc_html_e()` 等
 - [x] Text Domain 统一为 `at8-site-accelerator`
-- [x] `languages/at8-site-accelerator.pot` 已生成（313 条）
+- [x] `languages/at8-site-accelerator.pot` 已生成（316 条）
 - [x] `.pot` 与源码同步（CI 会自动校验，过期即失败）
 - [x] `.pot` 中的文件引用使用正斜杠（跨平台）
 
@@ -74,10 +78,10 @@
 
 发布前必须四处一致，缺一处就会出现"用户装的版本和你说的是两个版本"：
 
-- [x] 插件头 `Version: 3.0.0`
-- [x] `define( 'AT8SA_VERSION', '3.0.0' )`
-- [x] `readme.txt` 的 `Stable tag: 3.0.0`
-- [x] `CHANGELOG.md` 最新条目为 `3.0.0`
+- [x] 插件头 `Version: 3.0.1`
+- [x] `define( 'AT8SA_VERSION', '3.0.1' )`
+- [x] `readme.txt` 的 `Stable tag: 3.0.1`
+- [x] `CHANGELOG.md` 最新条目为 `3.0.1`
 - [x] `languages/at8-site-accelerator.pot` 的 `Project-Id-Version`
 
 > 版本号规则：十进制封十进一（`1.2.9` → `1.3.0`），不存在 `1.2.10`。
@@ -87,9 +91,12 @@
 - [x] `.gitignore` 已配置（排除测试产物、打包产物、密钥、编辑器文件）
 - [x] `tests/unit/fake-wp/` 不入库（每次运行自动重建）
 - [x] `dist/` 不入库
+- [x] `vendor/` 与 `composer.lock` 不入库（分发时不带开发依赖）
 - [x] 无 `.env` / 凭证文件入库
-- [x] CI 配置：`.github/workflows/ci.yml`（PHP 7.4–8.3 矩阵 + PHPCS + 打包）
+- [x] CI 配置：`.github/workflows/ci.yml`
+      （PHP 7.4–8.3 矩阵 + Redis 冒烟/单元 + PHPUnit 矩阵 + PHPStan + PHPCS + 打包）
 - [x] `phpcs.xml.dist` 已配置，豁免项均有理由说明
+- [x] 测试用 Redis 库号固定为 15（`tests/unit/wp-stubs.php`），不会碰真实站点的 2 号库
 
 ## 八、打包产物
 
@@ -111,7 +118,7 @@
 | # | 项目 | 结果 | 证据 |
 | --- | --- | --- | --- |
 | 1 | 真实站点启用无白屏 | ✅ | `HTTP/2 200`，首页正常渲染 |
-| 2 | `advanced-cache.php` 已生成且带归属标记 | ✅ | 4778 字节，`grep -c "AT8 Site Accelerator"` = 1 |
+| 2 | `advanced-cache.php` 已生成且带归属标记 | ✅ | 4974 字节，`grep -c "AT8 Site Accelerator"` = 1 |
 | 3 | `wp-config.php` 中 `WP_CACHE` 已开启 | ✅ | 第 98 行 `define( 'WP_CACHE', true );`，`php -l` 无语法错误，原文件已备份为 `wp-config.php.at8sa.bak` |
 | 4 | 二次访问 `X-AT8-Cache: HIT` | ✅ | 第 1 次 `MISS-SAVED` → 第 2、3 次 `HIT` |
 | 5 | 编辑 1 篇只清相关 URL | ✅ | 预热 71 条 → 清除 4 条（5.6%）；目标文章 `MISS-SAVED`，无关文章仍 `HIT`。对照组 `purge_scope=all` 清 71/71 |
@@ -123,13 +130,43 @@
 | 11 | PHP 8.x 真实站点 | ✅ | PHP 8.3.33 |
 
 **未验证项（6 / 7）的处理**：`ElementorCompat` 与 WooCommerce 相关逻辑只做"检测到就绕过"，
-不改写业务行为，代码路径已被 236 项冒烟断言覆盖；但仍建议在上游用户的
-Elementor / WooCommerce 站点上补一次真机确认后再发正式版。
+不改写业务行为，代码路径已被 248 项冒烟断言与 `RequestGuardTest` 的 Cookie 矩阵覆盖；
+但仍建议在上游用户的 Elementor / WooCommerce 站点上补一次真机确认后再发正式版。
+
+### HTTP 功能验证（2026-09-26 · 42 项 / 全部通过）
+
+第二轮真机验证专门针对 3.0.1 修动的链路，逐项断言（脚本可复现）：
+
+| 组 | 项数 | 关键结论 |
+| --- | ---: | --- |
+| 设置变更 → 运行时配置同步 | 5 | `cache_backend` 在 `disk`/`redis`/`auto` 间切换**每次立即生效**；`cache_ttl` 同步 |
+| Redis 后端主路径 | 8 | `MISS-SAVED → HIT`；落盘 1 个数据键；HIT 后键数不变；只留 1 个索引集合 |
+| Cookie 语义 | 9 | 8 类绕过 Cookie 全部 `BYPASS`；无关 Cookie 不误伤 |
+| `cache_logged_in` 开关 | 3 | `=1` 时登录态可缓存，但**密码保护页面依然拦截** |
+| 请求方法 / 后台 / 查询串 | 5 | POST、`wp-admin`、`wp-login.php`、`wp-json` 全部 `BYPASS`；查询串生成独立变体 |
+| 磁盘后端 | 8 | `MISS-SAVED → HIT`；布局 `<host>/__root/index.html` |
+| 整站失效 | 4 | `purge_all()` 返回真实条目数；失效后 Redis 数据键 0 个、孤儿索引集合 0 个 |
 
 ### 复核时顺带发现并修复的问题
 
+第一轮（3.0.0 → 3.0.1）：
+
 - `wp-config.php` 的括号配平校验把 salt 字符串里的大括号也算进去 → 校验恒失败 → `WP_CACHE` 永远开不起来（详见 `docs/PERFORMANCE_BENCHMARK.md` 7.8）。
 - 缓存目录属主是 root 而 PHP-FPM 是 `www` → 磁盘后端静默写不进去，表现为"缓存没生效"但不报错。
+
+第二轮（补 PHPUnit / PHPStan / HTTP 验证时）：
+
+- **密码保护页面会被缓存**：内置绕过 Cookie 表里的前缀漏写 `*`，`wp-postpass_` 永远匹配不上。
+  由 PHPUnit 的数据提供器矩阵抓到（冒烟测试没覆盖到）。
+- **`cache_logged_in` 是死开关**：修好上一条后连带暴露——`wordpress_logged_in_*` 被两处逻辑重复管理。
+  改为单一归属。
+- **WP-CLI / Cron 改设置完全不生效**：同步链路挂在 `is_admin()` 之后的后台类里。
+  真机受控实验连改 6 次 `cache_backend` 全部无效。已提取为 `Core\SettingsSync`。
+- **Redis 索引集合无限堆积**：`purge_all()` 先换盐再 flush，旧盐的索引集合（无 TTL）被永久孤立。
+  测试机上残留 21 个。已调整顺序并加清扫。
+- **`purge_all()` 的条目数恒为 0**：同上一条的副作用，日志里的"失效条目数"完全失真。
+- **WordPress 桩不忠实**：`do_action()` 空实现、`update_option()` 不触发钩子——
+  这是漏掉上面第 3 条的直接原因，已修正。
 
 ## 十、发布后
 

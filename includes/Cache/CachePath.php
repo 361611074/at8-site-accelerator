@@ -82,7 +82,7 @@ final class CachePath {
 
 		parse_str( $parts[1], $query );
 
-		if ( ! is_array( $query ) || empty( $query ) ) {
+		if ( empty( $query ) ) {
 			return $parts[0];
 		}
 
@@ -228,7 +228,7 @@ final class CachePath {
 		$parts = explode( '?', (string) $uri, 2 );
 
 		return array(
-			'path'  => isset( $parts[0] ) ? $parts[0] : '/',
+			'path'  => $parts[0],
 			'query' => isset( $parts[1] ) ? $parts[1] : '',
 		);
 	}

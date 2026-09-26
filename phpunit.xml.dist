@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	PHPUnit 配置（计划书 §72 / §89 / §130 要求）。
+
+	分工说明（重要，避免把两套东西混为一谈）：
+	- tests/phpunit/  —— 本文件驱动的**单元测试**。每个用例只测一个类的行为，
+	                     用 PHPUnit 的断言与数据提供器，失败信息精确到方法。
+	- tests/unit/smoke.php —— 冒烟测试。它的价值在"广"：把 38 个类全部实例化、
+	                     把安装/停用/卸载/drop-in 命中路径真跑一遍，抓的是
+	                     "某个类根本加载不起来"这类 E_ERROR。
+	两者不重复：单元测试保证**逻辑对不对**，冒烟测试保证**整条链路还活着**。
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+	bootstrap="tests/phpunit/bootstrap.php"
+	colors="true"
+	cacheResult="false"
+	beStrictAboutOutputDuringTests="true"
+	beStrictAboutTestsThatDoNotTestAnything="true"
+	failOnWarning="true"
+	convertDeprecationsToExceptions="true"
+	convertErrorsToExceptions="true"
+	convertNoticesToExceptions="true"
+	convertWarningsToExceptions="true"
+	>
+	<testsuites>
+		<testsuite name="AT8 Site Accelerator 单元测试">
+			<directory suffix="Test.php">tests/phpunit</directory>
+		</testsuite>
+	</testsuites>
+
+	<coverage>
+		<include>
+			<directory suffix=".php">includes</directory>
+		</include>
+		<exclude>
+			<directory suffix=".php">includes/Admin</directory>
+		</exclude>
+	</coverage>
+</phpunit>

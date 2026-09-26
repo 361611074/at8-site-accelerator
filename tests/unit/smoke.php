@@ -715,6 +715,24 @@ check(
 	'backend=' . $runtime_backend
 );
 
+// 盐（site_token|v版本）是后端实例的构造参数：改完版本必须丢掉已记忆化的实例。
+// 否则同一请求内后续读写会落到旧盐命名空间——写进去的条目 drop-in 按新盐读，
+// 永远不命中；backend_status() 也会统计旧盐键而恒为 0。
+// 真机（Redis）实测到：purge_all() 后同请求 cached_pages 返回 0，redis 里实有 71 个新盐键。
+$salt_factory = new BackendFactory( $auto_settings, $logger );
+$salt_backend = $salt_factory->make();
+$salt_before  = $salt_factory->salt();
+$version_next = $salt_factory->bump_cache_version();
+$salt_after   = $salt_factory->salt();
+
+check( 'bump 后盐确实变了', $salt_before !== $salt_after, $salt_before . ' -> ' . $salt_after );
+check(
+	'bump 后 make() 返回新实例（旧盐实例已作废）',
+	$salt_backend !== $salt_factory->make(),
+	'仍是同一个实例，说明 resolved 没被清掉'
+);
+check( 'bump 返回递增后的版本号', $version_next === (int) $salt_factory->cache_version() );
+
 /* ---------------------------------------------------------------------------
  * 7. 运行时配置与 drop-in
  * ------------------------------------------------------------------------ */
@@ -734,6 +752,37 @@ check( '配置文件已生成', is_file( AT8SA_CACHE_ROOT . '/config/default.php
 $written = include AT8SA_CACHE_ROOT . '/config/default.php';
 check( '配置文件返回数组', is_array( $written ) );
 check( '配置文件 salt 一致', $written['salt'] === $runtime['salt'] );
+
+// CLI / WP-Cron 场景（没有 HTTP_HOST）：配置必须写到 home_url() 对应的主机文件，
+// 否则 wp-cli 里的配置改动只会落进 default.php，而 drop-in 在前台优先读 <host>.php
+// ——改动永远到不了 drop-in。真机实测：wp-cli 切后端报成功，前台响应头仍是旧后端。
+// 顺带确认已有的其它 host 配置也会被一并刷新。
+$saved_http_host = isset( $_SERVER['HTTP_HOST'] ) ? $_SERVER['HTTP_HOST'] : null;
+unset( $_SERVER['HTTP_HOST'] );
+
+$cli_config    = new Config( $clean, $factory );
+$cli_runtime   = $cli_config->runtime();
+$cli_expected  = CachePath::normalize_host( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
+$cli_host_file = AT8SA_CACHE_ROOT . '/config/' . $cli_expected . '.php';
+
+// 先造一个"陈旧"的 host 配置，验证它会被刷新。
+file_put_contents( $cli_host_file, "<?php\nreturn array('enabled' => 0, 'stale' => true);\n" );
+
+$cli_config->write( $cli_runtime );
+
+$cli_written = include $cli_host_file;
+
+check(
+	'无 HTTP_HOST 时配置写到 home_url 对应的主机文件',
+	is_file( $cli_host_file ),
+	'期望 ' . $cli_expected . '.php'
+);
+check( '该主机文件已被刷新（不再是陈旧内容）', is_array( $cli_written ) && ! isset( $cli_written['stale'] ) );
+check( '该主机文件与 default 内容一致', is_array( $cli_written ) && $cli_written['salt'] === $cli_runtime['salt'] );
+
+if ( null !== $saved_http_host ) {
+	$_SERVER['HTTP_HOST'] = $saved_http_host;
+}
 
 $dropin = new AdvancedCache( $logger );
 
@@ -895,6 +944,43 @@ $GLOBALS['at8sa_minify_done'] = null;
 
 $conditional = '<html><!--[if IE]><p>ie</p><![endif]-->' . str_repeat( '<div>x</div>', 100 ) . '</html>';
 check( 'IE 条件注释保留', false !== strpos( $minifier->minify( $conditional ), '[if IE]' ) );
+
+$GLOBALS['at8sa_minify_done'] = null;
+
+// ---- 内联 CSS 折叠（html_minify_inline）----
+// 该开关曾是"死设置"：只在 Settings 里声明、后台有开关，代码里从未读取
+// （真机实测开启后体积 68253 → 68253，零变化）。现已实现。
+$inline_settings = new Settings();
+$inline_settings->persist(
+	$inline_settings->sanitize(
+		array(
+			'html_minify'       => 1,
+			'html_minify_inline' => 1,
+		)
+	)
+);
+$inline_minifier = new HtmlMinifier( $inline_settings );
+
+$inline_html = '<html><head><style>' . "\n"
+	. ".a {\n    color : red ;\n    font-family : sans   serif ;\n}\n"
+	. '.b::after { content: "a   b"; }' . "\n"
+	. "</style></head><body>"
+	. str_repeat( '<div>pad</div>', 100 )
+	. "<script>var s = 'keep   this';\nvar t = 2;</script>"
+	. '</body></html>';
+
+$inline_out = $inline_minifier->minify( $inline_html );
+
+check( '内联 CSS 的连续空白被折叠', false !== strpos( $inline_out, '.a { color : red ; font-family : sans serif ; }' ), $inline_out );
+check( '内联 CSS 引号内空格保留', false !== strpos( $inline_out, 'content: "a   b";' ), $inline_out );
+check( '内联 JS 未被折叠（ASI 安全）', false !== strpos( $inline_out, "var s = 'keep   this';" ), $inline_out );
+check( '内联折叠后体积变小', strlen( $inline_out ) < strlen( $inline_html ) );
+
+$GLOBALS['at8sa_minify_done'] = null;
+
+// 默认（inline 关闭）时不应动内联 CSS
+$default_out = ( new HtmlMinifier( $clean ) )->minify( $inline_html );
+check( '默认关闭时不折叠内联 CSS', false !== strpos( $default_out, 'sans   serif' ), $default_out );
 
 $GLOBALS['at8sa_minify_done'] = null;
 

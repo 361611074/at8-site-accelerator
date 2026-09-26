@@ -150,12 +150,24 @@ final class BackendFactory {
 	/**
 	 * 递增缓存版本。
 	 *
+	 * 盐（`site_token()|v<版本>`）是后端实例的构造参数，所以改完版本必须把
+	 * **已记忆化的后端实例丢掉**（`$this->resolved = null`）。否则同一请求内
+	 * 后续的读写仍落在旧盐命名空间：
+	 * - 写进去的条目 drop-in 永远读不到（它按新盐读）→ 表现为"缓存了却永远不命中"；
+	 * - `backend_status()['cached_pages']` 会统计旧盐键 → 恒为 0，诊断信息失真。
+	 *
+	 * 这个缺陷在真机（Redis 后端）实测到：purge_all() 后同请求统计条目数返回 0，
+	 * 而 redis-cli 里实际有 71 个新盐键。
+	 *
 	 * @return int
 	 */
 	public function bump_cache_version() {
 		$next = $this->cache_version() + 1;
 
 		update_option( 'at8sa_cache_version', $next, false );
+
+		// 盐变了，绑在旧盐上的后端实例立即作废。
+		$this->resolved = null;
 
 		return $next;
 	}

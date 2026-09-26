@@ -105,7 +105,22 @@ final class Config {
 			return false;
 		}
 
-		$host = CachePath::normalize_host( isset( $_SERVER['HTTP_HOST'] ) ? $_SERVER['HTTP_HOST'] : 'default' );
+		$http_host = isset( $_SERVER['HTTP_HOST'] ) ? (string) $_SERVER['HTTP_HOST'] : '';
+
+		// WP-CLI / WP-Cron 这类非 HTTP 上下文里没有 HTTP_HOST，此时退化成从
+		// home_url() 取主机，保证写出的文件名与前台请求的主机名一致。
+		// 否则会写成 default.php，而 drop-in 在前台（有 HTTP_HOST）优先读
+		// <host>.php —— 于是 CLI 里的配置改动永远到不了 drop-in。
+		// 真机实测：wp-cli 把后端切成 redis，脚本报成功，前台响应头却仍是 disk。
+		if ( '' === $http_host && function_exists( 'home_url' ) ) {
+			$parsed = wp_parse_url( home_url() );
+
+			if ( ! empty( $parsed['host'] ) ) {
+				$http_host = (string) $parsed['host'];
+			}
+		}
+
+		$host = CachePath::normalize_host( $http_host );
 		$body = "<?php\n"
 			. "// AT8 Site Accelerator 运行时配置 —— 由插件自动生成，请勿手工编辑。\n"
 			. "// 修改设置后插件会自动重写本文件。\n"
@@ -116,6 +131,23 @@ final class Config {
 
 		// 同时写一份 default 兜底，避免首次请求（HTTP_HOST 缺失）读不到配置。
 		Filesystem::put_contents( $dir . '/default.php', $body );
+
+		// 即便退化到 home_url()，也可能与实际访问域名不一致（多域名、反向代理）。
+		// 因此把已有的其它 host 配置一并刷新，避免任何一个 drop-in 读到陈旧配置。
+		// 单站点场景下它们本就该是同一份内容；index.php 是目录守卫，跳过。
+		$others = glob( $dir . '/*.php' );
+
+		if ( is_array( $others ) ) {
+			foreach ( $others as $file ) {
+				$base = basename( $file, '.php' );
+
+				if ( 'default' === $base || 'index' === $base || $base === $host ) {
+					continue;
+				}
+
+				Filesystem::put_contents( $file, $body );
+			}
+		}
 
 		return $ok;
 	}

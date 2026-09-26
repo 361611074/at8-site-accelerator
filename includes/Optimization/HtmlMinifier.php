@@ -8,8 +8,9 @@
  * - 只删 HTML 注释（保留 IE 条件注释与我们的指纹标记）；
  * - 只在标签之间折叠空白，**不动标签内部的属性值**；
  * - `<pre>` / `<textarea>` / `<script>` / `<style>` 内容原样保留；
- * - 内联 CSS/JS 的压缩默认关闭（`html_minify_inline`），开启后也只做最保守的
- *   空白折叠，绝不做变量名替换之类的"真压缩"（那需要解析器，风险不成比例）。
+ * - 内联 CSS 的压缩默认关闭（`html_minify_inline`），开启后只折叠 `<style>` 内的
+ *   连续空白（引号内的字符串跳过）；**不动**内联 JS——JS 的换行影响自动分号插入，
+ *   风险与收益不成比例。绝不做变量名替换之类的"真压缩"（那需要解析器）。
  *
  * @package AT8\SiteAccelerator\Optimization
  */
@@ -60,6 +61,12 @@ final class HtmlMinifier {
 		$original = $html;
 		$html     = $this->strip_comments( $html );
 
+		// 内联 CSS 折叠（可选，默认关闭）。必须放在 protect_blocks 之前，
+		// 因为 protect_blocks 会把 <style> 整体抠成占位符，之后就再也碰不到它了。
+		if ( $this->settings->is_on( 'html_minify_inline' ) ) {
+			$html = $this->minify_inline_css( $html );
+		}
+
 		$placeholders = array();
 		$html         = $this->protect_blocks( $html, $placeholders );
 
@@ -109,6 +116,53 @@ final class HtmlMinifier {
 				}
 
 				return '';
+			},
+			$html
+		);
+	}
+
+	/**
+	 * 折叠内联 `<style>` 里的空白。
+	 *
+	 * 为什么只做内联 CSS、不动内联 JS：
+	 * - CSS 的空白折叠是安全的（引号内的字符串会被跳过）；
+	 * - JS 不行——自动分号插入（ASI）依赖换行，删掉换行会改变语义，
+	 *   而且正则字面量里的空格是有意义的。风险与收益不成比例，不做。
+	 *
+	 * 为什么只折叠"连续空白"而不全删：CSS 里 `div .cls` 的后代选择器必须留空格，
+	 * 全删会把选择器粘成一坨。
+	 *
+	 * 注意：本项默认关闭（`html_minify_inline`）。实测发现 WordPress 区块主题
+	 * 输出的内联 CSS 本来就已紧凑（本测试站内联 CSS 有 55687 字节，但**没有任何
+	 * 连续空白**，折叠收益为 0），所以这个开关对这类站点没有可观测效果；
+	 * 它主要针对手写了带缩进内联 CSS 的主题。
+	 *
+	 * @param string $html HTML。
+	 * @return string
+	 */
+	private function minify_inline_css( $html ) {
+		return preg_replace_callback(
+			'/(<style\b[^>]*>)(.*?)(<\/style>)/is',
+			function ( $matches ) {
+				$css = $matches[2];
+
+				// 按引号字符串切分：偶数段是需要折叠的自由文本，
+				// 引号串（以引号开头的段）原样保留。
+				$parts = preg_split( '/("(?:[^"\\\\]|\\\\.)*")|(\'(?:[^\'\\\\]|\\\\.)*\')/', $css, -1, PREG_SPLIT_DELIM_CAPTURE );
+
+				if ( ! is_array( $parts ) ) {
+					return $matches[0];
+				}
+
+				foreach ( $parts as $i => $part ) {
+					if ( '' === $part || '"' === $part[0] || "'" === $part[0] ) {
+						continue;
+					}
+
+					$parts[ $i ] = preg_replace( '/[ \t\r\n]+/', ' ', $part );
+				}
+
+				return $matches[1] . implode( '', $parts ) . $matches[3];
 			},
 			$html
 		);

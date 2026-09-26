@@ -401,7 +401,7 @@ $at8sa_cache_on = ! empty( $at8sa_settings['page_cache'] );
 				<p class="at8sa-card-note"><?php esc_html_e( '保守实现：只删注释、只在标签之间折叠空白。pre / textarea / script / style / svg 内容原样保留。压缩后体积低于原始 40% 时会自动放弃本次压缩，防止正则误伤。', 'at8-site-accelerator' ); ?></p>
 
 				<?php $at8sa_toggle( 'html_minify', __( '启用 HTML 压缩', 'at8-site-accelerator' ) ); ?>
-				<?php $at8sa_toggle( 'html_minify_inline', __( '同时压缩内联 CSS / JS', 'at8-site-accelerator' ), __( '本插件不做变量重命名等"真压缩"（那需要 JS 解析器，风险不成比例）。此项当前仅作为预留开关。', 'at8-site-accelerator' ) ); ?>
+				<?php $at8sa_toggle( 'html_minify_inline', __( '同时压缩内联 CSS / JS', 'at8-site-accelerator' ), __( '只折叠内联 <code>&lt;style&gt;</code> 里的连续空白，不动内联 JS（JS 的换行影响自动分号插入，风险不成比例）。若你的主题输出的内联 CSS 本就紧凑（WordPress 区块主题通常如此），开启后不会有可观测变化。', 'at8-site-accelerator' ) ); ?>
 			</div>
 
 			<div class="at8sa-card">

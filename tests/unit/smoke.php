@@ -631,17 +631,33 @@ check( '缓存目录存在 index.php 守卫', is_file( AT8SA_CACHE_ROOT . '/inde
 
 section( '失效器' );
 
-$purger = new Purger( $clean, $factory, $logger );
+// 失效器断言的是"磁盘文件被删掉"，所以后端必须**固定为磁盘**：
+// `cache_backend` 默认 auto，而 auto 会在 Redis 可达时让 factory->make() 返回
+// RedisBackend —— 此时 purge 打的是 Redis，而这里的 $backend 是 DiskBackend，
+// 断言就会假失败。CI 机器上没有 Redis，所以这个坑一直没暴露；真机（带 Redis）必炸。
+$purge_settings = new Settings();
+$purge_settings->persist(
+	$purge_settings->sanitize(
+		array(
+			'page_cache'    => 1,
+			'cache_backend' => 'disk',
+			'cache_ttl'     => 3600,
+		)
+	)
+);
+
+$purge_factory = new BackendFactory( $purge_settings, $logger );
+$purger        = new Purger( $purge_settings, $purge_factory, $logger );
 
 $backend->set( 'example.test', '/hello/', $html, 3600 );
 $purged = $purger->purge_url( home_url( '/hello/' ) );
 
-check( 'purge_url 命中本站 URL', $purged > 0, 'purged=' . $purged );
+check( 'purge_url 命中本站 URL', $purged > 0, 'purged=' . var_export( $purged, true ) );
 check( 'purge_url 后缓存已失效', false === $backend->get( 'example.test', '/hello/' ) );
 
-$before = $factory->cache_version();
+$before = $purge_factory->cache_version();
 $purger->purge_all();
-$after = $factory->cache_version();
+$after = $purge_factory->cache_version();
 
 check( 'purge_all 递增缓存版本盐', $after === $before + 1, "before={$before} after={$after}" );
 
@@ -700,6 +716,109 @@ if ( $install_result ) {
 
 check( 'drop-in 移除成功', $dropin->uninstall() );
 check( '移除后识别为未安装', false === $dropin->is_installed() );
+
+/* ---------------------------------------------------------------------------
+ * 7b. wp-config.php 的 WP_CACHE 开关（回归：salt 字符串内含大括号）
+ *
+ * 历史 Bug：verify_wp_config() 曾用 substr_count($c,'{') 做朴素全文计数，
+ * 而 wp-config.php 的 8 个随机 salt 字符集包含 `{` `}`，字符串里的括号被算进
+ * 平衡判定 → 括号数永不配平 → 校验恒失败 → 每次都误回滚 → WP_CACHE 开不起来。
+ * 真机（wordpress.xmm.fan）实测 6 个 `{` vs 10 个 `}`，全部多出来的都在 salt 里。
+ * ------------------------------------------------------------------------ */
+
+section( 'wp-config.php / WP_CACHE 开关' );
+
+$wp_config_path = ABSPATH . 'wp-config.php';
+
+// 刻意构造"含大括号的 salt"与"注释里的 {@link ...}"，复现真机形态。
+$fake_config = <<<'PHPEOF'
+<?php
+/**
+ * WordPress 基本配置文件。
+ *
+ * 本文件包含以下配置选项：MySQL 设置、数据库表名前缀、密匙、语言设定。
+ * 要创建 wp-config.php 请访问 {@link https://api.wordpress.org/secret-key/1.1/salt/}
+ */
+
+// ** MySQL 设置 ** //
+define( 'DB_NAME', 'wordpress' );
+define( 'DB_USER', 'wordpress' );
+define( 'DB_PASSWORD', 'p@ss{word}' );
+define( 'DB_HOST', 'localhost' );
+
+define( 'AUTH_KEY',         'h/U5c%vqYZXfvlg/dC#MvYT)@%g+0*!ViFb1TCg/>0Z=}alP.]7Q--Wj}b0U|iGV' );
+define( 'SECURE_AUTH_KEY',  'cd pZldZLDmYM2FBQh%j{<spl]0l1[[6uC0#5OT%c=+26(Z}>|uYmRojRXB2+[ui' );
+define( 'LOGGED_IN_KEY',    '_b)Ozm0#b@IlT(OhpVVyU}5S={ Q6 xh_Zh[dBzy5(K~m?Q~F$B9jjX{pz#URn%m' );
+define( 'NONCE_KEY',        'vW781le|bUO><,ikmdi&Up-8q!PpVs|1xVg}*;t 8nkWP}zy&&s5bil[T/v~_Iv.' );
+define( 'AUTH_SALT',        ':b,V~MOP$;UU,ODpss6mS}_XE;2N b,WZ-w#S5r`u65^GUwxHg8-9qkHq!G}m;7`' );
+define( 'NONCE_SALT',       'oLQghWCYC5z:;d;AZni:6;rP-6qMJxD=2qH_wiHh~I(z5IyQ.{`Aw~Tif)<@stQF' );
+
+$table_prefix = 'wp_';
+
+define( 'WP_DEBUG', true );
+
+if ( ! defined( 'ABSPATH' ) ) {
+	define( 'ABSPATH', __DIR__ . '/' );
+}
+
+require_once ABSPATH . 'wp-settings.php';
+PHPEOF;
+
+file_put_contents( $wp_config_path, $fake_config );
+
+$enable = $dropin->enable_wp_cache();
+
+check( '含大括号 salt 时 WP_CACHE 仍能开启', true === $enable['ok'], $enable['message'] );
+
+$after = (string) file_get_contents( $wp_config_path );
+
+check( '已写入 WP_CACHE 为 true', false !== strpos( $after, "define( 'WP_CACHE', true );" ) );
+check( '已写入归属标记', false !== strpos( $after, AdvancedCache::WP_CACHE_MARKER ) );
+check( '原有 salt 未被破坏', false !== strpos( $after, 'NONCE_SALT' ) && false !== strpos( $after, 'oLQghWCYC5z' ) );
+check( 'DB_PASSWORD 含括号未受影响', false !== strpos( $after, 'p@ss{word}' ) );
+check( '已生成备份文件', is_file( $wp_config_path . '.at8sa.bak' ) );
+
+// 可逆性：删掉带标记的整行必须精确还原原文。
+$stripped = preg_replace(
+	'/^.*' . preg_quote( AdvancedCache::WP_CACHE_MARKER, '/' ) . '.*$\R?/m',
+	'',
+	$after,
+	1
+);
+check( '删除标记行可精确还原原文', $stripped === $fake_config, strlen( (string) $stripped ) . ' vs ' . strlen( $fake_config ) );
+
+// 幂等：再次调用应识别为已启用。
+$again = $dropin->enable_wp_cache();
+check( '重复调用不报错', true === $again['ok'], $again['message'] );
+
+// 停用路径：应移除我们写的那一行并还原原文。
+$disable = $dropin->disable_wp_cache();
+check( '停用 WP_CACHE 成功', true === $disable['ok'], $disable['message'] );
+
+$restored = (string) file_get_contents( $wp_config_path );
+check( '停用后精确还原原文', $restored === $fake_config, strlen( $restored ) . ' vs ' . strlen( $fake_config ) );
+
+// 已有 `WP_CACHE, false` 的站点：应原地替换为 true。
+$false_config        = str_replace( "define( 'WP_DEBUG', true );", "define( 'WP_DEBUG', true );\ndefine( 'WP_CACHE', false );", $fake_config );
+file_put_contents( $wp_config_path, $false_config );
+
+$replace = $dropin->enable_wp_cache();
+check( '已有 WP_CACHE=false 时能改为 true', true === $replace['ok'], $replace['message'] );
+
+$replaced = (string) file_get_contents( $wp_config_path );
+check( 'false 已被替换为 true', false === strpos( $replaced, "define( 'WP_CACHE', false );" ) && false !== strpos( $replaced, "define( 'WP_CACHE', true );" ) );
+
+// 替换路径的可逆性是"把 true 换回 false"，不是"删行"（删行会连 define 一起删掉）。
+$re_restored = preg_replace(
+	'/define\s*\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\)\s*;\s*' . preg_quote( AdvancedCache::WP_CACHE_MARKER, '/' ) . '/',
+	"define( 'WP_CACHE', false );",
+	$replaced,
+	1
+);
+check( '替换路径同样可逆', $re_restored === $false_config );
+
+@unlink( $wp_config_path );
+@unlink( $wp_config_path . '.at8sa.bak' );
 
 /* ---------------------------------------------------------------------------
  * 8. HTML 压缩

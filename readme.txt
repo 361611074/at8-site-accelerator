@@ -4,7 +4,7 @@ Tags: cache, page cache, redis, lazy load, webp
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 3.0.0
+Stable tag: 3.0.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -99,6 +99,12 @@ AT8 Site Accelerator 把"让 WordPress 变快"这件事拆成八个彼此独立�
 
 == Changelog ==
 
+= 3.0.1 =
+* 修复：部分站点的 `wp-config.php` 因随机密钥（salt）字符串里含有 `{` 或 `}`，导致「一键启用 WP_CACHE」被误判为写入失败并自动回滚，高级缓存始终无法生效。现在改为按 PHP 词法分析统计真实代码中的括号，不再把字符串内容算进来。
+* 修复：`wp-config.php` 写入校验增加「可逆性」检查——写入后的文件去掉插件那一行必须能精确还原原文，防止误改站点配置。
+* 修复：重复点击「启用 WP_CACHE」不再误报「无法自动改写」。
+* 修复：单元测试在装有 Redis 的机器上会假失败（失效器断言的是磁盘文件，但自动模式会选 Redis 后端）。现已固定后端，测试结果不再依赖宿主机环境。
+
 = 3.0.0 =
 * 全新重构：模块化架构（Cache / Purge / Optimization / Compatibility / Diagnostics / Admin / REST 七层）。
 * 新增：Redis 与磁盘双后端，自动降级。
@@ -111,6 +117,9 @@ AT8 Site Accelerator 把"让 WordPress 变快"这件事拆成八个彼此独立�
 完整的技术变更清单（含每一个修复项的原因）见仓库根目录的 `CHANGELOG.md`。
 
 == Upgrade Notice ==
+
+= 3.0.1 =
+建议所有 3.0.0 用户升级。若你在 3.0.0 上点过「启用 WP_CACHE」却提示需要手动添加，本次升级后重试即可自动完成。升级不会改动你的设置与缓存目录。
 
 = 3.0.0 =
 从 2.x 升级时设置会自动迁移，无需手工操作。升级后建议到「诊断」标签页确认一次环境状态。

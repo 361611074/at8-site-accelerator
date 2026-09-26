@@ -33,7 +33,7 @@ define( 'AT8SA_PATH', dirname( __DIR__, 2 ) . '/' );
 define( 'AT8SA_URL', 'http://example.test/wp-content/plugins/at8-site-accelerator/' );
 define( 'AT8SA_FILE', AT8SA_PATH . 'at8-site-accelerator.php' );
 define( 'AT8SA_BASENAME', 'at8-site-accelerator/at8-site-accelerator.php' );
-define( 'AT8SA_VERSION', '3.0.0' );
+define( 'AT8SA_VERSION', '3.0.1' );
 define( 'AT8SA_CACHE_ROOT', WP_CONTENT_DIR . '/cache/at8-site-accelerator' );
 define( 'AT8SA_CACHE_ROOT_URL', WP_CONTENT_URL . '/cache/at8-site-accelerator' );
 

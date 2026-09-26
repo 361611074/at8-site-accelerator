@@ -6,6 +6,57 @@
 
 ---
 
+## 3.0.1 — 真机验证修复版
+
+> 起因：在真实站点（WordPress 7.1.2 / PHP 8.3.33 / nginx，装 Redis）部署 3.0.0 后，
+> 激活结果里 `wp_cache` 恒为 `false`，提示「写入后校验未通过，已自动回滚」。
+> 逐层定位后确认是两个真实缺陷 + 一个测试缺陷。
+
+### 修复 1：`WP_CACHE` 在含大括号 salt 的站点上永远开不起来（严重）
+
+* **现象**：`enable_wp_cache()` 写入成功后被自己的校验判为失败，立即回滚。
+  真机 `wp-config.php` 实测 `{` 6 个、`}` 10 个，多出来的**全部位于 8 个随机 salt 字符串内**
+  （`AUTH_KEY` / `SECURE_AUTH_KEY` / `LOGGED_IN_KEY` / `NONCE_KEY` / `AUTH_SALT` / `NONCE_SALT` 等）。
+* **根因**：`verify_wp_config()` 用 `substr_count( $content, '{' ) !== substr_count( $content, '}' )`
+  做**全文**括号计数。salt 的字符集包含 `{` `}`，字符串里的括号被计入 → 括号数永不配平 →
+  校验恒失败。而 salt 含括号是常态，等于绝大多数真实站点都命中。
+* **修复**：新增 `braces_balanced()`，改用 `token_get_all()` 按 PHP 词法统计——
+  只计真实代码 token（含字符串插值的 `T_CURLY_OPEN` / `T_DOLLAR_OPEN_CURLY_BRACES`），
+  `T_CONSTANT_ENCAPSED_STRING`、注释一律跳过。词法器不可用或抛异常时返回 `true` 不阻断。
+
+### 修复 2：校验缺"可逆性"约束，且方向不对称
+
+* **新增**：`verify_wp_config()` 接收写入前原文，调用 `is_reversible()` 要求
+  **改动只差我们那一行**——写入后去掉标记行必须精确还原原文，否则判失败并回滚。
+* **对称性**：启用是「加一行」、停用是「减一行」，只做单向判断会让停用路径恒失败。
+  `is_reversible()` 现覆盖三个方向：① 启用-插入（strip 新文 == 原文）、
+  ② 停用-删除（strip 原文 == 新文）、③ 启用-替换（把 `true` 换回 `false` == 原文）。
+* **顺带修掉一个隐蔽缺陷**：插入时原本多带一个 `"\n"`，导致「删掉标记行」还原不出原文
+  （多一个空行），可逆性检查正是靠这个不变量成立的。现已改为严格只插入一行。
+* **幂等**：`enable_wp_cache()` 遇到文件中已是 `WP_CACHE, true` 时直接返回成功，
+  不再落到「已有定义且无法自动改写」的报错分支。
+
+### 修复 3：单元测试在装有 Redis 的机器上假失败
+
+* **现象**：`purge_url 后缓存已失效` / `purge_all 后页面缓存已清空` 两条断言在真机失败。
+* **根因**：`cache_backend` 默认 `auto`，Redis 可达时 `factory->make()` 返回 `RedisBackend`，
+  失效器清的是 Redis；而断言检查的是 `new DiskBackend(...)` 写的磁盘文件 → 必然对不上。
+  CI 机器没有 Redis，所以这个坑一直没暴露（`smoke.php` 第 13 节「缓存引擎」已经踩过并修过，
+  但「失效器」一节漏了）。
+* **修复**：给失效器一节引入独立的、`cache_backend=disk` 的 `Settings`，使断言与宿主机环境解耦。
+* **结论**：这不是生产缺陷——`Config::runtime()` 与 `Purger` 都走同一个 `redis_probe()`，
+  drop-in 读的 `backend` 与失效器清的后端天然一致。
+
+### 验证
+
+* 冒烟测试：**208 通过 / 2 失败 → 223 通过 / 0 失败**（新增 15 条断言，其中含 salt 含括号的回归用例）。
+* 真机端到端：`wp-config.php` 第 98 行写入 `define( 'WP_CACHE', true );`、
+  `php -l` 无错、站点 HTTP 200；drop-in 命中链路
+  `MISS-SAVED → HIT → HIT`；`purge_all()` 清 3 条并递增 `cache_version` 后回到 `MISS-SAVED`；
+  `purge_url()` 精准失效同样回到 `MISS-SAVED`。
+
+---
+
 ## 3.0.0 — 首个 Free 正式版
 
 ### 架构

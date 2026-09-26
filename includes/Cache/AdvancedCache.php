@@ -177,6 +177,15 @@ final class AdvancedCache {
 		}
 
 		if ( false !== strpos( $original, 'WP_CACHE' ) ) {
+			// 文件里已经是 `true`（例如上次已由我们或站点管理员开启）→ 幂等返回成功，
+			// 不能落到下面"无法自动改写"的报错分支，否则重复调用会误报失败。
+			if ( preg_match( '/define\s*\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\)\s*;/', $original ) ) {
+				return array(
+					'ok'      => true,
+					'message' => __( 'WP_CACHE 已启用。', 'at8-site-accelerator' ),
+				);
+			}
+
 			// 已存在但为 false，替换掉它。
 			$updated = preg_replace(
 				'/define\s*\(\s*[\'"]WP_CACHE[\'"]\s*,\s*false\s*\)\s*;/',
@@ -195,6 +204,8 @@ final class AdvancedCache {
 			);
 		}
 
+		// 严格"只插入一行"：ltrim 去掉 $line 的前导换行，$line 自带的尾部换行即行尾，
+		// 不再额外追加 "\n"，这样"删掉标记行"就能精确还原原文（可逆性校验依赖此不变量）。
 		$line = "\ndefine( 'WP_CACHE', true ); " . self::WP_CACHE_MARKER . "\n";
 
 		// 插到 "stop editing" 之前，这是 wp-config.php 的标准锚点。
@@ -210,7 +221,7 @@ final class AdvancedCache {
 			$pos = strpos( $original, $anchor );
 
 			if ( false !== $pos ) {
-				$updated = substr( $original, 0, $pos ) . ltrim( $line ) . "\n" . substr( $original, $pos );
+				$updated = substr( $original, 0, $pos ) . ltrim( $line ) . substr( $original, $pos );
 				break;
 			}
 		}
@@ -292,7 +303,7 @@ final class AdvancedCache {
 			);
 		}
 
-		if ( ! $this->verify_wp_config( $path ) ) {
+		if ( ! $this->verify_wp_config( $path, $original ) ) {
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 			@file_put_contents( $path, $original ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 
@@ -319,12 +330,19 @@ final class AdvancedCache {
 	/**
 	 * 校验 wp-config.php 仍然是"看起来能跑的"配置。
 	 *
-	 * 检查项刻意保守：非空、含 DB_NAME、含 wp-settings.php 引入、大括号配平。
+	 * 检查项刻意保守：非空、含 DB_NAME、含 wp-settings.php 引入、大括号配平（**词法级**）、
+	 * 且我们的改动可逆（拿掉标记行能还原原文）。
 	 *
-	 * @param string $path 路径。
+	 * 为什么不用 `substr_count( $content, '{' )`：wp-config.php 里的 8 个随机
+	 * salt（AUTH_KEY / SECURE_AUTH_KEY / … / NONCE_SALT）字符集包含 `{` 和 `}`，
+	 * 几乎必然出现"字符串内括号"，朴素的全文计数会把它算进来 → 括号数永不配平 →
+	 * 校验恒失败 → 每次都误回滚 → WP_CACHE 永远开不起来。必须只统计真实代码 token。
+	 *
+	 * @param string $path     路径。
+	 * @param string $original 写入前的原文，用于可逆性比对。
 	 * @return bool
 	 */
-	private function verify_wp_config( $path ) {
+	private function verify_wp_config( $path, $original = '' ) {
 		$content = (string) @file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents, WordPress.PHP.NoSilencedErrors.Discouraged
 
 		if ( strlen( $content ) < 100 ) {
@@ -339,10 +357,106 @@ final class AdvancedCache {
 			return false;
 		}
 
-		if ( substr_count( $content, '{' ) !== substr_count( $content, '}' ) ) {
+		if ( ! $this->braces_balanced( $content ) ) {
+			return false;
+		}
+
+		// 可逆性：我们的改动必须能精确还原成原文，否则说明写坏了别的内容。
+		if ( '' !== $original && ! $this->is_reversible( $original, $content ) ) {
 			return false;
 		}
 
 		return true;
+	}
+
+	/**
+	 * 只在真实代码 token 上统计大括号，忽略字符串与注释。
+	 *
+	 * 词法器不可用或解析异常时返回 true（不阻断），由可逆性检查兜底。
+	 *
+	 * @param string $content 文件内容。
+	 * @return bool
+	 */
+	private function braces_balanced( $content ) {
+		if ( ! function_exists( 'token_get_all' ) ) {
+			return true;
+		}
+
+		try {
+			$tokens = @token_get_all( $content ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		} catch ( \Throwable $e ) {
+			return true;
+		}
+
+		if ( ! is_array( $tokens ) ) {
+			return true;
+		}
+
+		$depth = 0;
+
+		foreach ( $tokens as $token ) {
+			if ( is_array( $token ) ) {
+				// 字符串插值里的 `{`：T_CURLY_OPEN / T_DOLLAR_OPEN_CURLY_BRACES。
+				if ( T_CURLY_OPEN === $token[0] || T_DOLLAR_OPEN_CURLY_BRACES === $token[0] ) {
+					++$depth;
+				}
+				// 其余数组型 token（常量字符串、注释、关键字）一律不计。
+				continue;
+			}
+
+			if ( '{' === $token ) {
+				++$depth;
+			} elseif ( '}' === $token ) {
+				--$depth;
+
+				if ( $depth < 0 ) {
+					return false;
+				}
+			}
+		}
+
+		return 0 === $depth;
+	}
+
+	/**
+	 * 判断 $original 与 $content 是否"只差我们那一行"。
+	 *
+	 * 必须**双向**成立，因为启用是"加一行"、停用是"减一行"：
+	 * ① 启用-插入：strip(新文) === 原文
+	 * ② 停用-删除：strip(原文) === 新文
+	 * ③ 启用-替换：把 `WP_CACHE, true` 换回 `false` === 原文
+	 *
+	 * 只做单向判断会导致停用路径恒失败 → 误回滚（曾实测踩到）。
+	 *
+	 * @param string $original 写入前原文。
+	 * @param string $content  写入后内容。
+	 * @return bool
+	 */
+	private function is_reversible( $original, $content ) {
+		$marker = preg_quote( self::WP_CACHE_MARKER, '/' );
+		$line   = '/^.*' . $marker . '.*$\R?/m';
+
+		$stripped_content  = preg_replace( $line, '', $content, 1 );
+		$stripped_original = preg_replace( $line, '', $original, 1 );
+
+		// ① 启用（插入了一行）。
+		if ( is_string( $stripped_content ) && $stripped_content === $original ) {
+			return true;
+		}
+
+		// ② 停用（删掉了一行）。
+		if ( is_string( $stripped_original ) && $stripped_original === $content ) {
+			return true;
+		}
+
+		// ③ 启用（把 `false` 原地换成 `true`）。
+		$restored = preg_replace(
+			'/define\s*\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\)\s*;\s*' . $marker . '/',
+			"define( 'WP_CACHE', false );",
+			$content,
+			1
+		);
+
+		return is_string( $restored ) && $restored === $original;
 	}
 }

@@ -4,7 +4,7 @@
 优先 Redis 对象缓存、不可用时自动降级为磁盘缓存，内置 Elementor / WooCommerce
 兼容层与第三方缓存插件冲突检测。
 
-- 当前版本：**3.0.0**
+- 当前版本：**3.0.1**
 - 环境要求：**PHP 7.4+ / WordPress 5.8+**
 - 许可：**GPL-2.0-or-later**
 
@@ -57,7 +57,7 @@
 
 ```
 php tools/build-zip.php
-# 产出 dist/at8-site-accelerator-3.0.0.zip
+# 产出 dist/at8-site-accelerator-3.0.1.zip
 ```
 
 ---

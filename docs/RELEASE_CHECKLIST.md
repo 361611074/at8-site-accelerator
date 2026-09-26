@@ -93,8 +93,10 @@
 - [x] `dist/` 不入库
 - [x] `vendor/` 与 `composer.lock` 不入库（分发时不带开发依赖）
 - [x] 无 `.env` / 凭证文件入库
-- [x] CI 配置：`.github/workflows/ci.yml`
+- [x] CI 配置已就绪：`.github/ci-workflow.yml.disabled`
       （PHP 7.4–8.3 矩阵 + Redis 冒烟/单元 + PHPUnit 矩阵 + PHPStan + PHPCS + 打包）
+- [ ] ⚠️ CI 尚未激活：令牌缺 `workflow` scope，文件暂存于 `.github/` 根目录；
+      重命名回 `.github/workflows/ci.yml` 后流水线即生效
 - [x] `phpcs.xml.dist` 已配置，豁免项均有理由说明
 - [x] 测试用 Redis 库号固定为 15（`tests/unit/wp-stubs.php`），不会碰真实站点的 2 号库
 

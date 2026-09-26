@@ -56,7 +56,7 @@
 | 文件 | 作用 |
 | --- | --- |
 | `.gitignore` | 排除测试产物、打包产物、密钥 |
-| `.github/workflows/ci.yml` | PHP 7.4–8.3 矩阵 + 语法检查 + 冒烟测试 + .pot 同步校验 + PHPCS + 打包 |
+| `.github/ci-workflow.yml.disabled` | CI 定义：PHP 7.4–8.3 矩阵 + 语法检查 + 冒烟测试 + .pot 同步校验 + PHPCS + 打包。因令牌缺 `workflow` scope 暂存此处，重命名回 `.github/workflows/ci.yml` 即生效 |
 | `phpcs.xml.dist` | WordPress 规范，豁免项均有理由说明 |
 | `tools/make-pot.php` | 翻译模板生成（无 WP-CLI 依赖） |
 | `tools/build-zip.php` | 白名单式打包 + 回读自检 |
@@ -306,7 +306,8 @@ CI 的 `test-redis` 任务额外断言跳过数为 0。
 2. ✅ 按 `docs/PERFORMANCE_BENCHMARK.md` 执行基准测量，数据已填回第七节，
    测量脚本沉淀在 `tools/benchmark/`；
 3. ✅ 清理 PHPCS 存量问题（535 → 0），CI 中的 phpcs 任务已改为阻断；
-4. ✅ 私有仓库 `361611074/at8-site-accelerator` 已创建并推送（72 个文件）；
+4. ✅ 私有仓库 `361611074/at8-site-accelerator` 已推送完整开发历史
+   （10 个提交 / 93 个文件，`main` 与 `v3.0.1` 均指向 `6783771`）；
 5. ✅ 补齐 PHPUnit 单元测试套件与 PHPStan 静态分析，四道闸门全部通过
    （对应计划书 §130 Release Gate）；
 6. ✅ 第二轮真机 HTTP 功能验证 42 项断言全部通过，并据此修掉 4 个新缺陷
@@ -314,12 +315,14 @@ CI 的 `test-redis` 任务额外断言跳过数为 0。
 
 ### 立即可做（还差一步就能闭环）
 
-7. **把 `.github/workflows/ci.yml` 补到远端**。本地文件是完整的，但 GitHub REST API
-   要求令牌带 `workflow` scope 才能写 `.github/workflows/*`，当前令牌只有
-   `gist, read:org, repo`。两条路：
-   - 重新授权并勾选 `workflow`（`gh auth refresh -s workflow`，需要能访问 `github.com`；
-     本机网络对 `github.com` 时通时断，两次设备码授权均超时失败）；
-   - 或在 GitHub 网页上新建文件 `.github/workflows/ci.yml`，内容照抄本地。
+7. ⚠️ **CI 流水线尚未激活（唯一遗留项）**。CI 定义已随仓库推送，但存放于
+   `.github/ci-workflow.yml.disabled`：GitHub 对令牌写入 `.github/workflows/*`
+   强制要求 `workflow` scope，而当前令牌只有 `gist, read:org, repo`，缺该项会让
+   **整个 `main` 分支被拒绝推送**。已实测确认 GitHub 只校验推送的最终文件树、
+   不扫描历史，因此把文件移出该目录即可正常推送（10 个提交完整推上去了）。
+   启用方式（任选其一，各需一次授权）：
+   - 令牌补 `workflow` scope 后：`git mv .github/ci-workflow.yml.disabled .github/workflows/ci.yml` 并提交推送；
+   - 或在 GitHub 网页新建 `.github/workflows/ci.yml`，内容照抄该文件。
    在此之前，CI 里的 `test-redis`、`phpunit`、`phpstan` 与"phpcs 阻断"四项改动
    都不会在流水线上生效。
 8. 在有 Elementor / WooCommerce 的站点上补一次真机确认（见第六节）。

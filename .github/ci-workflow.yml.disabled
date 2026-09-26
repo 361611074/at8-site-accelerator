@@ -58,18 +58,24 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
-  # 2. 带 Redis 的冒烟测试
+  # 2. 带 Redis 的冒烟 + 单元测试
   #
   # 上面那个 test 任务跑在没有 Redis 的 runner 上，覆盖的其实是"Redis 不可达 →
   # 降级磁盘"这条路径。而 Redis 可达时的分支（后端探测、Config 写 backend=redis、
-  # 失效器打 Redis）在那边一行都没被执行过。
+  # 失效器打 Redis、索引集合与 SCAN 兜底）在那边一行都没被执行过。
   #
   # 这不是假想的风险：2026-09-26 在真机（装了 Redis）验证时，正是因为存在这个盲区，
   # "失效器断言的是磁盘文件、实际清的却是 Redis" 的测试缺陷一直藏到部署才发现。
-  # 现在补一个真正带 Redis 的 job，把这条路径纳入回归。
+  # 后来又在这个盲区里漏掉了第二个缺陷：purge_all() 先换盐再 flush，
+  # 导致每个旧版本的索引集合（SADD 建的、无 TTL）被永久孤立在 Redis 里。
+  #
+  # 所以这里不仅跑冒烟，还要跑 PHPUnit——RedisBackendTest 在没有 Redis 的
+  # runner 上是 skip 的，只有这个 job 能让它真正执行。
+  #
+  # 测试用 15 号逻辑库（tests/unit/wp-stubs.php 里固定），不碰插件的默认 2 号库。
   # ---------------------------------------------------------------------------
   test-redis:
-    name: 冒烟测试（Redis 后端）
+    name: 冒烟 + 单元测试（Redis 后端）
     runs-on: ubuntu-latest
 
     services:
@@ -92,6 +98,7 @@ jobs:
         with:
           php-version: '8.2'
           coverage: none
+          tools: composer:v2
           ini-values: error_reporting=E_ALL, display_errors=On
 
       # 插件用的是纯 PHP RESP 客户端，不依赖 phpredis 扩展——
@@ -103,6 +110,28 @@ jobs:
 
       - name: 冒烟测试
         run: php tests/unit/smoke.php
+
+      - name: 缓存 Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-redis-8.2-${{ hashFiles('composer.json') }}
+
+      - name: 安装开发依赖
+        run: composer update --no-interaction --prefer-dist --no-progress
+
+      # RedisBackendTest 会在这里真正执行；若 Redis 意外不可达，用例会 skip 而非
+      # 静默通过——所以下面额外断言"跳过数为 0"，防止 skip 悄悄吃掉覆盖。
+      - name: 运行 PHPUnit（Redis 用例必须真的跑起来）
+        run: |
+          set -e
+          ./vendor/bin/phpunit --configuration phpunit.xml.dist | tee /tmp/phpunit-redis.log
+          if grep -qE '^OK \(' /tmp/phpunit-redis.log && ! grep -qi 'skipped' /tmp/phpunit-redis.log; then
+            echo "Redis 用例已执行，无跳过。"
+          else
+            echo "::error::Redis 用例被跳过或未执行——覆盖形同虚设。"
+            exit 1
+          fi
 
   # ---------------------------------------------------------------------------
   # 3. 编码规范（WordPress Coding Standards）
@@ -134,12 +163,96 @@ jobs:
         run: phpcs --standard=phpcs.xml.dist --report=summary --colors
 
   # ---------------------------------------------------------------------------
-  # 4. 打包产物（打 tag 时生成，供人工下载检查）
+  # 4. 单元测试（PHPUnit，计划书 §72 / §89 / §130）
+  #
+  # 与冒烟测试的分工：冒烟测试保证"整条链路还活着"（38 个类能不能加载、
+  # 安装/停用/卸载/drop-in 命中路径跑不跑得通），单元测试保证"逻辑对不对"。
+  # 两者都要有——2026-09-26 补上 PHPUnit 时，它立刻抓出了一个冒烟测试
+  # 完全没覆盖的缺陷：内置绕过 Cookie 表里的前缀漏写 `*`，导致
+  # wp-postpass_ 永远匹配不上，密码保护页面会被缓存给未输密码的访客。
+  #
+  # 矩阵只取两端（7.4 下限 / 8.3 当前）：单元测试不测语言兼容性，
+  # 那件事由上面的 test 任务在 7.4~8.3 全矩阵上做。
+  # ---------------------------------------------------------------------------
+  phpunit:
+    name: PHPUnit (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: [ '7.4', '8.3' ]
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer:v2
+
+      - name: 缓存 Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-phpunit-${{ matrix.php }}-${{ hashFiles('composer.json') }}
+
+      # 用 update 而不是 install：composer.lock 被刻意排除在版本控制之外
+      # （本插件对外分发时不带 vendor/，锁文件对使用者无意义）。
+      # 代价是 CI 可能被上游新版本打破，所以 composer.json 里的约束都用 ^ 锁大版本。
+      - name: 安装开发依赖
+        run: composer update --no-interaction --prefer-dist --no-progress
+
+      - name: 运行 PHPUnit
+        run: ./vendor/bin/phpunit --configuration phpunit.xml.dist
+
+  # ---------------------------------------------------------------------------
+  # 5. 静态分析（PHPStan，计划书 §72 / §89 / §130）
+  #
+  # level 5 + phpstan-wordpress + WooCommerce 类桩。
+  # 豁免只有 1 条（Webp::load() 的 GdImage 返回类型，见 phpstan.neon.dist 里的说明），
+  # 其余"恒真/恒假"类告警是通过 treatPhpDocTypesAsCertain: false 关掉的，
+  # 那不是在关检查，而是承认"PHPDoc 是契约不是运行时保证"——WordPress 插件
+  # 的数据大量来自第三方过滤器，防御性判空必须留着。
+  # ---------------------------------------------------------------------------
+  phpstan:
+    name: PHPStan (level 5)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+          tools: composer:v2
+
+      - name: 缓存 Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-phpstan-${{ hashFiles('composer.json') }}
+
+      - name: 安装开发依赖
+        run: composer update --no-interaction --prefer-dist --no-progress
+
+      # WooCommerce 类桩有 4.4MB，默认 128M 内存装不下，必须显式放宽。
+      - name: 运行 PHPStan
+        run: ./vendor/bin/phpstan analyse --configuration=phpstan.neon.dist --memory-limit=2G --no-progress
+
+  # ---------------------------------------------------------------------------
+  # 6. 打包产物（打 tag 时生成，供人工下载检查）
   # ---------------------------------------------------------------------------
   package:
     name: 打包 Free 版 ZIP
     runs-on: ubuntu-latest
-    needs: [ test ]
+    needs: [ test, test-redis, phpunit, phpstan ]
     if: startsWith( github.ref, 'refs/tags/v' )
 
     steps:

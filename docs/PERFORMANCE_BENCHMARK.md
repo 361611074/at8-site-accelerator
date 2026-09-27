@@ -317,3 +317,43 @@ RPS：A 6.02 / B 5.81 / C 6.23，三者在同一水平。原因是这台 VPS 太
 | 4 | WP-CLI 改配置对前台不生效 | 无 `HTTP_HOST` 时只写 `default.php`，drop-in 读的是 `<host>.php` | 退化到 `home_url()` 取主机名，并刷新其它已有 host 配置 |
 
 ---
+
+
+---
+
+## 8. Commerce / License Server 基准（2026-09-27，Phase 11 补齐）
+
+> 计划书 §77：Commerce 测 API latency / Webhook latency / Checkout latency /
+> License API latency。真机（wordpress.xmm.fan 同机，4C4G VPS），N=100，
+> PHP 循环 + hrtime 采样，逐请求独立 nonce（真实验签开销）。
+> License validate 的限流阈值在测量期间临时调高、测后恢复 60/小时。
+
+| 项 | avg | p50 | p95 | p99 | max |
+| --- | --- | --- | --- | --- | --- |
+| License validate API（HMAC 验签 + nonce + Ed25519 签发 + SQLite） | 13.98 | 13.57 | 18.22 | 20.04 | 20.04 ms |
+| License health（无鉴权，框架开销下限） | 0.55 | 0.51 | 0.72 | 1.83 | 1.83 ms |
+| Commerce webhook 六步管线（含 license HTTP 履约） | 73.71 | 73.52 | 87.09 | 89.47 | 89.47 ms |
+| Commerce GET /api/plans（HTTP 全栈） | 0.50 | 0.46 | 0.53 | 3.20 | 3.20 ms |
+
+### 8.1 解读
+
+- **validate p95 < 20ms**：7 天心跳策略下（§23），每次心跳 14ms 对站点前台无感；
+  且插件有宽限期兜底，License Server 慢/挂不影响访客。
+- **webhook 管线 ~74ms**：其中大头是一次真实的 License Server HTTP 往返 +
+  Ed25519 签发 + 新许可证写入。这是**付款成功后一次性**的履约路径，
+  不在访客关键路径上；该吞吐对第一版商业规模绰绰有余。
+- **/api/plans ~0.5ms**：结账页数据接口远低于可感知阈值。
+
+### 8.2 测量中确认的防线（均为故意触发并确认按设计拒绝）
+
+| 现象 | 结论 |
+| --- | --- |
+| 未激活指纹直接 validate → 409 not_activated | 防线正常（先激活后心跳） |
+| validate 达 60/小时/指纹 → 429 | 按指纹精细限流正常 |
+| 累计超 IP 层 600/小时 → 429 | 验签前 IP 粗限流正常 |
+| nonce 复用 → 409 重放拒绝 | 重放保护正常（客户端必须逐请求换 nonce） |
+
+### 8.3 与 WordPress 侧基准的关系
+
+第 1-7 节测的是**客户网站**的加速效果；第 8 节测的是**我们自己的商业服务**
+在 VPS 上的健康度。两者口径不同，不直接可比。

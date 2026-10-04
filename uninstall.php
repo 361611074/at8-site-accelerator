@@ -78,6 +78,7 @@ $at8sa_options = array(
 	'at8sa_cache_version',
 	'at8sa_version',
 	'at8sa_migrated_from_legacy',
+	'at8sa_legacy_checked',
 	'at8sa_activation_result',
 	'site_accelerator_settings',
 );

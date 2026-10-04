@@ -31,9 +31,23 @@ final class Settings {
 	const LEGACY_OPTION = 'site_accelerator_settings';
 
 	/**
-	 * 迁移完成标记。
+	 * 迁移完成标记：**只在真的迁移了 2.x 数据时才置位**。
+	 *
+	 * 消费方是设置页与后台提示 —— 它们据此告诉用户"已从 2.x 升级并自动迁移"。
+	 * 全新安装绝不能置位，否则这句话就是假的。
 	 */
 	const MIGRATED_FLAG = 'at8sa_migrated_from_legacy';
+
+	/**
+	 * "已检查过 2.x 数据"标记。
+	 *
+	 * 与 `MIGRATED_FLAG` **必须分开**，两者语义不同：
+	 * - "查过了、别再查" —— 防重复执行。迁移不能跑第二次，因为旧选项按设计保留
+	 *   （供用户回滚），重复迁移会用旧值覆盖用户当前设置；
+	 * - "真的迁移过了" —— 决定要不要告诉用户。
+	 * 共用一个标志就会出现"没旧数据也置位"→ 全新安装显示迁移成功提示的问题。
+	 */
+	const LEGACY_CHECKED_FLAG = 'at8sa_legacy_checked';
 
 	/**
 	 * 设置页 option group。
@@ -413,17 +427,49 @@ final class Settings {
 	 * 在 3.0 里改了名字（改名是为了让开关的**名字说人话**，见注释）。
 	 * 用户从未用过的键保持 3.0 默认值。
 	 *
+	 * **返回值只表示"这次真的迁移了 2.x 的数据"**，调用方据此决定要不要告诉用户
+	 * "已从 2.x 升级"。全新安装返回 false，且不会留下任何"迁移过"的痕迹。
+	 * 附带自愈：撤回 3.0.1 在"没有旧数据"时误置的迁移标记（见方法内注释）。
+	 *
 	 * @return bool 是否实际执行了迁移。
 	 */
 	public function migrate_from_legacy() {
-		if ( get_option( self::MIGRATED_FLAG ) ) {
+		/*
+		 * 两个标志都查：
+		 * - LEGACY_CHECKED_FLAG：本次逻辑"已经查过"，避免重复走这一段；
+		 * - MIGRATED_FLAG：旧版本（3.0.2 之前）留下的"查过"痕迹 —— 那些站点上
+		 *   它可能是"没旧数据"时误置的，但既然置了就说明已经检查过，
+		 *   这里必须继续认它，否则会二次迁移、用旧值覆盖用户当前设置。
+		 */
+		$flagged_migrated = get_option( self::MIGRATED_FLAG );
+
+		if ( get_option( self::LEGACY_CHECKED_FLAG ) || $flagged_migrated ) {
+			// 自愈：3.0.2 之前，"没有 2.x 数据"的全新安装也会置 MIGRATED_FLAG。
+			// 那些站点上这句话是假的（设置页会显示"检测到 2.x 的旧设置，已自动迁移"），
+			// 而这条提示按设计不会自己消失 —— 违反插件目录指南 11。
+			//
+			// 判据：标记在、但旧选项**根本不存在** ⇒ 当时什么都没迁移，撤回标记。
+			// 为什么撤回是安全的：旧选项不存在时迁移本身就是空操作，不会引发二次搬运；
+			// 反过来说，只要旧选项还在，就一律不动标记（真迁移过的站点必须继续认它）。
+			if ( $flagged_migrated && ! is_array( get_option( self::LEGACY_OPTION, null ) ) ) {
+				delete_option( self::MIGRATED_FLAG );
+				update_option( self::LEGACY_CHECKED_FLAG, AT8SA_VERSION, false );
+
+				return false;
+			}
+
 			return false;
 		}
+
+		// 先落"已检查"标记：无论有没有旧数据，这段都不再重复执行。
+		update_option( self::LEGACY_CHECKED_FLAG, AT8SA_VERSION, false );
 
 		$legacy = get_option( self::LEGACY_OPTION, null );
 
 		if ( ! is_array( $legacy ) || empty( $legacy ) ) {
-			update_option( self::MIGRATED_FLAG, AT8SA_VERSION, false );
+			// 全新安装：什么都不做，**也绝不置 MIGRATED_FLAG**。
+			// 置了的话设置页会显示"检测到 2.x 的旧设置，已自动迁移"——对一个刚装上的
+			// 站点是假话，而且是一条永远不消失的提示（违反插件目录指南 11）。
 			return false;
 		}
 

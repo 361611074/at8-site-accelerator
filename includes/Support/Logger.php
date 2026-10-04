@@ -188,6 +188,11 @@ final class Logger {
 
 		wp_delete_file( $file );
 
+		// 必须清 stat 缓存再回查：`is_file()` 读的是 PHP 的**请求级 stat 缓存**，
+		// 上面那次 `is_file()` 已经把"存在"缓存下来了，不清就会读到旧结果、
+		// 把一次成功的删除报成失败。
+		clearstatcache( true, $file );
+
 		// wp_delete_file() 不返回结果，所以用"文件是否还在"来给出真实回执，
 		// 而不是无条件返回 true（那会让权限问题被静默吞掉）。
 		return ! is_file( $file );

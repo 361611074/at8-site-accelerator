@@ -203,6 +203,11 @@ final class AdvancedCache {
 
 		wp_delete_file( $target );
 
+		// 必须清 stat 缓存再回查：上面的 `is_installed()` 已经用 `is_file()` 把
+		// "文件存在"缓存进了 PHP 的请求级 stat 缓存，不清就会读到旧结果，
+		// 把一次成功的删除报成失败。
+		clearstatcache( true, $target );
+
 		// wp_delete_file() 没有返回值，用"文件是否还在"给出真实结果，
 		// 避免目录不可写时假装成功。
 		return ! is_file( $target );

@@ -33,7 +33,35 @@ define( 'AT8SA_PATH', dirname( __DIR__, 2 ) . '/' );
 define( 'AT8SA_URL', 'http://example.test/wp-content/plugins/at8-site-accelerator/' );
 define( 'AT8SA_FILE', AT8SA_PATH . 'at8-site-accelerator.php' );
 define( 'AT8SA_BASENAME', 'at8-site-accelerator/at8-site-accelerator.php' );
-define( 'AT8SA_VERSION', '3.0.1' );
+
+/*
+ * 插件版本 —— **从主插件文件真实解析，不要在这里写死**。
+ *
+ * 为什么必须动态取：drop-in 的版本自检拿"模板里的版本戳"与"主文件的版本戳"做比对，
+ * 不一致就主动让出。桩里写死一个版本，只要源码升一次级就会漂移，后果是所有
+ * "缓存命中"场景静默退化成 fall-through —— 测试报 3 条假失败，同时把命中路径的
+ * 真实行为一起掩盖掉。实测踩过：桩写 3.0.1、主文件 3.0.2。
+ *
+ * 解析方式与 templates/advanced-cache.php 的自检**故意保持一致**（同一条正则、
+ * 同样只读前 8KB），这样"桩认为的版本"和"drop-in 认为的版本"不可能各说各话。
+ */
+$at8sa_stub_version = '0.0.0';
+
+if ( is_readable( AT8SA_FILE ) ) {
+	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents
+	$at8sa_stub_head = (string) @file_get_contents( AT8SA_FILE, false, null, 0, 8192 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+
+	if ( preg_match( '/AT8SA_VERSION[\'"\s,]+([0-9A-Za-z.\-]+)/', $at8sa_stub_head, $at8sa_stub_match ) ) {
+		$at8sa_stub_version = $at8sa_stub_match[1];
+	}
+
+	unset( $at8sa_stub_head, $at8sa_stub_match );
+}
+
+define( 'AT8SA_VERSION', $at8sa_stub_version );
+
+unset( $at8sa_stub_version );
+
 define( 'AT8SA_CACHE_ROOT', WP_CONTENT_DIR . '/cache/at8-site-accelerator' );
 define( 'AT8SA_CACHE_ROOT_URL', WP_CONTENT_URL . '/cache/at8-site-accelerator' );
 
@@ -813,6 +841,27 @@ function wp_delete_post( $id, $force = false ) {
 function wp_delete_comment( $id, $force = false ) {
 	unset( $id, $force );
 	return true;
+}
+
+/**
+ * `wp_delete_file()` 桩。
+ *
+ * 插件在「精准删除缓存文件」「递归清空缓存目录」「卸载 drop-in」三条路径上都调用它。
+ * 桩**必须真的删文件**——否则磁盘后端的删除断言会假通过（文件明明还在，测试却以为
+ * 删掉了），而这种假绿灯正是"缓存清了但页面没变"这类线上问题最爱的藏身处。
+ *
+ * 与 WP 保持一致：无返回值，删除失败不抛异常。
+ *
+ * @param string $file 待删文件路径。
+ * @return void
+ */
+function wp_delete_file( $file ) {
+	if ( ! $file ) {
+		return;
+	}
+
+	// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- 与 WP 核心一致：删除失败静默。
+	@unlink( $file );
 }
 
 function get_comment( $id ) {

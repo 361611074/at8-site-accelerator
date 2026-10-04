@@ -15,7 +15,7 @@
  *   php dropin-hit.php <mode>                     —— 命令行直接跑
  *   echo '<bootstrap>' | php                       —— 由 smoke.php 从 stdin 喂进来
  *
- * 场景：hit / miss / post / preview / safe_mode / no_config / mobile / no_plugin
+ * 场景：hit / miss / post / preview / safe_mode / no_config / mobile / no_plugin / stale_version
  *
  * stdout 契约：
  *   命中 → 原样输出缓存内容（随后 exit）
@@ -87,12 +87,25 @@ if ( is_dir( $at8sa_cache ) ) {
 $at8sa_dropin = WP_CONTENT_DIR . '/advanced-cache.php';
 $at8sa_source = (string) file_get_contents( AT8SA_PATH . 'templates/advanced-cache.php' );
 
+// 版本戳：必须与 AdvancedCache::install() **一样同时替换两个占位符**。
+//
+// 这里曾经漏掉 {{AT8SA_VERSION}}，后果是 3.0.2 新增的版本自检把这份副本永远判定为
+// "已过期"并主动让出 —— 所有 hit 场景静默退化成 fall-through，测试报假失败，
+// 顺带把"命中路径"的真实行为一起掩盖掉。
+//
+// stale_version 场景故意写一个旧戳：drop-in 必须**自己发现**自己是旧版并让出。
+// 这条路径是"升级后整站白屏"的真正防线 —— 一旦命中就 exit，事后的
+// needs_reinstall() / ensure_dropin() 根本没机会执行。
+$at8sa_stamp = ( 'stale_version' === $at8sa_mode ) ? '0.0.1-old' : AT8SA_VERSION;
+
 if ( 'no_plugin' === $at8sa_mode ) {
 	// 模拟"插件目录被挪走"：把占位符换成一个不存在的路径。
 	$at8sa_source = str_replace( '{{AT8SA_PATH}}', '/nonexistent-plugin-dir/', $at8sa_source );
 } else {
 	$at8sa_source = str_replace( '{{AT8SA_PATH}}', trailingslashit( wp_normalize_path( AT8SA_PATH ) ), $at8sa_source );
 }
+
+$at8sa_source = str_replace( '{{AT8SA_VERSION}}', $at8sa_stamp, $at8sa_source );
 
 file_put_contents( $at8sa_dropin, $at8sa_source );
 

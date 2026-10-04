@@ -1807,6 +1807,19 @@ foreach ( $must_fall_through as $mode => $label ) {
 	);
 }
 
+// 版本戳过期：缓存文件**在**，但 drop-in 必须自己发现"我是旧版"并主动让出。
+//
+// 为什么单独测这条：这是 3.0.2 新增的代码，也是"升级后整站白屏"的真正防线。
+// drop-in 一旦命中就 exit，WordPress 根本不会启动，事后的 needs_reinstall() /
+// ensure_dropin() 永远没机会跑——只有 drop-in 自己让出，请求才能落回 WordPress
+// 并触发重装。少了这条断言，这段逻辑退化了也不会有人发现。
+$r = run_dropin( 'stale_version' );
+check(
+	'drop-in 版本戳过期时主动让出（交给 ensure_dropin 重装）',
+	0 === $r['code'] && false !== strpos( $r['out'], 'AT8SA_DROPIN_FELL_THROUGH' ),
+	'code=' . $r['code'] . ' out=' . substr( $r['out'], 0, 120 )
+);
+
 // 插件目录消失：必须静默退化，绝不报错。
 $r = run_dropin( 'no_plugin' );
 check(

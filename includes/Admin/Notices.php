@@ -6,6 +6,14 @@
  * 不做"感谢安装本插件"这种噪声，也不做长期驻留的推广横幅。
  * 每条提示都必须是可执行的（告诉用户下一步点哪里），否则就不该存在。
  *
+ * 两条硬约束（插件目录指南 11：不得劫持后台）：
+ * 1. **只在真正需要用户处理时才出现，且问题解决后自动消失** —— 本文件里每条
+ *    提示都挂在某个可判定的状态上（`WP_CACHE` 没开 / drop-in 没装 / 检测到冲突），
+ *    状态一变提示就没了。不做需要"手动关闭"的提示，因为那反而会把真问题关掉。
+ * 2. **纯信息类提示不放这里** —— 例如"2.x 设置已迁移"，它永远不会有"已解决"的状态，
+ *    放在全站通知里就是一条永远不消失的提示。它已经在设置页的状态区里
+ *    （见 `templates/settings-page.php`），只在用户主动打开插件页面时出现。
+ *
  * @package AT8SA\Admin
  */
 
@@ -73,23 +81,12 @@ final class Notices {
 		// 设置页自身不再重复显示（页面里已经有状态区）。
 		$is_own_page = $screen && 'toplevel_page_' . SettingsPage::SLUG === $screen->id;
 
-		/** @var Settings $settings */
-		$settings = $this->dep( 'settings' );
-
-		if ( $settings->was_migrated() && ! $is_own_page ) {
-			$this->notice(
-				'success',
-				sprintf(
-					/* translators: %s: plugin admin page URL */
-					__( 'AT8 Site Accelerator 已从 2.x 升级并自动迁移设置。原有开关保持不变，旧的 %s 选项仍保留以便回滚。', 'at8-site-accelerator' ),
-					'<code>site_accelerator_settings</code>'
-				)
-			);
-		}
-
 		if ( $is_own_page ) {
 			return;
 		}
+
+		/** @var Settings $settings */
+		$settings = $this->dep( 'settings' );
 
 		/** @var AdvancedCache $dropin */
 		$dropin = $this->dep( 'advanced_cache' );

@@ -290,15 +290,42 @@ final class SettingsTest extends TestCase {
 	}
 
 	/**
-	 * 没有旧选项时不执行迁移，但会打标记（避免每次请求都去查旧选项）。
+	 * 没有旧选项时：不迁移、**不置"迁移过"标记**，只落"已检查"标记。
+	 *
+	 * 这条曾经写反过（全新安装也置 `MIGRATED_FLAG`），后果是设置页对刚装上的站点
+	 * 显示"检测到 2.x 的旧设置，已自动迁移"——一句假话，而且提示永不消失
+	 * （违反插件目录指南 11）。两个标记必须语义分离，这里把边界钉死。
 	 *
 	 * @return void
 	 */
-	public function test_migrate_without_legacy_is_a_noop_but_flags() {
+	public function test_migrate_without_legacy_is_a_noop_and_does_not_flag_migrated() {
 		$settings = new Settings();
 
 		$this->assertFalse( $settings->migrate_from_legacy() );
-		$this->assertTrue( $settings->was_migrated() );
+		$this->assertFalse( $settings->was_migrated(), '全新安装绝不能声称"迁移过"' );
+		$this->assertFalse(
+			get_option( Settings::MIGRATED_FLAG ),
+			'MIGRATED_FLAG 不该被全新安装置位'
+		);
+		$this->assertSame(
+			AT8SA_VERSION,
+			get_option( Settings::LEGACY_CHECKED_FLAG ),
+			'"已检查"标记必须落位，避免每次请求都去查旧选项'
+		);
+	}
+
+	/**
+	 * 有旧选项时才置"迁移过"标记——消费方据此显示迁移提示。
+	 *
+	 * @return void
+	 */
+	public function test_migrate_with_legacy_flags_migrated() {
+		$GLOBALS['at8sa_test_options'][ Settings::LEGACY_OPTION ] = array( 'page_cache' => 0 );
+
+		$settings = new Settings();
+
+		$this->assertTrue( $settings->migrate_from_legacy() );
+		$this->assertTrue( $settings->was_migrated(), '真迁移过才允许声称"迁移过"' );
 	}
 
 	/**
@@ -338,6 +365,74 @@ final class SettingsTest extends TestCase {
 			get_option( Settings::LEGACY_OPTION ),
 			'旧选项被删掉就再也回不去了'
 		);
+	}
+
+	/**
+	 * 从 3.0.1 升级上来的站点：只有旧的 `MIGRATED_FLAG`、没有新 `LEGACY_CHECKED_FLAG`。
+	 *
+	 * 这种情况必须继续短路。否则旧选项还在（按设计保留供回滚），二次迁移会用
+	 * **旧值覆盖用户当前设置**——静默的数据破坏，比假提示严重得多。
+	 *
+	 * @return void
+	 */
+	public function test_migrate_short_circuits_on_legacy_301_marker() {
+		// 3.0.1 遗留状态：旧标记在、新标记不在，旧选项还在。
+		$GLOBALS['at8sa_test_options'][ Settings::MIGRATED_FLAG ] = '3.0.1';
+		$GLOBALS['at8sa_test_options'][ Settings::LEGACY_OPTION ] = array( 'page_cache' => 0 );
+
+		$settings = new Settings();
+
+		$this->assertFalse(
+			$settings->migrate_from_legacy(),
+			'认旧标记，不得二次迁移'
+		);
+		$this->assertSame(
+			1,
+			(int) $settings->get( 'page_cache' ),
+			'用户当前设置不能被旧值覆盖（旧值是 0，默认值是 1）'
+		);
+	}
+
+	/**
+	 * 自愈：只有 `MIGRATED_FLAG`、且旧选项不存在 ⇒ 那是 3.0.1 误置的假标记，撤回。
+	 *
+	 * 真机实证过这个状态（站点上 `at8sa_migrated_from_legacy=3.0.0` 而
+	 * `site_accelerator_settings` 根本不存在）——设置页会一直显示"检测到 2.x 的
+	 * 旧设置，已自动迁移"，用户既没迁移过也关不掉这条提示。
+	 *
+	 * @return void
+	 */
+	public function test_migrate_self_heals_false_migrated_flag() {
+		// 3.0.1 误置状态：标记在、旧选项不在。
+		$GLOBALS['at8sa_test_options'][ Settings::MIGRATED_FLAG ] = '3.0.0';
+
+		$settings = new Settings();
+
+		$this->assertFalse( $settings->migrate_from_legacy() );
+		$this->assertFalse(
+			$settings->was_migrated(),
+			'假标记必须被撤回，否则设置页会永远显示一句假话'
+		);
+		$this->assertSame(
+			AT8SA_VERSION,
+			get_option( Settings::LEGACY_CHECKED_FLAG ),
+			'撤回后要落"已检查"，避免下次再走一遍'
+		);
+	}
+
+	/**
+	 * 自愈**不能**误伤真迁移过的站点：旧选项还在（按设计保留供回滚）时标记必须保留。
+	 *
+	 * @return void
+	 */
+	public function test_migrate_does_not_clear_flag_when_legacy_option_remains() {
+		$GLOBALS['at8sa_test_options'][ Settings::MIGRATED_FLAG ] = '3.0.1';
+		$GLOBALS['at8sa_test_options'][ Settings::LEGACY_OPTION ] = array( 'page_cache' => 0 );
+
+		$settings = new Settings();
+		$settings->migrate_from_legacy();
+
+		$this->assertTrue( $settings->was_migrated(), '旧选项还在 ⇒ 真迁移过，标记不得撤回' );
 	}
 
 	/**

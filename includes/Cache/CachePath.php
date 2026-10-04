@@ -327,3 +327,17 @@ final class CachePath {
 		return is_array( $parsed ) ? $parsed : array();
 	}
 }
+
+// ── 旧命名空间兼容层（不要删，除非确认线上已无 3.0.2 之前生成的 drop-in）──
+//
+// 为什么这一段必须存在：`wp-content/advanced-cache.php` 是**复制**出去的独立文件，
+// 插件升级不会更新它。3.0.2 之前（含 3.0.0 / 3.0.1）生成的 drop-in 里硬编码了
+// `\AT8\SiteAccelerator\Cache\CachePath`，而它跑在 WordPress 之前 ——
+// 类名一旦对不上就是 PHP Fatal，前台与 wp-admin 一起白屏，且无法自愈。
+//
+// 旧 drop-in 会 `require_once` 本文件，所以在这里补一个别名，升级瞬间仍然可用；
+// 下一次请求时 `Plugin::ensure_dropin()` 会把 drop-in 重写成新版模板，
+// 之后别名就不再有调用方了。等所有站点都完成这一跳即可删除本段。
+if ( ! class_exists( 'AT8\\SiteAccelerator\\Cache\\CachePath', false ) ) {
+	class_alias( CachePath::class, 'AT8\\SiteAccelerator\\Cache\\CachePath' );
+}

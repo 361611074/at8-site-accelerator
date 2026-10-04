@@ -12,7 +12,16 @@
  * 命中时直接输出缓存并 exit，完全跳过 WordPress 的数据库查询与模板渲染——
  * 这是整页缓存最大的性能收益来源（计划书 §62）。
  *
+ * **本文件是"复制出去"的，插件升级不会更新它**。所以它必须满足三条约束：
+ * 1. 引用的类名/配置键一旦对不上，只能**静默退化**，绝不能 Fatal（见下面的
+ *    `class_exists()` 护栏）——drop-in 跑在 WordPress 之前，一个 Fatal 就是整站白屏；
+ * 2. 必须带版本戳，供 `AdvancedCache::needs_reinstall()` 在 WordPress 起来之后
+ *    发现"这份 drop-in 是旧版的"并自动重装；
+ * 3. 必须**自己发现自己是旧版**并主动让出（见下面的"版本自检"）——因为一旦命中缓存
+ *    这里就 `exit` 了，第 2 条那套事后修复根本没机会跑。
+ *
  * @package AT8SA
+ * @at8sa-dropin-version {{AT8SA_VERSION}}
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -23,8 +32,53 @@ if ( ! is_readable( $at8sa_path . 'includes/Cache/CachePath.php' ) ) {
 	return; // 插件目录被挪走 / 被删：静默退化为无缓存，绝不报错。
 }
 
+// ── 版本自检：本文件是"复制出去"的，插件升级**不会**更新它 ──
+//
+// 为什么非要有这一步：这份 drop-in 一旦命中缓存就直接 `exit`，WordPress 根本不会启动，
+// 于是 `AdvancedCache::needs_reinstall()` / `Plugin::ensure_dropin()` 这两道"事后修复"
+// **永远没有机会执行**——旧文件就一直挂在 `wp-content/` 下，永远不更新。
+// 实测确认过这条路径：3 次请求全部 HIT，drop-in 一个字节都没变。
+//
+// 插件主文件 `at8-site-accelerator.php` 是升级时**必然被替换**的唯一凭据，
+// 所以直接读它的 `AT8SA_VERSION` 常量来比对：不一致就主动放弃本次命中，
+// 让请求落回 WordPress，由 `ensure_dropin()` 把本文件重写成新版。
+//
+// 这一步同时兜住了"将来再改命名空间"：哪怕类名对不上，也要先走到这里退化，
+// 而不是等到调用处变成 PHP Fatal（前台 + wp-admin 一起白屏）。
+//
+// 读不到文件、正则不匹配一律按"一致"处理（不阻断）——
+// 绝不能因为读不到版本号就把整站缓存关掉。
+$at8sa_dropin_version = '{{AT8SA_VERSION}}';
+
+if ( is_readable( $at8sa_path . 'at8-site-accelerator.php' ) ) {
+	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents
+	$at8sa_main_head = (string) @file_get_contents( $at8sa_path . 'at8-site-accelerator.php', false, null, 0, 8192 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+
+	if ( preg_match( '/AT8SA_VERSION[\'"\s,]+([0-9A-Za-z.\-]+)/', $at8sa_main_head, $at8sa_version_match ) ) {
+		if ( $at8sa_version_match[1] !== $at8sa_dropin_version ) {
+			return; // 本文件已过期：交给 ensure_dropin() 重写。
+		}
+	}
+}
+
+unset( $at8sa_main_head, $at8sa_version_match );
+
 require_once $at8sa_path . 'includes/Cache/CachePath.php';
 require_once $at8sa_path . 'includes/Cache/RequestGuard.php';
+
+// 类名对不上就静默退化，**绝不**让这里变成 PHP Fatal。
+//
+// 为什么这条护栏是必须的：drop-in 是**复制**到 `wp-content/` 的独立文件，
+// 插件升级不会更新它（只有"激活插件 / 保存设置"才会重写）。而它跑在 WordPress
+// 之前 —— 一旦文件里硬编码的类名/命名空间与新版插件对不上，就是一个 Fatal：
+// 前台和 wp-admin 一起白屏，而且因为 WordPress 根本没机会加载，drop-in 也永远
+// 得不到修复，用户只能手工删掉这个文件。
+// 3.0.2 把命名空间从 `AT8\SiteAccelerator` 改成 `AT8SA`（PCP 前缀要求），
+// 就正好踩中这条：老 drop-in + 新插件 = 整站白屏。
+// 有这条护栏，"整站白屏"降级为"暂时没有页面缓存"，站点照常可用。
+if ( ! class_exists( '\AT8SA\Cache\CachePath' ) || ! class_exists( '\AT8SA\Cache\RequestGuard' ) ) {
+	return;
+}
 
 // 主机名归一化**必须**复用 CachePath::normalize_host()：
 // 它同时决定配置文件叫什么（这里）和缓存目录叫什么（DiskBackend 侧）。
@@ -64,19 +118,22 @@ $at8sa_backend      = isset( $at8sa_config['backend'] ) ? (string) $at8sa_config
 if ( 'redis' === $at8sa_backend && ! empty( $at8sa_config['redis'] ) && is_readable( $at8sa_path . 'includes/Support/RedisClient.php' ) ) {
 	require_once $at8sa_path . 'includes/Support/RedisClient.php';
 
-	$at8sa_redis = new \AT8SA\Support\RedisClient(
-		isset( $at8sa_config['redis']['host'] ) ? $at8sa_config['redis']['host'] : '127.0.0.1',
-		isset( $at8sa_config['redis']['port'] ) ? (int) $at8sa_config['redis']['port'] : 6379,
-		1.0,
-		isset( $at8sa_config['redis']['db'] ) ? (int) $at8sa_config['redis']['db'] : 2
-	);
+	// 同上面的护栏：类名对不上时静默退化，不 Fatal。
+	if ( class_exists( '\AT8SA\Support\RedisClient' ) ) {
+		$at8sa_redis = new \AT8SA\Support\RedisClient(
+			isset( $at8sa_config['redis']['host'] ) ? $at8sa_config['redis']['host'] : '127.0.0.1',
+			isset( $at8sa_config['redis']['port'] ) ? (int) $at8sa_config['redis']['port'] : 6379,
+			1.0,
+			isset( $at8sa_config['redis']['db'] ) ? (int) $at8sa_config['redis']['db'] : 2
+		);
 
-	if ( $at8sa_redis->connect() ) {
-		$at8sa_key  = \AT8SA\Cache\CachePath::redis_key( $at8sa_config['salt'], $at8sa_request_host, $at8sa_uri, $at8sa_mobile );
-		$at8sa_html = $at8sa_redis->get( $at8sa_key );
+		if ( $at8sa_redis->connect() ) {
+			$at8sa_key  = \AT8SA\Cache\CachePath::redis_key( $at8sa_config['salt'], $at8sa_request_host, $at8sa_uri, $at8sa_mobile );
+			$at8sa_html = $at8sa_redis->get( $at8sa_key );
 
-		if ( ! is_string( $at8sa_html ) || '' === $at8sa_html ) {
-			$at8sa_html = false;
+			if ( ! is_string( $at8sa_html ) || '' === $at8sa_html ) {
+				$at8sa_html = false;
+			}
 		}
 	}
 } else {

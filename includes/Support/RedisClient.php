@@ -358,3 +358,10 @@ final class RedisClient {
 		$this->disconnect();
 	}
 }
+
+// ── 旧命名空间兼容层（不要删，除非确认线上已无 3.0.2 之前生成的 drop-in）──
+// 旧 drop-in 在 Redis 后端下会 require_once 本文件并实例化
+// `\AT8\SiteAccelerator\Support\RedisClient`。详见 CachePath.php 末尾同段注释。
+if ( ! class_exists( 'AT8\\SiteAccelerator\\Support\\RedisClient', false ) ) {
+	class_alias( RedisClient::class, 'AT8\\SiteAccelerator\\Support\\RedisClient' );
+}

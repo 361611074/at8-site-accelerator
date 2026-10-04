@@ -34,6 +34,15 @@ final class AdvancedCache {
 	const DROPIN_MARKER = 'AT8 Site Accelerator —— advanced-cache.php drop-in';
 
 	/**
+	 * drop-in 模板 / 已安装文件中的版本戳字段。
+	 *
+	 * 写成 docblock 里的自定义标签，而不是 define 或变量：drop-in 是纯执行文件，
+	 * 多一个"没人用"的常量/变量会误导后来者，而 docblock 标签既不会被执行，
+	 * 又能被稳定地正则读回。
+	 */
+	const VERSION_TAG = '@at8sa-dropin-version';
+
+	/**
 	 * 日志。
 	 *
 	 * @var Logger
@@ -73,15 +82,32 @@ final class AdvancedCache {
 	 * @return bool
 	 */
 	public function is_installed() {
+		return '' !== $this->dropin_head();
+	}
+
+	/**
+	 * 读取已安装 drop-in 的文件头（仅当它属于本插件时）。
+	 *
+	 * 返回空串有两种含义，都必须与"是本插件的 drop-in"区分开：
+	 * - 文件不存在；
+	 * - 文件存在但不是我们的 —— 这时**绝不能覆盖**，它可能是别的缓存插件的文件。
+	 *
+	 * @return string
+	 */
+	private function dropin_head() {
 		$path = $this->dropin_path();
 
 		if ( ! is_file( $path ) ) {
-			return false;
+			return '';
 		}
 
-		$head = (string) @file_get_contents( $path, false, null, 0, 2048 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents, WordPress.PHP.NoSilencedErrors.Discouraged
+		$head = (string) @file_get_contents( $path, false, null, 0, 4096 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents, WordPress.PHP.NoSilencedErrors.Discouraged
 
-		return false !== strpos( $head, 'AT8 Site Accelerator' );
+		if ( false === strpos( $head, 'AT8 Site Accelerator' ) ) {
+			return '';
+		}
+
+		return $head;
 	}
 
 	/**
@@ -100,7 +126,11 @@ final class AdvancedCache {
 
 		$content = (string) file_get_contents( $template ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents
 
-		$content = str_replace( '{{AT8SA_PATH}}', trailingslashit( wp_normalize_path( AT8SA_PATH ) ), $content );
+		$content = str_replace(
+			array( '{{AT8SA_PATH}}', '{{AT8SA_VERSION}}' ),
+			array( trailingslashit( wp_normalize_path( AT8SA_PATH ) ), AT8SA_VERSION ),
+			$content
+		);
 
 		$target = $this->dropin_path();
 
@@ -112,6 +142,51 @@ final class AdvancedCache {
 
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 		return false !== @file_put_contents( $target, $content ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+	}
+
+	/**
+	 * 已安装 drop-in 的版本戳。
+	 *
+	 * @return string 读不到时返回空串。
+	 */
+	public function installed_version() {
+		$head = $this->dropin_head();
+
+		if ( '' === $head ) {
+			return '';
+		}
+
+		if ( preg_match( '/' . preg_quote( self::VERSION_TAG, '/' ) . '\s+([0-9A-Za-z.\-]+)/', $head, $matches ) ) {
+			return $matches[1];
+		}
+
+		return '';
+	}
+
+	/**
+	 * 已安装的 drop-in 是否需要重装。
+	 *
+	 * 为什么必须存在这一层（真机实测到的整站白屏）：
+	 * drop-in 是**复制**到 `wp-content/` 的独立文件，插件升级只替换插件目录里的文件，
+	 * 不会动它。而它跑在 WordPress 之前，引用的类名一旦与新版插件对不上就是 PHP Fatal——
+	 * 前台与 wp-admin 一起白屏，且因为 WordPress 根本没机会加载，drop-in 永远得不到修复。
+	 * 3.0.2 把命名空间改成 `AT8SA` 时正好踩中：老 drop-in + 新插件 = 整站打不开。
+	 *
+	 * 模板里的 `class_exists()` 护栏把"白屏"降级为"暂时没缓存"，
+	 * 本方法则负责在 WordPress 能跑起来之后把 drop-in 修好，二者缺一不可。
+	 *
+	 * 未安装时返回 false：装不装 drop-in 由激活流程与设置开关决定，不在这里擅自安装。
+	 *
+	 * @return bool
+	 */
+	public function needs_reinstall() {
+		$head = $this->dropin_head();
+
+		if ( '' === $head ) {
+			return false;
+		}
+
+		return $this->installed_version() !== AT8SA_VERSION;
 	}
 
 	/**

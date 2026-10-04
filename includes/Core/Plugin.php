@@ -336,7 +336,15 @@ final class Plugin {
 		$c->get( SettingsSync::class )->boot();
 
 		// 运行时配置的兜底：缺失或已过期就补写，保证 drop-in 读到的是最新配置。
-		add_action( 'init', array( $this, 'ensure_runtime_config' ), 99 );
+		//
+		// 优先级必须是 0，不能是 99：`CacheEngine::maybe_serve_from_cache()` 挂在
+		// `init` 优先级 1，命中插件侧缓存时它输出完就 `exit`，99 的兜底**永远跑不到**
+		// （真机实测：首页 HIT 时 drop-in 与运行时配置都不会被刷新）。
+		// 兜底要早于"任何可能提前退出的路径"，所以放在 1 之前。
+		add_action( 'init', array( $this, 'ensure_runtime_config' ), 0 );
+
+		// drop-in 的兜底：与当前插件版本不一致就重装。同样必须早于 init 优先级 1。
+		add_action( 'init', array( $this, 'ensure_dropin' ), 0 );
 	}
 
 	/**
@@ -395,5 +403,42 @@ final class Plugin {
 		}
 
 		$config->write( $config->runtime() );
+	}
+
+	/**
+	 * 确保 `advanced-cache.php` drop-in 与当前插件版本一致。
+	 *
+	 * 为什么必须有这一层（真机实测到的整站白屏）：
+	 * drop-in 是**复制**到 `wp-content/` 的独立文件，插件升级只替换插件目录里的文件，
+	 * 不会动它。它又跑在 WordPress 之前，引用的类名一旦与新版插件对不上就是 PHP Fatal，
+	 * 前台与 wp-admin 一起白屏。3.0.2 把命名空间改成 `AT8SA` 时正好踩中这条。
+	 *
+	 * 兜底是两层的，缺一不可：
+	 * - `templates/advanced-cache.php` 里的 `class_exists()` 护栏 → 把"白屏"降级为
+	 *   "暂时没有页面缓存"，让 WordPress 还能正常加载；
+	 * - 本方法 → 在 WordPress 起来之后，把那份过期的 drop-in 重写成当前版本。
+	 *
+	 * 对"后台自动更新"尤其重要：那条路径（`wp_doing_cron()`）不会停用/重新激活插件，
+	 * 所以不会走 `Activator::activate()`，drop-in 只能靠这里修好。
+	 *
+	 * @return void
+	 */
+	public function ensure_dropin() {
+		// 只有"高级缓存（drop-in）"开着时才自愈。
+		// 关掉它之后 `SettingsSync::sync()` 只是"不再安装"，并不会删掉磁盘上已有的文件；
+		// 少了这道门禁，用户关掉 drop-in 之后一升级又会被装回来。
+		if ( ! $this->container->get( Settings::class )->is_on( 'advanced_cache' ) ) {
+			return;
+		}
+
+		$dropin = $this->container->get( AdvancedCache::class );
+
+		if ( ! $dropin->needs_reinstall() ) {
+			return;
+		}
+
+		if ( $dropin->install() ) {
+			$this->container->get( Logger::class )->info( 'advanced-cache.php 已按当前版本重装', array( 'version' => AT8SA_VERSION ) );
+		}
 	}
 }

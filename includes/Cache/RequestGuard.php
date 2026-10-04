@@ -310,3 +310,10 @@ final class RequestGuard {
 		return false;
 	}
 }
+
+// ── 旧命名空间兼容层（不要删，除非确认线上已无 3.0.2 之前生成的 drop-in）──
+// 旧 drop-in 会 require_once 本文件并调用 `\AT8\SiteAccelerator\Cache\RequestGuard`。
+// 详见 CachePath.php 末尾同段注释。
+if ( ! class_exists( 'AT8\\SiteAccelerator\\Cache\\RequestGuard', false ) ) {
+	class_alias( RequestGuard::class, 'AT8\\SiteAccelerator\\Cache\\RequestGuard' );
+}

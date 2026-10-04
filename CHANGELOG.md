@@ -6,6 +6,94 @@
 
 ---
 
+## 3.0.2 — 命名空间合规 + drop-in 自愈版
+
+> 起因：WordPress 官方 Plugin Check 2.1.0 报出两类问题——① 所有符号必须带它从代码里
+> 推导出的 4 字符前缀（实测为 `at8sa`），而本插件当时用的是 `AT8\SiteAccelerator`；
+> ② 一批编码规范告警（text-domain、直接查库、`unlink` 等）。
+> 改名的过程中牵出了三个此前未被报告的真实缺陷，全部在真机上复现并验证修复。
+
+### 修复 1：升级后整站白屏（严重，交付阻塞）
+
+* **现象**：装上 3.0.2 后前台与 `wp-admin` 一起 500，页面源码为空。
+* **根因链条**：
+  1. `wp-content/advanced-cache.php` 是**复制**出去的 drop-in，插件升级只替换插件目录里的文件，
+     **不会**动它；
+  2. 它跑在 `wp-settings.php` 极早期，**早于插件加载**；
+  3. 3.0.2 把命名空间从 `AT8\SiteAccelerator` 改成 `AT8SA`（PCP 前缀要求），
+     于是老 drop-in 里硬编码的 `\AT8\SiteAccelerator\Cache\CachePath::normalize_host()`
+     变成一个不存在的类 → `PHP Fatal error: Uncaught Error: Class "..." not found`；
+  4. WordPress 根本没机会加载，所以没有任何"事后修复"能救它——用户只能手工删文件。
+* **为什么升级不会自动重装 drop-in**：实测确认，WordPress 的后台自动更新走
+  `wp_doing_cron()` 分支，而 `deactivate_plugin_before_upgrade()` 在 cron 下直接
+  `return $response;`，`install_package()` 里也没有"重新激活"的调用 —— 所以
+  `Activator::activate()` 不会跑，drop-in 不会被重写。
+* **修复（四层，缺一不可）**：
+  1. **兼容层**：`CachePath` / `RequestGuard` / `RedisClient` 三个类文件末尾各加一个
+     `class_alias()` 到旧命名空间。老 drop-in 会 `require_once` 这些文件，所以升级瞬间仍然可用；
+  2. **失败安全**：模板里加 `class_exists()` 护栏，类名对不上就 `return`，
+     把"整站白屏"降级为"暂时没有页面缓存"；
+  3. **版本戳 + 自愈**：模板 docblock 写入 `@at8sa-dropin-version`，
+     `AdvancedCache::needs_reinstall()` 比对版本、`Plugin::ensure_dropin()` 负责重写；
+  4. **drop-in 自检**：drop-in 一旦命中缓存就直接 `exit`，WordPress 不启动，
+     第 3 层根本没机会跑（实测 3 次请求全 HIT，文件一个字节都没变）。所以 drop-in
+     必须自己读插件主文件的 `AT8SA_VERSION` 与自身版本戳比对，不一致就主动让出命中。
+
+### 修复 2：同一请求内二次保存不失效
+
+* **现象**：一个请求里连续两次 `wp_update_post()`，第二次的改动在缓存里看不到。
+* **根因**：`PurgeActions::$handled` 只按文章 ID 去重，`array<int,bool>`。
+  "同一请求"被当成了"同一次保存"，第二次保存被静默跳过。
+* **修复**：改成 `array<int,string>`，值存内容指纹（`post_modified_gmt` / 状态 / 标题 /
+  别名 / 正文 / 摘要 的 md5）。指纹不同就是一次新保存，同时作废"已失效 URL"备忘
+  （`Purger::reset_purged()`）——因为 Pro 的预热器会把页面写回缓存，
+  沿用备忘会让第二次失效被跳过。
+
+### 修复 3：缓存命中时兜底钩子永远不执行
+
+* **现象**：drop-in 与运行时配置文件在持续命中缓存的情况下永远不刷新。
+* **根因**：两个兜底挂在 `init` 优先级 **99**，而 `CacheEngine::maybe_serve_from_cache()`
+  挂在 `init` 优先级 **1** —— 命中插件侧缓存时它输出完就 `exit`，99 的钩子跑不到。
+* **修复**：两个兜底一起提前到 `init` 优先级 **0**。
+  另外给 `ensure_dropin()` 补上 `advanced_cache` 设置门禁：
+  `SettingsSync::sync()` 关闭该项时只是"不再安装"、不会删掉已有文件，
+  少了门禁会出现"用户关掉 drop-in 之后一升级又被装回来"。
+
+### Plugin Check 2.1.0 清零
+
+* 命名空间 `AT8\SiteAccelerator` → `AT8SA`（440 处），满足 4 字符前缀要求。
+* 直接查库处补 `esc_sql()` + 表名白名单，SQL 表达式内联在 `$wpdb->get_results()`
+  的第一个参数里（`DirectDBSniff::check_expression()` 会越过表达式末端继续扫，
+  写成变量会被误判）。
+* `unlink()` → `wp_delete_file()`；`fsockopen` / `fclose` / `rmdir` / `rename`
+  用**行尾合并**的 phpcs 豁免 + 理由注释（PHPCS 对同一行只保留最后一条注解，
+  拆成两行会让前一条失效）。
+* `readme.txt` 英文化并压缩到限制内（短描述 130 / 150 字符，Upgrade Notice 275 / 300 字符）。
+
+### 真机验证结论（测试站 WordPress 7.1.2 / PHP 8.3.33 / nginx + Redis，插件版本 3.0.2）
+
+| 场景 | drop-in 状态 | 结果 |
+| --- | --- | --- |
+| A | 新版模板 + 旧版本戳 3.0.0（缓存热） | 200，drop-in 自动刷成 3.0.2 |
+| B | 新版模板 + 命名空间改坏 + 版本戳**一致** | 200，`class_exists` 护栏拦下，页面正常渲染 |
+| C | 新版模板 + 命名空间改坏 + 旧版本戳 | 200，版本自检先让出，随后自动刷成新版 |
+| D | 真实 3.0.1 老 drop-in（旧命名空间、无护栏无自检） | 200，`class_alias` 兜住 |
+| E | 场景 D + 强制 MISS | 200，WP 启动后自动重装 drop-in |
+| F | 老模板 + 命名空间改坏（**无护栏**） | **500** —— 对照组，证明护栏/自检才是防白屏的关键 |
+
+场景 F 抓到的原始报错（就是"整站白屏"的真身）：
+
+```
+PHP Fatal error:  Uncaught Error: Class "AT8\TotallyGone\Cache\CachePath" not found
+in /www/wwwroot/wordpress.xmm.fan/wp-content/advanced-cache.php:32
+```
+
+场景 D 说明了一件必须写进运维文档的事：**drop-in 一旦命中缓存就 `exit`，WordPress 不启动，
+所以"事后重装"这条路在纯命中流量下走不通**——老 drop-in 靠 `class_alias` 继续服务，
+真正被刷新要等到下一次 MISS 或后台访问。这也是场景 A/C 里"版本自检"必须存在的原因。
+
+---
+
 ## 3.0.1 — 真机验证修复版
 
 > 起因：在真实站点（WordPress 7.1.2 / PHP 8.3.33 / nginx，装 Redis）部署 3.0.0 后，

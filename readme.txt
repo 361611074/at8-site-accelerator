@@ -4,7 +4,7 @@ Tags: cache, page cache, redis, lazy load, webp
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 3.0.1
+Stable tag: 3.0.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -94,6 +94,12 @@ Yes. Each site gets its own cache directory and its own Redis key prefix.
 
 == Changelog ==
 
+= 3.0.2 =
+* Fixed: **upgrading from 3.0.1 could have left the whole site - front end and wp-admin - blank.** `advanced-cache.php` is a drop-in that gets copied into `wp-content/`; a plugin upgrade never touches it, and this release renames the plugin namespace, so an old copy would have called classes that no longer exist. That is a PHP fatal which runs before WordPress can load, so nothing can repair it afterwards. The drop-in now fails safe (falls back to "no page cache") instead of fataling, carries a version stamp, and rewrites itself on the next request. A compatibility alias keeps already-installed old copies working until that rewrite happens.
+* Fixed: saving the same post twice within one request only invalidated the cache once, so the second save could leave a stale page in the cache until the TTL expired.
+* Fixed: while pages were being served from cache, the drop-in and the runtime configuration file were never refreshed, because the cache-hit path exits before the cleanup hooks run. Both now run early enough to always be reached.
+* Plugin Check: renamed the namespace so every symbol starts with the four-character prefix that Plugin Check derives from the code (`at8sa`), and cleared the remaining coding-standard, text-domain and direct-database-query warnings reported by Plugin Check 2.1.0. The plugin now reports zero errors.
+
 = 3.0.1 =
 * Fixed: on some sites the random keys (salts) in `wp-config.php` contain `{` or `}`, which made "enable WP_CACHE with one click" report a write failure and roll itself back, so the advanced cache never became active. Braces are now counted with a real PHP lexer, so string contents are no longer counted as code.
 * Fixed: the `wp-config.php` write check now also verifies reversibility - removing the line the plugin added must reproduce the original file exactly, preventing accidental edits to site configuration.
@@ -120,6 +126,9 @@ Yes. Each site gets its own cache directory and its own Redis key prefix.
 The full technical change list (including the reason behind every fix) is in `CHANGELOG.md` at the root of the repository.
 
 == Upgrade Notice ==
+
+= 3.0.2 =
+Recommended for all 3.0.1 users. This release renames the plugin namespace; the advanced-cache.php drop-in copied into wp-content/ is not replaced by an upgrade, so it now fails safe and repairs itself. Also fixes cache invalidation when a post is saved twice in one request.
 
 = 3.0.1 =
 Recommended for every 3.0.0 user. Fixes two subtle issues: settings changed from WP-CLI or cron had no effect on the front end, and each cache purge left unreleased data in Redis. Retrying "enable WP_CACHE" now completes it automatically.

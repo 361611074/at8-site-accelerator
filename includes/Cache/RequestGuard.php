@@ -8,10 +8,10 @@
  *
  * 因此这里**禁止**出现任何 `is_*()` / `wp_*()` 调用。
  *
- * @package AT8\SiteAccelerator\Cache
+ * @package AT8SA\Cache
  */
 
-namespace AT8\SiteAccelerator\Cache;
+namespace AT8SA\Cache;
 
 defined( 'ABSPATH' ) || exit;
 

@@ -6,12 +6,12 @@
  * 多缓存一个登录用户 → 泄漏他人数据；少缓存一个页面 → 只是性能损失。
  * 所以用例集中在**必须放行的场景一个都不能漏**。
  *
- * @package AT8\SiteAccelerator\Tests
+ * @package AT8SA\Tests
  */
 
-namespace AT8\SiteAccelerator\Tests;
+namespace AT8SA\Tests;
 
-use AT8\SiteAccelerator\Cache\RequestGuard;
+use AT8SA\Cache\RequestGuard;
 
 /**
  * Class RequestGuardTest

@@ -5,7 +5,7 @@
  * 默认**保留数据**（`keep_data_on_uninstall = 1`）：用户卸载插件常常是为了重装排障，
  * 顺手删掉所有设置会让人白折腾一遍。想彻底清干净的用户可以在设置里显式关掉这个开关。
  *
- * @package AT8\SiteAccelerator
+ * @package AT8SA
  */
 
 defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
@@ -32,7 +32,7 @@ if ( is_readable( $at8sa_dropin ) ) {
 	$at8sa_head = (string) file_get_contents( $at8sa_dropin, false, null, 0, 2048 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 
 	if ( false !== strpos( $at8sa_head, 'AT8 Site Accelerator' ) ) {
-		@unlink( $at8sa_dropin ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		wp_delete_file( $at8sa_dropin );
 	}
 }
 
@@ -56,11 +56,14 @@ if ( is_dir( $at8sa_cache ) ) {
 				if ( is_dir( $at8sa_path ) ) {
 					$at8sa_stack[] = $at8sa_path;
 				} else {
-					@unlink( $at8sa_path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+					wp_delete_file( $at8sa_path );
 				}
 			}
 
-			@rmdir( $at8sa_dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			// rmdir 没有 WordPress 等价 API；这里只删插件自己的缓存目录，
+			// 且目录已经在上面的循环里被清空。
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir, WordPress.PHP.NoSilencedErrors.Discouraged
+			@rmdir( $at8sa_dir );
 		}
 	}
 }

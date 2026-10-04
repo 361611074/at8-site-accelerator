@@ -7,12 +7,12 @@
  *    导入这类局部更新不会误关功能）。这个设计一旦写错，用户在后台点开关会毫无反应。
  * 2. **升级丢设置**：`migrate_from_legacy()` 必须幂等、必须保留旧选项（可回滚）。
  *
- * @package AT8\SiteAccelerator\Tests
+ * @package AT8SA\Tests
  */
 
-namespace AT8\SiteAccelerator\Tests;
+namespace AT8SA\Tests;
 
-use AT8\SiteAccelerator\Core\Settings;
+use AT8SA\Core\Settings;
 
 /**
  * Class SettingsTest

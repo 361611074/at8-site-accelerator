@@ -6,12 +6,12 @@
  * 一旦映射可以被穿越，攻击者就能让缓存写文件到任意位置。
  * 所以这里的用例重点是**穿越防护**与**变体隔离**，而不只是"函数能跑"。
  *
- * @package AT8\SiteAccelerator\Tests
+ * @package AT8SA\Tests
  */
 
-namespace AT8\SiteAccelerator\Tests;
+namespace AT8SA\Tests;
 
-use AT8\SiteAccelerator\Cache\CachePath;
+use AT8SA\Cache\CachePath;
 
 /**
  * Class CachePathTest

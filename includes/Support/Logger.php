@@ -5,12 +5,12 @@
  * 只写本地文件，**默认关闭**，绝不上报远程（计划书 §60：Free 版默认无远程分析）。
  * 日志中禁止出现密钥、Cookie、License Key（计划书 §79）。
  *
- * @package AT8\SiteAccelerator\Support
+ * @package AT8SA\Support
  */
 
-namespace AT8\SiteAccelerator\Support;
+namespace AT8SA\Support;
 
-use AT8\SiteAccelerator\Core\Settings;
+use AT8SA\Core\Settings;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -93,7 +93,7 @@ final class Logger {
 
 		// 日志轮转：超过 1MB 时截断，避免磁盘被写满。
 		if ( is_file( $this->file() ) && filesize( $this->file() ) > 1048576 ) {
-			@unlink( $this->file() ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			wp_delete_file( $this->file() );
 		}
 
 		$line = sprintf(
@@ -180,11 +180,17 @@ final class Logger {
 	 * @return bool
 	 */
 	public function clear() {
-		if ( is_file( $this->file() ) ) {
-			return (bool) @unlink( $this->file() ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		$file = $this->file();
+
+		if ( ! is_file( $file ) ) {
+			return true;
 		}
 
-		return true;
+		wp_delete_file( $file );
+
+		// wp_delete_file() 不返回结果，所以用"文件是否还在"来给出真实回执，
+		// 而不是无条件返回 true（那会让权限问题被静默吞掉）。
+		return ! is_file( $file );
 	}
 
 	/**

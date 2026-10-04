@@ -50,7 +50,7 @@ echo "================ BENCHMARK [$LABEL] ================"
 echo "site   : $SITE"
 echo "php    : $(php -r 'echo PHP_VERSION;')"
 echo "date   : $(date -Iseconds)"
-echo "backend: $($WP eval 'echo \AT8\SiteAccelerator\Core\Plugin::instance()->container()->get(\AT8\SiteAccelerator\Cache\Backend\BackendFactory::class)->active_name();' 2>/dev/null || echo 'n/a')"
+echo "backend: $($WP eval 'echo \AT8SA\Core\Plugin::instance()->container()->get(\AT8SA\Cache\Backend\BackendFactory::class)->active_name();' 2>/dev/null || echo 'n/a')"
 echo "plugin : $($WP plugin get at8-site-accelerator --field=status 2>/dev/null || echo 'not-installed')"
 echo
 
@@ -112,7 +112,7 @@ echo
 
 # ---- 4. 缓存条目总数 ----
 echo "---- 4. 缓存条目 ----"
-$WP eval 'echo "cached_pages=" . \AT8\SiteAccelerator\Core\Plugin::instance()->container()->get(\AT8\SiteAccelerator\Purge\Purger::class)->backend_status()["cached_pages"] . "\n";' 2>/dev/null || echo "  n/a"
+$WP eval 'echo "cached_pages=" . \AT8SA\Core\Plugin::instance()->container()->get(\AT8SA\Purge\Purger::class)->backend_status()["cached_pages"] . "\n";' 2>/dev/null || echo "  n/a"
 echo
 
 # ---- 5. 并发稳定性 ----

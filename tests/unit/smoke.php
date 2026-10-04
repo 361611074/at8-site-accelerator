@@ -19,7 +19,7 @@
  *   - 诊断采集
  *   - 设置页模板渲染（抓模板致命错误）
  *
- * @package AT8\SiteAccelerator\Tests
+ * @package AT8SA\Tests
  */
 
 // phpcs:disable
@@ -168,7 +168,7 @@ function at8sa_grep_key( $target, $key ) {
 
 spl_autoload_register(
 	function ( $class ) {
-		$prefix = 'AT8\\SiteAccelerator\\';
+		$prefix = 'AT8SA\\';
 		$length = strlen( $prefix );
 
 		if ( 0 !== strncmp( $prefix, $class, $length ) ) {
@@ -183,24 +183,24 @@ spl_autoload_register(
 	}
 );
 
-use AT8\SiteAccelerator\Cache\AdvancedCache;
-use AT8\SiteAccelerator\Cache\Backend\BackendFactory;
-use AT8\SiteAccelerator\Cache\Backend\DiskBackend;
-use AT8\SiteAccelerator\Cache\CacheEngine;
-use AT8\SiteAccelerator\Cache\CachePath;
-use AT8\SiteAccelerator\Cache\Config;
-use AT8\SiteAccelerator\Cache\RequestGuard;
-use AT8\SiteAccelerator\Compatibility\CachePluginDetector;
-use AT8\SiteAccelerator\Core\Container;
-use AT8\SiteAccelerator\Core\Plugin;
-use AT8\SiteAccelerator\Core\Settings;
-use AT8\SiteAccelerator\Diagnostics\Diagnostics;
-use AT8\SiteAccelerator\Optimization\BrowserCache;
-use AT8\SiteAccelerator\Optimization\HtmlMinifier;
-use AT8\SiteAccelerator\Optimization\LazyLoad;
-use AT8\SiteAccelerator\Purge\Purger;
-use AT8\SiteAccelerator\Support\Filesystem;
-use AT8\SiteAccelerator\Support\Logger;
+use AT8SA\Cache\AdvancedCache;
+use AT8SA\Cache\Backend\BackendFactory;
+use AT8SA\Cache\Backend\DiskBackend;
+use AT8SA\Cache\CacheEngine;
+use AT8SA\Cache\CachePath;
+use AT8SA\Cache\Config;
+use AT8SA\Cache\RequestGuard;
+use AT8SA\Compatibility\CachePluginDetector;
+use AT8SA\Core\Container;
+use AT8SA\Core\Plugin;
+use AT8SA\Core\Settings;
+use AT8SA\Diagnostics\Diagnostics;
+use AT8SA\Optimization\BrowserCache;
+use AT8SA\Optimization\HtmlMinifier;
+use AT8SA\Optimization\LazyLoad;
+use AT8SA\Purge\Purger;
+use AT8SA\Support\Filesystem;
+use AT8SA\Support\Logger;
 
 echo "AT8 Site Accelerator 冒烟测试\n";
 echo 'PHP ' . PHP_VERSION . "\n";
@@ -1200,7 +1200,7 @@ $preload_settings->persist(
 	)
 );
 
-$preloader = new \AT8\SiteAccelerator\Optimization\LinkPreloader( $preload_settings );
+$preloader = new \AT8SA\Optimization\LinkPreloader( $preload_settings );
 
 // 未入队时不应输出 preload 标签（避免预加载一个不会被用到的文件）。
 $GLOBALS['at8sa_test_enqueued_scripts'] = array();
@@ -1223,7 +1223,7 @@ check( 'preload 的 URL 与入队 URL 一致（含 ver）', false !== strpos( $p
 
 // 关闭开关后不应输出。
 $preload_settings->persist( $preload_settings->sanitize( array( 'resource_preload' => 0 ) ) );
-$preloader_off = new \AT8\SiteAccelerator\Optimization\LinkPreloader( $preload_settings );
+$preloader_off = new \AT8SA\Optimization\LinkPreloader( $preload_settings );
 
 ob_start();
 $preloader_off->output_resource_preload();
@@ -1304,7 +1304,7 @@ foreach ( array( 'WP Rocket', 'LiteSpeed Cache', 'W3 Total Cache', 'WP Super Cac
 
 section( '诊断' );
 
-$diagnostics = new Diagnostics( $clean, $factory, $dropin, $detector, $browser, new \AT8\SiteAccelerator\Optimization\Webp( $clean, $logger ) );
+$diagnostics = new Diagnostics( $clean, $factory, $dropin, $detector, $browser, new \AT8SA\Optimization\Webp( $clean, $logger ) );
 $report      = $diagnostics->collect();
 
 foreach ( array( 'cache', 'object_cache', 'php', 'wordpress', 'server', 'https', 'database', 'conflicts' ) as $section_key ) {
@@ -1480,8 +1480,8 @@ $template_data = array(
 	'conflicts'       => $conflicts,
 	'conflict_notice' => $detector->notice_text(),
 	'browser_cache'   => $browser,
-	'db_cleanup'      => new \AT8\SiteAccelerator\Optimization\DatabaseCleanup( $clean, $logger ),
-	'db_preview'      => ( new \AT8\SiteAccelerator\Optimization\DatabaseCleanup( $clean, $logger ) )->preview(),
+	'db_cleanup'      => new \AT8SA\Optimization\DatabaseCleanup( $clean, $logger ),
+	'db_preview'      => ( new \AT8SA\Optimization\DatabaseCleanup( $clean, $logger ) )->preview(),
 	'logger'          => $log,
 	'log_lines'       => array(),
 	'migrated'        => true,
@@ -1567,7 +1567,7 @@ $lifecycle_settings->persist( $lifecycle_settings->sanitize( array( 'page_cache'
 $activate_error = '';
 
 try {
-	\AT8\SiteAccelerator\Core\Activator::activate();
+	\AT8SA\Core\Activator::activate();
 } catch ( Throwable $e ) {
 	$activate_error = $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine();
 }
@@ -1580,7 +1580,7 @@ check( '激活后 config 目录存在', is_dir( AT8SA_CACHE_ROOT . '/config' ) )
 $deactivate_error = '';
 
 try {
-	\AT8\SiteAccelerator\Core\Deactivator::deactivate();
+	\AT8SA\Core\Deactivator::deactivate();
 } catch ( Throwable $e ) {
 	$deactivate_error = $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine();
 }

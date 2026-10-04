@@ -6,13 +6,13 @@
  * 这里的关键改进是**目录即 URL**：精准失效退化成一次 `rrmdir()`，
  * 也让服务器规则可以直接 `try_files` 直出（计划书 §62）。
  *
- * @package AT8\SiteAccelerator\Cache\Backend
+ * @package AT8SA\Cache\Backend
  */
 
-namespace AT8\SiteAccelerator\Cache\Backend;
+namespace AT8SA\Cache\Backend;
 
-use AT8\SiteAccelerator\Cache\CachePath;
-use AT8\SiteAccelerator\Support\Filesystem;
+use AT8SA\Cache\CachePath;
+use AT8SA\Support\Filesystem;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -77,7 +77,7 @@ final class DiskBackend implements BackendInterface {
 		// 过期即视为未命中（同时顺手清理，避免陈旧文件长期占盘）。
 		$ttl = $this->ttl_of( $file );
 		if ( $ttl > 0 && ( time() - (int) filemtime( $file ) ) > $ttl ) {
-			@unlink( $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			wp_delete_file( $file );
 			return false;
 		}
 
@@ -137,7 +137,8 @@ final class DiskBackend implements BackendInterface {
 		$deleted = 0;
 
 		foreach ( array( $dir . '/index.html', $dir . '/__m/index.html' ) as $file ) {
-			if ( is_file( $file ) && @unlink( $file ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			if ( is_file( $file ) ) {
+				wp_delete_file( $file );
 				++$deleted;
 			}
 		}
@@ -195,7 +196,7 @@ final class DiskBackend implements BackendInterface {
 			if ( is_dir( $path ) ) {
 				Filesystem::rrmdir( $path );
 			} else {
-				@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				wp_delete_file( $path );
 			}
 		}
 

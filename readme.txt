@@ -2,132 +2,127 @@
 Contributors: at8fun
 Tags: cache, page cache, redis, lazy load, webp
 Requires at least: 5.8
-Tested up to: 6.7
+Tested up to: 7.1
 Requires PHP: 7.4
 Stable tag: 3.0.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-轻量级整页缓存 + 精准失效 + 智能预加载 + 浏览器缓存 + HTML 压缩 + 图片懒加载 + WebP 自动转换 + 数据库瘦身，多合一站点加速。
+Lightweight full-page cache with surgical invalidation, smart preloading, HTML minification, WebP conversion and database cleanup.
 
 == Description ==
 
-AT8 Site Accelerator 把"让 WordPress 变快"这件事拆成八个彼此独立、可单独关闭的模块，
-每一处都可能单独出问题，所以每一处都单独做了取舍说明。
+AT8 Site Accelerator splits "make WordPress fast" into eleven independent modules that can each be switched off on their own. Every module makes an explicit trade-off, and every trade-off is documented.
 
-= 为什么是"精准失效"而不是"整站清空" =
+= Why "surgical invalidation" instead of "purge everything" =
 
-大多数缓存插件在"保存文章"时的做法是把整站缓存删掉。这在流量稍大的站点上意味着：
-一次编辑 = 全站缓存清零 = 下一批访客全部打到数据库。**缓存插件反而成了压力源。**
+Most caching plugins delete the entire site cache whenever a post is saved. On a site with any real traffic that means: one edit = the whole cache is empty = the next batch of visitors all hit the database. The cache plugin becomes the source of the load spike.
 
-本插件在保存文章时只失效真正受影响的那几个 URL：文章本身、首页、相关归档、
-所属分类/标签/作者归档、以及它们的翻页。其余页面的缓存原封不动。
+This plugin invalidates only the URLs that are actually affected when a post is saved: the post itself, the home page, related archives, the post's category/tag/author archives, and their paginated pages. Everything else keeps its cache.
 
-= 缓存命中路径 =
+= The cache hit path =
 
-启用"高级缓存"后插件会写入 `wp-content/advanced-cache.php`。
-命中时在 WordPress 完成初始化**之前**直接输出缓存并结束请求——
-不查数据库、不加载主题、不加载其他插件。
+Once "advanced cache" is enabled, the plugin writes `wp-content/advanced-cache.php`. On a hit it sends the cached response and ends the request **before** WordPress finishes booting - no database queries, no theme, no other plugins.
 
-= 后端选择 =
+= Choosing a backend =
 
-* **Redis**：使用内置的纯 PHP RESP 客户端，不需要 `phpredis` 扩展。多站点共用一台 Redis 时按站点盐隔离，**从不使用 FLUSHDB**（那会连别人的站点一起清掉）。
-* **磁盘**：目录布局即 URL 结构（`cache/at8-site-accelerator/<域名>/<路径>/index.html`），因此"失效一个 URL"退化成"删一个目录"。
-* **自动**：优先 Redis，不可达时自动降级磁盘，并对探测结果做 1 小时缓存，避免每个请求都吃一次连接超时。
+* **Redis** - uses a built-in pure-PHP RESP client, so the `phpredis` extension is not required. When several sites share one Redis instance, keys are isolated per site by a salt, and `FLUSHDB` is **never** used (it would wipe other sites).
+* **Disk** - the directory layout mirrors the URL structure (`cache/at8-site-accelerator/<domain>/<path>/index.html`), so "invalidate one URL" becomes "delete one directory".
+* **Auto** - prefers Redis and falls back to disk when Redis is unreachable. The probe result is cached for one hour so that every request does not pay a connection timeout.
 
-= 模块一览 =
+= Modules =
 
-**① 页面缓存** —— 整页缓存、TTL、移动端独立变体、登录用户是否缓存、URL/Cookie/查询参数绕过规则。
+**1. Page cache** - full-page caching, TTL, separate mobile variant, whether to cache logged-in users, URL/cookie/query-argument bypass rules.
 
-**② 失效策略** —— 精准失效（默认）或整站清空；保存文章时是否同时清首页。
+**2. Invalidation strategy** - surgical invalidation (default) or full purge; whether saving a post should also purge the home page.
 
-**③ 智能预加载** —— 访客鼠标悬停或触摸链接时预取目标页面，让"点击"变成"瞬开"。尊重 `Save-Data` 与慢速网络，页面不可见时自动停止。
+**3. Smart preloading** - prefetches the target page when a visitor hovers or touches a link, turning "click" into "instant". Respects `Save-Data` and slow connections, and stops automatically while the page is hidden.
 
-**④ 浏览器缓存** —— 为静态资源发送长缓存响应头，并提供 nginx / Apache 规则片段供你复制到服务器配置（插件不会擅自改你的 `.htaccess`）。
+**4. Browser caching** - long-lived cache headers for static assets, plus ready-to-paste nginx / Apache rule snippets (the plugin never edits your `.htaccess` on its own).
 
-**⑤ HTML 压缩** —— 移除注释与多余空白。`pre` / `textarea` / `script` / `style` / `svg` 内容原样保留，IE 条件注释保留。带安全阀：压缩后体积若低于原始的 40%，判定为异常并放弃压缩。
+**5. HTML minification** - removes comments and redundant whitespace. The contents of `pre` / `textarea` / `script` / `style` / `svg` are preserved verbatim, and IE conditional comments are kept. Includes a safety valve: if the minified size drops below 40% of the original, the result is treated as broken and discarded.
 
-**⑥ 图片懒加载** —— 使用浏览器原生 `loading="lazy"`，不引入任何 JavaScript。首屏前两张图会被显式标记为 `loading="eager"` 以避免拖慢 LCP。
+**6. Image lazy loading** - uses the browser-native `loading="lazy"` attribute with no JavaScript at all. The first two above-the-fold images are explicitly marked `loading="eager"` so LCP is not delayed.
 
-**⑦ 前端资源精简** —— emoji 脚本、embeds、generator 标签、jQuery Migrate、Dashicons、区块编辑器样式、静态资源查询串、Heartbeat 频率。
+**7. Front-end cleanup** - emoji script, embeds, generator tag, jQuery Migrate, Dashicons, block editor styles, static asset query strings, Heartbeat frequency.
 
-**⑧ 图片** —— 上传 JPEG/PNG 时自动生成 WebP 副本（保留 PNG 透明通道）。若转换后体积反而变大则丢弃副本。
+**8. Images** - automatically creates a WebP copy when a JPEG/PNG is uploaded (PNG transparency preserved). If the copy ends up larger, it is discarded.
 
-**⑨ 数据库瘦身** —— 修订版本、自动草稿、回收站文章、垃圾/回收站评论、过期瞬态、表优化。**默认全部关闭**：清理是破坏性操作，必须由你显式勾选。执行前可先预览每项的条数。
+**9. Database cleanup** - revisions, auto-drafts, trashed posts, spam/trashed comments, expired transients, table optimization. **Everything is off by default**: cleanup is destructive, so you must opt in per item. A count preview is shown before anything runs.
 
-**⑩ 后台精简** —— 站点健康、活动与新闻、版本检查、超大缩略图。
+**10. Admin cleanup** - site health, activity and news widgets, version checks, oversized thumbnails.
 
-**⑪ 诊断与安全** —— 环境体检报告（不评分，只给事实）、冲突检测、结构化日志（默认关闭，写入前自动脱敏长十六进制串与 Token）、安全模式（一键全局停缓存）。
+**11. Diagnostics and safety** - environment health report (facts only, no scoring), conflict detection, structured logging (off by default, long hex strings and tokens are redacted before writing), and a safe mode that disables caching globally with one click.
 
-= 兼容性 =
+= Compatibility =
 
-* **Elementor** —— 三层防护：写入前检查引用的 `post-*.css` 是否真实存在、缓存版本盐、以及响应结束后异步重建样式，避免访客命中"样式 404"的陈旧页面。
-* **WooCommerce** —— 购物车、结算、我的账户、订单相关端点一律不缓存；库存变化时精准失效对应商品页。
-* **其他缓存插件** —— 会主动检测并提示冲突（WP Rocket、LiteSpeed Cache、W3 Total Cache、WP Super Cache、Autoptimize、FlyingPress、Perfmatters、Cache Enabler、Swift Performance、Nginx Helper、Hummingbird）。
+* **Elementor** - three layers of protection: check that the referenced `post-*.css` really exists before writing, a cache version salt, and an asynchronous style rebuild after the response ends, so visitors never get a stale page with a 404 stylesheet.
+* **WooCommerce** - cart, checkout, my account and order endpoints are never cached; changing stock invalidates exactly the affected product page.
+* **Other caching plugins** - conflicts are detected and reported (WP Rocket, LiteSpeed Cache, W3 Total Cache, WP Super Cache, Autoptimize, FlyingPress, Perfmatters, Cache Enabler, Swift Performance, Nginx Helper, Hummingbird).
 
-= 不会做的事 =
+= What this plugin will not do =
 
-* 不会自动修改 WordPress 核心文件。
-* 不会擅自覆盖你的 `.htaccess`（只提供规则片段，由你决定是否写入）。
-* 不会在停用时删除你的设置或缓存。
-* 不会在卸载时删除你的数据（除非你显式关闭"卸载时保留数据"）。
-* 不使用 `FLUSHDB`，不使用 `eval`，不调用任何 shell 命令。
+* It will not modify WordPress core files.
+* It will not overwrite your `.htaccess` (it only gives you rule snippets; you decide whether to apply them).
+* It will not delete your settings or cache on deactivation.
+* It will not delete your data on uninstall unless you explicitly turn off "keep data on uninstall".
+* It does not use `FLUSHDB`, does not use `eval`, and does not call any shell command.
 
 == Installation ==
 
-1. 上传 `at8-site-accelerator` 目录到 `/wp-content/plugins/`。
-2. 在"插件"页面启用。
-3. 打开左侧菜单「AT8 加速」，按提示完成 WP_CACHE 与 drop-in 安装。
+1. Upload the `at8-site-accelerator` folder to `/wp-content/plugins/`.
+2. Activate the plugin on the Plugins screen.
+3. Open the "AT8 Accelerator" menu and follow the prompts to enable `WP_CACHE` and install the drop-in.
 
 = Frequently Asked Questions =
 
-= 缓存没有生效？ =
+= Why is the cache not working? =
 
-到「诊断」标签页看第一项。最常见的三种原因：`wp-content` 目录不可写、`wp-config.php` 中的 `WP_CACHE` 未开启、或者同服务器上还有另一个缓存插件的 `advanced-cache.php` 在抢同一个 drop-in 位置。
+Check the first item on the "Diagnostics" tab. The three most common causes are: the `wp-content` directory is not writable, `WP_CACHE` is not enabled in `wp-config.php`, or another caching plugin on the same server is already occupying the `advanced-cache.php` drop-in slot.
 
-= 为什么保存文章后缓存没有全清？ =
+= Why is the cache not fully purged after I save a post? =
 
-这是设计如此，见上文"为什么是精准失效"。如果你确实需要整站清空，到「失效」标签页把策略改成"整站清空"。
+That is by design - see "Why surgical invalidation" above. If you really want a full purge, switch the strategy to "purge everything" on the "Invalidation" tab.
 
-= 用了 Redis 会不会把别的站点数据清掉？ =
+= Can Redis wipe data belonging to other sites? =
 
-不会。所有键都带站点盐前缀（基于本站 `COOKIEHASH` 与缓存版本号），失效时只删自己前缀下的键，代码里不存在 `FLUSHDB`。
+No. Every key carries a per-site salt prefix (derived from this site's `COOKIEHASH` and the cache version), invalidation only deletes keys under this site's prefix, and `FLUSHDB` does not appear anywhere in the codebase.
 
-= 支持多站点吗？ =
+= Is Multisite supported? =
 
-支持。每个站点有独立的缓存目录与独立的 Redis 键前缀。
+Yes. Each site gets its own cache directory and its own Redis key prefix.
 
 == Changelog ==
 
 = 3.0.1 =
-* 修复：部分站点的 `wp-config.php` 因随机密钥（salt）字符串里含有 `{` 或 `}`，导致「一键启用 WP_CACHE」被误判为写入失败并自动回滚，高级缓存始终无法生效。现在改为按 PHP 词法分析统计真实代码中的括号，不再把字符串内容算进来。
-* 修复：`wp-config.php` 写入校验增加「可逆性」检查——写入后的文件去掉插件那一行必须能精确还原原文，防止误改站点配置。
-* 修复：重复点击「启用 WP_CACHE」不再误报「无法自动改写」。
-* 修复：单元测试在装有 Redis 的机器上会假失败（失效器断言的是磁盘文件，但自动模式会选 Redis 后端）。现已固定后端，测试结果不再依赖宿主机环境。
-* 修复：点击「清空缓存」后，统计里的缓存条目数会显示为 0（实际没清干净）——缓存版本变了但后端实例还绑在旧版本上，现已让旧实例立即作废。
-* 修复：**在 WP-CLI、计划任务或其它插件里修改设置后，前台站点完全不生效**，仍按旧配置运行（例如切换缓存后端毫无反应）。此前该同步逻辑只在 WordPress 后台页面里执行，现已改为在所有运行环境下都生效。
-* 修复：**「清空缓存」会在 Redis 里留下永不释放的残留数据**。原先的实现顺序有误，导致每清一次缓存就有一批索引数据被遗留下来、且不会自动过期。长时间运行会持续占用内存。现已修正顺序，并额外清理历史上已遗留的残留。
-* 修复：用 Redis 作为缓存后端时，「清空缓存」的提示里缓存条目数始终显示为 0，现已能正确统计。
-* 修复：设置页的「同时压缩内联 CSS」开关此前不生效，现已实现（注：区块主题的内联样式本身就是紧凑排版，实测收益接近 0，不建议为此单独开启）。
-* 修复：响应头 `X-AT8-Cache-Backend` 的取值在「命中由高级缓存直接返回」与「由插件处理」两种情况下大小写不一致，现已统一为 `Redis` / `Disk`。
-* 代码规范：全量通过 WordPress Coding Standards 检查（原先有 535 处违规），流水线改为阻断式，后续新增违规会让 CI 变红。
-* 工程质量：新增 208 个单元测试用例与静态分析（PHPStan level 5，0 错误），并让持续集成在装有 Redis 的环境中真实执行 Redis 相关用例（此前这些分支从未被自动测试覆盖过）。
+* Fixed: on some sites the random keys (salts) in `wp-config.php` contain `{` or `}`, which made "enable WP_CACHE with one click" report a write failure and roll itself back, so the advanced cache never became active. Braces are now counted with a real PHP lexer, so string contents are no longer counted as code.
+* Fixed: the `wp-config.php` write check now also verifies reversibility - removing the line the plugin added must reproduce the original file exactly, preventing accidental edits to site configuration.
+* Fixed: clicking "enable WP_CACHE" twice no longer falsely reports "cannot rewrite automatically".
+* Fixed: unit tests failed spuriously on machines with Redis installed (the purger asserted on disk files, but auto mode selected the Redis backend). The backend is now pinned, so results no longer depend on the host.
+* Fixed: after clicking "purge cache" the cache entry count showed 0 even though the cache had not really been cleared - the cache version changed but the backend instance was still bound to the old version. The stale instance is now invalidated immediately.
+* Fixed: **changing settings from WP-CLI, a cron job or another plugin had no effect on the front end**, which kept running with the old configuration (for example, switching backends did nothing). The sync logic used to run only inside wp-admin and now runs in every runtime context.
+* Fixed: **"purge cache" left permanently unreleased data in Redis.** The previous order of operations left a batch of index data behind on every purge, and it never expired, so memory usage grew over time. The order is fixed and historical leftovers are cleaned up as well.
+* Fixed: with the Redis backend, the entry count reported after "purge cache" was always 0; it is now counted correctly.
+* Fixed: the "also minify inline CSS" toggle on the settings screen had no effect; it is now implemented (note: block themes already emit compact inline styles, so the measured gain is close to zero and enabling it just for this is not recommended).
+* Fixed: the `X-AT8-Cache-Backend` response header used inconsistent casing between "served directly by the advanced cache" and "served by the plugin"; both now report `Redis` / `Disk`.
+* Coding standards: the whole codebase passes WordPress Coding Standards (previously 535 violations) and the pipeline is now blocking, so any new violation turns CI red.
+* Engineering: added 208 unit test cases and static analysis (PHPStan level 5, 0 errors), and CI now really exercises the Redis code paths on a machine with Redis installed (previously those branches were never covered automatically).
 
 = 3.0.0 =
-* 全新重构：模块化架构（Cache / Purge / Optimization / Compatibility / Diagnostics / Admin / REST 七层）。
-* 新增：Redis 与磁盘双后端，自动降级。
-* 新增：按 URL 精准失效，取代整站清空。
-* 新增：REST API（`at8sa/v1`）。
-* 新增：诊断报告、冲突检测、结构化日志、安全模式。
-* 新增：原生懒加载、WebP 自动转换、数据库瘦身。
-* 兼容 2.x 的全部设置项，升级后自动迁移，旧设置不会被删除。
+* Full rewrite: modular architecture (Cache / Purge / Optimization / Compatibility / Diagnostics / Admin / REST).
+* New: Redis and disk backends with automatic fallback.
+* New: per-URL surgical invalidation, replacing full purges.
+* New: REST API (`at8sa/v1`).
+* New: diagnostics report, conflict detection, structured logging, safe mode.
+* New: native lazy loading, automatic WebP conversion, database cleanup.
+* All 2.x settings are supported and migrated automatically on upgrade; old settings are never deleted.
 
-完整的技术变更清单（含每一个修复项的原因）见仓库根目录的 `CHANGELOG.md`。
+The full technical change list (including the reason behind every fix) is in `CHANGELOG.md` at the root of the repository.
 
 == Upgrade Notice ==
 
 = 3.0.1 =
-建议所有 3.0.0 用户升级。本次修复了两个不易察觉但影响实际效果的问题：一是在 WP-CLI、计划任务或其它插件里修改设置后前台不生效；二是每次清空缓存都会在 Redis 里留下永不释放的残留数据。若你在 3.0.0 上点过「启用 WP_CACHE」却提示需要手动添加，本次升级后重试即可自动完成。升级不会改动你的设置与缓存目录。
+Recommended for every 3.0.0 user. Fixes two subtle issues: settings changed from WP-CLI or cron had no effect on the front end, and each cache purge left unreleased data in Redis. Retrying "enable WP_CACHE" now completes it automatically.
 
 = 3.0.0 =
-从 2.x 升级时设置会自动迁移，无需手工操作。升级后建议到「诊断」标签页确认一次环境状态。
+Upgrading from 2.x migrates your settings automatically. After upgrading, check the "Diagnostics" tab once to confirm the environment status.

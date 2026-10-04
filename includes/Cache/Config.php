@@ -7,14 +7,14 @@
  * 把它固化成 `cache/at8-site-accelerator/config/<host>.php`（纯 PHP 数组，可被 opcache
  * 缓存），命中路径就完全零数据库开销。这正是 WP Rocket 的 config 文件思路。
  *
- * @package AT8\SiteAccelerator\Cache
+ * @package AT8SA\Cache
  */
 
-namespace AT8\SiteAccelerator\Cache;
+namespace AT8SA\Cache;
 
-use AT8\SiteAccelerator\Cache\Backend\BackendFactory;
-use AT8\SiteAccelerator\Core\Settings;
-use AT8\SiteAccelerator\Support\Filesystem;
+use AT8SA\Cache\Backend\BackendFactory;
+use AT8SA\Core\Settings;
+use AT8SA\Support\Filesystem;
 
 defined( 'ABSPATH' ) || exit;
 

@@ -9,10 +9,10 @@
  * - 所有命令以数组形式传入，参数逐个按 RESP 批量串编码，天然免疫命令注入。
  * - 连接超时固定 1 秒，Redis 不可达时不会拖慢前台请求。
  *
- * @package AT8\SiteAccelerator\Support
+ * @package AT8SA\Support
  */
 
-namespace AT8\SiteAccelerator\Support;
+namespace AT8SA\Support;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -88,7 +88,11 @@ final class RedisClient {
 			return true;
 		}
 
-		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		// 这里是**网络套接字**，不是文件操作：WP_Filesystem 与 wp_remote_* 都做不了
+		// RESP 协议的双向长连接对话（wp_remote_* 每次请求都会重新建连、拿不到连接级
+		// 状态）。所以必须直接 fsockopen。Redis 不可达时 @ 抑制连接告警，返回 false
+		// 由调用方降级到磁盘后端。
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fsockopen, WordPress.PHP.NoSilencedErrors.Discouraged
 		$this->socket = @fsockopen( $this->host, $this->port, $errno, $errstr, $this->timeout );
 
 		if ( ! $this->socket ) {
@@ -335,8 +339,12 @@ final class RedisClient {
 	 */
 	public function disconnect() {
 		if ( is_resource( $this->socket ) ) {
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
-			@fclose( $this->socket ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			// 同上：关闭的是套接字句柄，没有对应的 WordPress API。
+			// 注意 phpcs:ignore 必须写成**行尾合并**形式——PHPCS 对同一行只会保留
+			// 最后一条注解，把 NoSilencedErrors 单独写在行尾会把前一行的
+			// fclose 豁免覆盖掉，导致豁免看起来配了却不生效。
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose, WordPress.PHP.NoSilencedErrors.Discouraged
+			@fclose( $this->socket );
 		}
 
 		$this->socket    = null;

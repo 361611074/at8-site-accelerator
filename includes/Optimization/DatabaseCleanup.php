@@ -9,13 +9,13 @@
  * - 定时任务默认关闭，且只执行用户已经勾选过的项；
  * - 清理前不额外备份（那属于站点备份职责），但**绝不触碰** wp_posts 中非修订/非草稿的内容。
  *
- * @package AT8\SiteAccelerator\Optimization
+ * @package AT8SA\Optimization
  */
 
-namespace AT8\SiteAccelerator\Optimization;
+namespace AT8SA\Optimization;
 
-use AT8\SiteAccelerator\Core\Settings;
-use AT8\SiteAccelerator\Support\Logger;
+use AT8SA\Core\Settings;
+use AT8SA\Support\Logger;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -120,54 +120,54 @@ final class DatabaseCleanup {
 		$items = array();
 
 		// 文章修订版。
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$items['db_revisions'] = array(
 			'label'   => __( '文章修订版', 'at8-site-accelerator' ),
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- 后台预览用的实时计数，缓存它只会让用户看到过期数字。
 			'count'   => (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = 'revision'" ),
 			'enabled' => $this->settings->is_on( 'db_revisions' ),
 			'danger'  => false,
 		);
 
 		// 自动草稿。
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$items['db_auto_drafts'] = array(
 			'label'   => __( '自动草稿', 'at8-site-accelerator' ),
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- 后台预览用的实时计数，缓存它只会让用户看到过期数字。
 			'count'   => (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_status = 'auto-draft'" ),
 			'enabled' => $this->settings->is_on( 'db_auto_drafts' ),
 			'danger'  => true,
 		);
 
 		// 回收站文章。
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$items['db_trashed_posts'] = array(
 			'label'   => __( '回收站中的文章', 'at8-site-accelerator' ),
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- 后台预览用的实时计数，缓存它只会让用户看到过期数字。
 			'count'   => (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_status = 'trash'" ),
 			'enabled' => $this->settings->is_on( 'db_trashed_posts' ),
 			'danger'  => true,
 		);
 
 		// 垃圾评论。
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$items['db_spam_comments'] = array(
 			'label'   => __( '垃圾评论', 'at8-site-accelerator' ),
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- 后台预览用的实时计数，缓存它只会让用户看到过期数字。
 			'count'   => (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->comments} WHERE comment_approved = 'spam'" ),
 			'enabled' => $this->settings->is_on( 'db_spam_comments' ),
 			'danger'  => true,
 		);
 
 		// 回收站评论。
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$items['db_trashed_comments'] = array(
 			'label'   => __( '回收站中的评论', 'at8-site-accelerator' ),
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- 后台预览用的实时计数，缓存它只会让用户看到过期数字。
 			'count'   => (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->comments} WHERE comment_approved = 'trash'" ),
 			'enabled' => $this->settings->is_on( 'db_trashed_comments' ),
 			'danger'  => true,
 		);
 
 		// 过期 transient。
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$items['db_transients'] = array(
 			'label'   => __( '过期 transient', 'at8-site-accelerator' ),
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- 后台预览用的实时计数，缓存它只会让用户看到过期数字。
 			'count'   => (int) $wpdb->get_var(
 				$wpdb->prepare(
 					"SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE %s AND option_value < %d",
@@ -256,6 +256,7 @@ final class DatabaseCleanup {
 	private function delete_posts_by_type( $post_type ) {
 		global $wpdb;
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- 取待删除 ID 列表，缓存会导致删到已经不存在的行。
 		$ids = $wpdb->get_col(
 			$wpdb->prepare(
 				"SELECT ID FROM {$wpdb->posts} WHERE post_type = %s LIMIT %d",
@@ -276,6 +277,7 @@ final class DatabaseCleanup {
 	private function delete_posts_by_status( $status ) {
 		global $wpdb;
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- 取待删除 ID 列表，缓存会导致删到已经不存在的行。
 		$ids = $wpdb->get_col(
 			$wpdb->prepare(
 				"SELECT ID FROM {$wpdb->posts} WHERE post_status = %s AND post_type NOT IN ('attachment','revision') LIMIT %d",
@@ -330,6 +332,7 @@ final class DatabaseCleanup {
 	private function delete_comments_by_status( $status ) {
 		global $wpdb;
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- 取待删除 ID 列表，缓存会导致删到已经不存在的行。
 		$ids = $wpdb->get_col(
 			$wpdb->prepare(
 				"SELECT comment_ID FROM {$wpdb->comments} WHERE comment_approved = %s LIMIT %d",
@@ -359,6 +362,7 @@ final class DatabaseCleanup {
 
 		$now = time();
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- 取待删除的过期 transient 名单，缓存会导致删到已经不存在的行。
 		$names = $wpdb->get_col(
 			$wpdb->prepare(
 				"SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s AND option_value < %d LIMIT %d",

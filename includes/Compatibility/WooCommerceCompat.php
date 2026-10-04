@@ -11,13 +11,13 @@
  * - **允许缓存但必须及时失效**：商品页、商店页、分类页。它们对未登录访客是静态的，
  *   缓存收益极大；但库存变化（卖出最后一件）必须立刻反映到"售罄"标记上。
  *
- * @package AT8\SiteAccelerator\Compatibility
+ * @package AT8SA\Compatibility
  */
 
-namespace AT8\SiteAccelerator\Compatibility;
+namespace AT8SA\Compatibility;
 
-use AT8\SiteAccelerator\Purge\Purger;
-use AT8\SiteAccelerator\Support\Logger;
+use AT8SA\Purge\Purger;
+use AT8SA\Support\Logger;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -93,12 +93,17 @@ final class WooCommerceCompat {
 	 */
 	public function mark_dynamic_pages() {
 		if ( $this->is_dynamic_request() ) {
-			// 官方常量，整页缓存插件都认它。
+			// DONOTCACHEPAGE / DONOTCACHEOBJECT 是 WordPress 缓存生态的**既成标准常量**
+			// （WP Super Cache、W3 Total Cache、LiteSpeed Cache 等整页缓存插件都读它），
+			// 必须原样使用这个名字才能互通，加插件前缀反而会让其它插件认不出来。
+			// WPCS 的允许清单只覆盖 WP 核心常量，所以这里逐条豁免并说明理由。
 			if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+				// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- 见上：跨插件互通的标准常量，不能加前缀。
 				define( 'DONOTCACHEPAGE', true );
 			}
 
 			if ( ! defined( 'DONOTCACHEOBJECT' ) ) {
+				// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- 见上：跨插件互通的标准常量，不能加前缀。
 				define( 'DONOTCACHEOBJECT', true );
 			}
 

@@ -6,13 +6,13 @@
  * 默认 `purge_scope = related`，只失效与该文章真正相关的页面（计划书 §64）。
  * 需要旧行为的用户可以在设置里切回 `all`。
  *
- * @package AT8\SiteAccelerator\Purge
+ * @package AT8SA\Purge
  */
 
-namespace AT8\SiteAccelerator\Purge;
+namespace AT8SA\Purge;
 
-use AT8\SiteAccelerator\Core\Settings;
-use AT8\SiteAccelerator\Support\Logger;
+use AT8SA\Core\Settings;
+use AT8SA\Support\Logger;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -43,9 +43,22 @@ final class PurgeActions {
 	private $logger;
 
 	/**
-	 * 本次请求内已处理过的文章 ID，避免 save_post / publish_post / transition 重复触发。
+	 * 本次请求内已失效过的文章：`文章 ID => 内容指纹`。
 	 *
-	 * @var array<int, bool>
+	 * 为什么不是简单的 `ID => true`（真机实测到的缺陷）：
+	 * 一次保存会连续触发 `transition_post_status` → `publish_post` → `save_post`
+	 * 三次回调，必须去重，否则同一篇文章要清三遍缓存。
+	 * 但"同一个请求"并不等于"同一次保存"——批量脚本、导入器，以及"在 `save_post`
+	 * 里再调一次 `wp_update_post()`"的插件，都会在同一个请求内对同一篇文章发起
+	 * **多次内容不同的保存**。只按 ID 去重会把后面几次真实改动一并吞掉：
+	 * 缓存里留着上一版页面，直到 TTL 过期才被纠正。
+	 * 实测：同一个请求内先把标题改成 A 再改成 B，缓存里始终是 A。
+	 *
+	 * 指纹里带上修改时间与标题/正文等字段，于是：
+	 * - 同一次保存的那三次回调指纹相同 → 仍然只失效一次（去重目的不变）；
+	 * - 同请求内的第二次真实保存指纹不同 → 会再失效一次。
+	 *
+	 * @var array<int, string>
 	 */
 	private $handled = array();
 
@@ -183,11 +196,18 @@ final class PurgeActions {
 			return;
 		}
 
-		if ( isset( $this->handled[ $post->ID ] ) ) {
+		$fingerprint = $this->fingerprint( $post );
+
+		if ( isset( $this->handled[ $post->ID ] ) && $this->handled[ $post->ID ] === $fingerprint ) {
 			return;
 		}
 
-		$this->handled[ $post->ID ] = true;
+		$this->handled[ $post->ID ] = $fingerprint;
+
+		// 这是一次新的保存：把"已失效 URL"的备忘作废。
+		// 上一次保存之后预热器已经把页面重新写回缓存，若沿用备忘，
+		// 本次失效会被静默跳过，缓存里就会留下上一版的页面。
+		$this->purger->reset_purged();
 
 		/**
 		 * 过滤是否对该文章执行失效。
@@ -216,6 +236,31 @@ final class PurgeActions {
 			array(
 				'post_id' => $post->ID,
 				'urls'    => $count,
+			)
+		);
+	}
+
+	/**
+	 * 内容指纹：区分"同一次保存的多次回调"与"同一请求内的多次保存"。
+	 *
+	 * `post_modified_gmt` 只有秒级精度，同一秒内的两次改动会得到相同的时间戳，
+	 * 所以必须把正文相关字段一起算进来。
+	 *
+	 * @param \WP_Post $post 文章。
+	 * @return string
+	 */
+	private function fingerprint( \WP_Post $post ) {
+		return md5(
+			implode(
+				'|',
+				array(
+					(string) $post->post_modified_gmt,
+					(string) $post->post_status,
+					(string) $post->post_title,
+					(string) $post->post_name,
+					(string) $post->post_content,
+					(string) $post->post_excerpt,
+				)
 			)
 		);
 	}

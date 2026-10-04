@@ -6,16 +6,16 @@
  * 直接 `$wpdb->update()`、`wp option import`、站点迁移脚本、DB 层手工修改都不会触发它。
  * `Config::needs_refresh()` 是这层兜底——比对设置指纹，对不上就重写。
  *
- * @package AT8\SiteAccelerator\Tests
+ * @package AT8SA\Tests
  */
 
-namespace AT8\SiteAccelerator\Tests;
+namespace AT8SA\Tests;
 
-use AT8\SiteAccelerator\Cache\Backend\BackendFactory;
-use AT8\SiteAccelerator\Cache\Config;
-use AT8\SiteAccelerator\Core\Settings;
-use AT8\SiteAccelerator\Support\Filesystem;
-use AT8\SiteAccelerator\Support\Logger;
+use AT8SA\Cache\Backend\BackendFactory;
+use AT8SA\Cache\Config;
+use AT8SA\Core\Settings;
+use AT8SA\Support\Filesystem;
+use AT8SA\Support\Logger;
 
 /**
  * Class ConfigStalenessTest

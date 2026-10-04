@@ -8,7 +8,7 @@
  *
  * 这不是单元测试框架的替代品——它是发布前的最后一道粗筛。
  *
- * @package AT8\SiteAccelerator\Tests
+ * @package AT8SA\Tests
  */
 
 // phpcs:disable

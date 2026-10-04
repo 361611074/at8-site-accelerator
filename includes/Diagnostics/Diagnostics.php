@@ -8,17 +8,17 @@
  *
  * 所有信息都在本地采集，**不会发送到任何远程服务**（计划书 §60）。
  *
- * @package AT8\SiteAccelerator\Diagnostics
+ * @package AT8SA\Diagnostics
  */
 
-namespace AT8\SiteAccelerator\Diagnostics;
+namespace AT8SA\Diagnostics;
 
-use AT8\SiteAccelerator\Cache\AdvancedCache;
-use AT8\SiteAccelerator\Cache\Backend\BackendFactory;
-use AT8\SiteAccelerator\Compatibility\CachePluginDetector;
-use AT8\SiteAccelerator\Core\Settings;
-use AT8\SiteAccelerator\Optimization\BrowserCache;
-use AT8\SiteAccelerator\Optimization\Webp;
+use AT8SA\Cache\AdvancedCache;
+use AT8SA\Cache\Backend\BackendFactory;
+use AT8SA\Compatibility\CachePluginDetector;
+use AT8SA\Core\Settings;
+use AT8SA\Optimization\BrowserCache;
+use AT8SA\Optimization\Webp;
 
 defined( 'ABSPATH' ) || exit;
 

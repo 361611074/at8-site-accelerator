@@ -12,16 +12,16 @@
  * 第 5 步放在最后、且失败不阻断——因为 wp-config.php 不可写是很常见的情况，
  * 不该因此让用户激活失败。
  *
- * @package AT8\SiteAccelerator\Core
+ * @package AT8SA\Core
  */
 
-namespace AT8\SiteAccelerator\Core;
+namespace AT8SA\Core;
 
-use AT8\SiteAccelerator\Cache\AdvancedCache;
-use AT8\SiteAccelerator\Cache\Config;
-use AT8\SiteAccelerator\Cache\Backend\BackendFactory;
-use AT8\SiteAccelerator\Support\Filesystem;
-use AT8\SiteAccelerator\Support\Logger;
+use AT8SA\Cache\AdvancedCache;
+use AT8SA\Cache\Config;
+use AT8SA\Cache\Backend\BackendFactory;
+use AT8SA\Support\Filesystem;
+use AT8SA\Support\Logger;
 
 defined( 'ABSPATH' ) || exit;
 

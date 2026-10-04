@@ -6,10 +6,10 @@
  * 意外触发的风险（`wp_nonce_url` 的 URL 一旦被 prefetch，缓存就真的被清了）。
  * 这里改为**纯按钮 + fetch(POST)**，不产生任何可被预取的 GET 链接。
  *
- * @package AT8\SiteAccelerator\Admin
+ * @package AT8SA\Admin
  */
 
-namespace AT8\SiteAccelerator\Admin;
+namespace AT8SA\Admin;
 
 defined( 'ABSPATH' ) || exit;
 

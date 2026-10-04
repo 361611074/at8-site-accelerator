@@ -12,7 +12,7 @@
  * 命中时直接输出缓存并 exit，完全跳过 WordPress 的数据库查询与模板渲染——
  * 这是整页缓存最大的性能收益来源（计划书 §62）。
  *
- * @package AT8\SiteAccelerator
+ * @package AT8SA
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -29,8 +29,8 @@ require_once $at8sa_path . 'includes/Cache/RequestGuard.php';
 // 主机名归一化**必须**复用 CachePath::normalize_host()：
 // 它同时决定配置文件叫什么（这里）和缓存目录叫什么（DiskBackend 侧）。
 // 两边各写一份正则，早晚会因为改了其中一处而"配置读得到、缓存找不到"。
-$at8sa_host = \AT8\SiteAccelerator\Cache\CachePath::normalize_host(
-	\AT8\SiteAccelerator\Cache\RequestGuard::server( 'HTTP_HOST' )
+$at8sa_host = \AT8SA\Cache\CachePath::normalize_host(
+	\AT8SA\Cache\RequestGuard::server( 'HTTP_HOST' )
 );
 
 $at8sa_config_dir  = WP_CONTENT_DIR . '/cache/at8-site-accelerator/config/';
@@ -50,13 +50,13 @@ if ( ! is_array( $at8sa_config ) || empty( $at8sa_config['enabled'] ) || ! empty
 	return;
 }
 
-if ( \AT8\SiteAccelerator\Cache\RequestGuard::should_bypass( $at8sa_config ) ) {
+if ( \AT8SA\Cache\RequestGuard::should_bypass( $at8sa_config ) ) {
 	return;
 }
 
-$at8sa_request_host = \AT8\SiteAccelerator\Cache\RequestGuard::host();
-$at8sa_uri          = \AT8\SiteAccelerator\Cache\RequestGuard::uri( $at8sa_config );
-$at8sa_mobile       = ! empty( $at8sa_config['cache_mobile'] ) && \AT8\SiteAccelerator\Cache\RequestGuard::is_mobile();
+$at8sa_request_host = \AT8SA\Cache\RequestGuard::host();
+$at8sa_uri          = \AT8SA\Cache\RequestGuard::uri( $at8sa_config );
+$at8sa_mobile       = ! empty( $at8sa_config['cache_mobile'] ) && \AT8SA\Cache\RequestGuard::is_mobile();
 $at8sa_ttl          = isset( $at8sa_config['ttl'] ) ? (int) $at8sa_config['ttl'] : 3600;
 $at8sa_html         = false;
 $at8sa_backend      = isset( $at8sa_config['backend'] ) ? (string) $at8sa_config['backend'] : 'disk';
@@ -64,7 +64,7 @@ $at8sa_backend      = isset( $at8sa_config['backend'] ) ? (string) $at8sa_config
 if ( 'redis' === $at8sa_backend && ! empty( $at8sa_config['redis'] ) && is_readable( $at8sa_path . 'includes/Support/RedisClient.php' ) ) {
 	require_once $at8sa_path . 'includes/Support/RedisClient.php';
 
-	$at8sa_redis = new \AT8\SiteAccelerator\Support\RedisClient(
+	$at8sa_redis = new \AT8SA\Support\RedisClient(
 		isset( $at8sa_config['redis']['host'] ) ? $at8sa_config['redis']['host'] : '127.0.0.1',
 		isset( $at8sa_config['redis']['port'] ) ? (int) $at8sa_config['redis']['port'] : 6379,
 		1.0,
@@ -72,7 +72,7 @@ if ( 'redis' === $at8sa_backend && ! empty( $at8sa_config['redis'] ) && is_reada
 	);
 
 	if ( $at8sa_redis->connect() ) {
-		$at8sa_key  = \AT8\SiteAccelerator\Cache\CachePath::redis_key( $at8sa_config['salt'], $at8sa_request_host, $at8sa_uri, $at8sa_mobile );
+		$at8sa_key  = \AT8SA\Cache\CachePath::redis_key( $at8sa_config['salt'], $at8sa_request_host, $at8sa_uri, $at8sa_mobile );
 		$at8sa_html = $at8sa_redis->get( $at8sa_key );
 
 		if ( ! is_string( $at8sa_html ) || '' === $at8sa_html ) {
@@ -80,7 +80,7 @@ if ( 'redis' === $at8sa_backend && ! empty( $at8sa_config['redis'] ) && is_reada
 		}
 	}
 } else {
-	$at8sa_file = \AT8\SiteAccelerator\Cache\CachePath::disk_file(
+	$at8sa_file = \AT8SA\Cache\CachePath::disk_file(
 		$at8sa_config['cache_root'],
 		$at8sa_request_host,
 		$at8sa_uri,

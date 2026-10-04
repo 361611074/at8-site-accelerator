@@ -13,7 +13,7 @@
  * Text Domain:       at8-site-accelerator
  * Domain Path:       /languages
  *
- * @package AT8\SiteAccelerator
+ * @package AT8SA
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -100,7 +100,7 @@ unset( $wp_version, $at8sa_environment_notice );
  */
 spl_autoload_register(
 	function ( $class_name ) {
-		$prefix = 'AT8\\SiteAccelerator\\';
+		$prefix = 'AT8SA\\';
 		$length = strlen( $prefix );
 
 		if ( 0 !== strncmp( $prefix, $class_name, $length ) ) {
@@ -121,8 +121,8 @@ spl_autoload_register(
  * 生命周期钩子
  * ----------------------------------------------------------------------
  */
-register_activation_hook( AT8SA_FILE, array( 'AT8\\SiteAccelerator\\Core\\Activator', 'activate' ) );
-register_deactivation_hook( AT8SA_FILE, array( 'AT8\\SiteAccelerator\\Core\\Deactivator', 'deactivate' ) );
+register_activation_hook( AT8SA_FILE, array( 'AT8SA\\Core\\Activator', 'activate' ) );
+register_deactivation_hook( AT8SA_FILE, array( 'AT8SA\\Core\\Deactivator', 'deactivate' ) );
 
 /*
 -------------------------------------------------------------------------
@@ -132,7 +132,7 @@ register_deactivation_hook( AT8SA_FILE, array( 'AT8\\SiteAccelerator\\Core\\Deac
 add_action(
 	'plugins_loaded',
 	function () {
-		AT8\SiteAccelerator\Core\Plugin::instance()->boot();
+		AT8SA\Core\Plugin::instance()->boot();
 	},
 	1
 );

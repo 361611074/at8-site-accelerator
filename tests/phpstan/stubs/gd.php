@@ -15,7 +15,7 @@
  *
  * 注意：这不是产品代码，不参与打包（见 .gitattributes 的 export-ignore）。
  *
- * @package AT8\SiteAccelerator\Tests\PHPStan
+ * @package AT8SA\Tests\PHPStan
  */
 
 // 全局命名空间：GD 的类就在根命名空间下。

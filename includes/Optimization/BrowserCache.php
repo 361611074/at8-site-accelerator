@@ -17,12 +17,12 @@
  * 主题/插件更新后浏览器仍会使用旧的 CSS/JS，且因为 URL 没变而无法自动失效。
  * 后台会就此给出明确警告，详见 docs/COMPATIBILITY.md。
  *
- * @package AT8\SiteAccelerator\Optimization
+ * @package AT8SA\Optimization
  */
 
-namespace AT8\SiteAccelerator\Optimization;
+namespace AT8SA\Optimization;
 
-use AT8\SiteAccelerator\Core\Settings;
+use AT8SA\Core\Settings;
 
 defined( 'ABSPATH' ) || exit;
 

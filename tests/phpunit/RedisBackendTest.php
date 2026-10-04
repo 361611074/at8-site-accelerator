@@ -11,13 +11,13 @@
  * 并固定使用 15 号逻辑库——绝不能碰 2 号库，那是插件的默认库，
  * 在开发者本机可能正跑着真实站点。
  *
- * @package AT8\SiteAccelerator\Tests
+ * @package AT8SA\Tests
  */
 
-namespace AT8\SiteAccelerator\Tests;
+namespace AT8SA\Tests;
 
-use AT8\SiteAccelerator\Cache\Backend\RedisBackend;
-use AT8\SiteAccelerator\Support\RedisClient;
+use AT8SA\Cache\Backend\RedisBackend;
+use AT8SA\Support\RedisClient;
 
 /**
  * Class RedisBackendTest

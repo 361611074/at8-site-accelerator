@@ -12,7 +12,7 @@
  * 注意：**不要**在这里 define ABSPATH。wordpress-stubs 已经声明了它，
  * 重复定义会让 PHPStan 报 "Constant ABSPATH already defined"。
  *
- * @package AT8\SiteAccelerator\Tests
+ * @package AT8SA\Tests
  */
 
 // phpcs:disable

@@ -5,7 +5,7 @@
  * 复用 tests/unit/wp-stubs.php 的 WordPress 函数桩，而不是引一套新的——
  * 两套桩必然漂移，漂移之后"冒烟通过、单元失败"这类假信号会浪费大量排查时间。
  *
- * @package AT8\SiteAccelerator\Tests
+ * @package AT8SA\Tests
  */
 
 // phpcs:disable
@@ -13,10 +13,10 @@
 require_once __DIR__ . '/../unit/wp-stubs.php';
 
 // 与 smoke.php 完全一致的 PSR-4 风格自动加载映射：
-// AT8\SiteAccelerator\Cache\CachePath → includes/Cache/CachePath.php
+// AT8SA\Cache\CachePath → includes/Cache/CachePath.php
 spl_autoload_register(
 	function ( $class ) {
-		$prefix = 'AT8\\SiteAccelerator\\';
+		$prefix = 'AT8SA\\';
 		$length = strlen( $prefix );
 
 		if ( 0 !== strncmp( $prefix, $class, $length ) ) {

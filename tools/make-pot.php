@@ -9,7 +9,7 @@
  * 用法：
  *   php tools/make-pot.php
  *
- * @package AT8\SiteAccelerator\Tools
+ * @package AT8SA\Tools
  */
 
 // phpcs:disable

@@ -5,10 +5,10 @@
  * 只做两件事：登记工厂、按需单例解析。刻意不引入 league/container
  * 之类的依赖——插件体积与攻击面越小越好（计划书 §87 禁止打包无关依赖）。
  *
- * @package AT8\SiteAccelerator\Core
+ * @package AT8SA\Core
  */
 
-namespace AT8\SiteAccelerator\Core;
+namespace AT8SA\Core;
 
 defined( 'ABSPATH' ) || exit;
 

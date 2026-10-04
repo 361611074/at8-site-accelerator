@@ -9,36 +9,36 @@
  *
  * 这样在访客请求里完全不会加载后台代码，是"命中路径零开销"的前提。
  *
- * @package AT8\SiteAccelerator\Core
+ * @package AT8SA\Core
  */
 
-namespace AT8\SiteAccelerator\Core;
+namespace AT8SA\Core;
 
-use AT8\SiteAccelerator\Admin\AdminBar;
-use AT8\SiteAccelerator\Admin\Ajax;
-use AT8\SiteAccelerator\Admin\Notices;
-use AT8\SiteAccelerator\Admin\SettingsPage;
-use AT8\SiteAccelerator\Cache\AdvancedCache;
-use AT8\SiteAccelerator\Cache\Backend\BackendFactory;
-use AT8\SiteAccelerator\Cache\CacheEngine;
-use AT8\SiteAccelerator\Cache\Config;
-use AT8\SiteAccelerator\Compatibility\CachePluginDetector;
-use AT8\SiteAccelerator\Compatibility\ElementorCompat;
-use AT8\SiteAccelerator\Compatibility\WooCommerceCompat;
-use AT8\SiteAccelerator\Diagnostics\Diagnostics;
-use AT8\SiteAccelerator\Optimization\BrowserCache;
-use AT8\SiteAccelerator\Optimization\DatabaseCleanup;
-use AT8\SiteAccelerator\Optimization\FrontendCleanup;
-use AT8\SiteAccelerator\Optimization\HtmlMinifier;
-use AT8\SiteAccelerator\Optimization\LazyLoad;
-use AT8\SiteAccelerator\Optimization\LinkPreloader;
-use AT8\SiteAccelerator\Optimization\Webp;
-use AT8\SiteAccelerator\Purge\PurgeActions;
-use AT8\SiteAccelerator\Purge\Purger;
-use AT8\SiteAccelerator\REST\CacheController;
-use AT8\SiteAccelerator\REST\DiagnosticsController;
-use AT8\SiteAccelerator\REST\SettingsController;
-use AT8\SiteAccelerator\Support\Logger;
+use AT8SA\Admin\AdminBar;
+use AT8SA\Admin\Ajax;
+use AT8SA\Admin\Notices;
+use AT8SA\Admin\SettingsPage;
+use AT8SA\Cache\AdvancedCache;
+use AT8SA\Cache\Backend\BackendFactory;
+use AT8SA\Cache\CacheEngine;
+use AT8SA\Cache\Config;
+use AT8SA\Compatibility\CachePluginDetector;
+use AT8SA\Compatibility\ElementorCompat;
+use AT8SA\Compatibility\WooCommerceCompat;
+use AT8SA\Diagnostics\Diagnostics;
+use AT8SA\Optimization\BrowserCache;
+use AT8SA\Optimization\DatabaseCleanup;
+use AT8SA\Optimization\FrontendCleanup;
+use AT8SA\Optimization\HtmlMinifier;
+use AT8SA\Optimization\LazyLoad;
+use AT8SA\Optimization\LinkPreloader;
+use AT8SA\Optimization\Webp;
+use AT8SA\Purge\PurgeActions;
+use AT8SA\Purge\Purger;
+use AT8SA\REST\CacheController;
+use AT8SA\REST\DiagnosticsController;
+use AT8SA\REST\SettingsController;
+use AT8SA\Support\Logger;
 
 defined( 'ABSPATH' ) || exit;
 

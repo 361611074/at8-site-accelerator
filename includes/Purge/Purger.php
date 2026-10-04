@@ -16,17 +16,17 @@
  *
  * 每次失效都会先把"关联 URL 集合"算出来，再交给后端做精确删除。
  *
- * @package AT8\SiteAccelerator\Purge
+ * @package AT8SA\Purge
  */
 
-namespace AT8\SiteAccelerator\Purge;
+namespace AT8SA\Purge;
 
-use AT8\SiteAccelerator\Cache\Backend\BackendFactory;
-use AT8\SiteAccelerator\Cache\CachePath;
-use AT8\SiteAccelerator\Cache\Config;
-use AT8\SiteAccelerator\Core\Settings;
-use AT8\SiteAccelerator\Support\Filesystem;
-use AT8\SiteAccelerator\Support\Logger;
+use AT8SA\Cache\Backend\BackendFactory;
+use AT8SA\Cache\CachePath;
+use AT8SA\Cache\Config;
+use AT8SA\Core\Settings;
+use AT8SA\Support\Filesystem;
+use AT8SA\Support\Logger;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -190,6 +190,24 @@ final class Purger {
 		}
 
 		return $count;
+	}
+
+	/**
+	 * 清空"本次请求已失效 URL"的备忘。
+	 *
+	 * `$purged` 的目的是省掉重复删除，但它默认"同一请求内 URL 一旦失效就一直失效"。
+	 * 这个假设在**同一请求内对同一篇文章保存多次**时不成立：每一次保存之后，
+	 * 预热器（Pro）都会把页面重新写回缓存，此时若沿用备忘，第二次失效会
+	 * 直接 `continue` 跳过删除 —— 缓存里留下上一版的页面，直到 TTL 过期。
+	 * 实测：同请求内先改成 A 再改成 B，缓存里始终是 A。
+	 *
+	 * 因此 `PurgeActions` 在判定"这是一次新的保存"之后会先清空备忘。
+	 * 清空只会让后续多做几次"删不存在的键"的空 DEL，不会影响正确性。
+	 *
+	 * @return void
+	 */
+	public function reset_purged() {
+		$this->purged = array();
 	}
 
 	/**

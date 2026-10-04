@@ -11,12 +11,12 @@
  *
  * 后台文案已按此区分，避免用户误以为开了这个就等于"缓存已预热"。
  *
- * @package AT8\SiteAccelerator\Optimization
+ * @package AT8SA\Optimization
  */
 
-namespace AT8\SiteAccelerator\Optimization;
+namespace AT8SA\Optimization;
 
-use AT8\SiteAccelerator\Core\Settings;
+use AT8SA\Core\Settings;
 
 defined( 'ABSPATH' ) || exit;
 

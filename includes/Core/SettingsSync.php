@@ -18,15 +18,15 @@
  * 因此这里把监听器挪到 `boot_shared()`（前后台 + CLI + Cron 都会执行），
  * 让"改了设置就一定同步"成为一条与上下文无关的不变式。
  *
- * @package AT8\SiteAccelerator\Core
+ * @package AT8SA\Core
  */
 
-namespace AT8\SiteAccelerator\Core;
+namespace AT8SA\Core;
 
-use AT8\SiteAccelerator\Cache\AdvancedCache;
-use AT8\SiteAccelerator\Cache\Backend\BackendFactory;
-use AT8\SiteAccelerator\Cache\Config;
-use AT8\SiteAccelerator\Purge\Purger;
+use AT8SA\Cache\AdvancedCache;
+use AT8SA\Cache\Backend\BackendFactory;
+use AT8SA\Cache\Config;
+use AT8SA\Purge\Purger;
 
 defined( 'ABSPATH' ) || exit;
 

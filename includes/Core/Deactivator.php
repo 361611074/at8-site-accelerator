@@ -11,13 +11,13 @@
  * 停用就清数据是流氓行为，而且 WP_CACHE 常量留着完全无害
  * （没有 advanced-cache.php 时 WordPress 什么都不会做）。
  *
- * @package AT8\SiteAccelerator\Core
+ * @package AT8SA\Core
  */
 
-namespace AT8\SiteAccelerator\Core;
+namespace AT8SA\Core;
 
-use AT8\SiteAccelerator\Cache\AdvancedCache;
-use AT8\SiteAccelerator\Optimization\DatabaseCleanup;
+use AT8SA\Cache\AdvancedCache;
+use AT8SA\Optimization\DatabaseCleanup;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -50,7 +50,7 @@ final class Deactivator {
 
 		wp_clear_scheduled_hook( DatabaseCleanup::CRON_HOOK );
 
-		$logger = $container->get( \AT8\SiteAccelerator\Support\Logger::class );
+		$logger = $container->get( \AT8SA\Support\Logger::class );
 		$logger->info( '插件已停用（设置与缓存目录保留）' );
 
 		/**

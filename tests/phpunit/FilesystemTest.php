@@ -6,12 +6,12 @@
  * `is_inside_cache_root()`。这条判断写松了，一个路径穿越就能删掉用户整个站点。
  * 所以用例里有一半是在证明"不该放行的路径确实被拒绝了"。
  *
- * @package AT8\SiteAccelerator\Tests
+ * @package AT8SA\Tests
  */
 
-namespace AT8\SiteAccelerator\Tests;
+namespace AT8SA\Tests;
 
-use AT8\SiteAccelerator\Support\Filesystem;
+use AT8SA\Support\Filesystem;
 
 /**
  * Class FilesystemTest

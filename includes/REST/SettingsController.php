@@ -5,14 +5,14 @@
  * 写入走 `Settings::sanitize()`，与后台表单完全同一条清洗路径——
  * 这样就不存在"通过 REST 绕过校验"的旁路（计划书 §124 所有输入必须 sanitize）。
  *
- * @package AT8\SiteAccelerator\REST
+ * @package AT8SA\REST
  */
 
-namespace AT8\SiteAccelerator\REST;
+namespace AT8SA\REST;
 
-use AT8\SiteAccelerator\Cache\Backend\BackendFactory;
-use AT8\SiteAccelerator\Cache\Config;
-use AT8\SiteAccelerator\Core\Settings;
+use AT8SA\Cache\Backend\BackendFactory;
+use AT8SA\Cache\Config;
+use AT8SA\Core\Settings;
 
 defined( 'ABSPATH' ) || exit;
 

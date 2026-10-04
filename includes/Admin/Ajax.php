@@ -6,20 +6,20 @@
  * 每个动作都先校验 nonce，再校验 `manage_options` 能力，最后才做业务。
  * 校验顺序不能反——先查权限再查 nonce 会让攻击者能通过响应差异探测权限模型。
  *
- * @package AT8\SiteAccelerator\Admin
+ * @package AT8SA\Admin
  */
 
-namespace AT8\SiteAccelerator\Admin;
+namespace AT8SA\Admin;
 
-use AT8\SiteAccelerator\Cache\AdvancedCache;
-use AT8\SiteAccelerator\Cache\Config;
-use AT8\SiteAccelerator\Cache\Backend\BackendFactory;
-use AT8\SiteAccelerator\Compatibility\CachePluginDetector;
-use AT8\SiteAccelerator\Core\Settings;
-use AT8\SiteAccelerator\Optimization\BrowserCache;
-use AT8\SiteAccelerator\Optimization\DatabaseCleanup;
-use AT8\SiteAccelerator\Purge\Purger;
-use AT8\SiteAccelerator\Support\Logger;
+use AT8SA\Cache\AdvancedCache;
+use AT8SA\Cache\Config;
+use AT8SA\Cache\Backend\BackendFactory;
+use AT8SA\Compatibility\CachePluginDetector;
+use AT8SA\Core\Settings;
+use AT8SA\Optimization\BrowserCache;
+use AT8SA\Optimization\DatabaseCleanup;
+use AT8SA\Purge\Purger;
+use AT8SA\Support\Logger;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -270,7 +270,7 @@ final class Ajax {
 			wp_send_json_error( array( 'message' => __( 'drop-in 移除失败。', 'at8-site-accelerator' ) ) );
 		}
 
-		wp_send_json_success( array( 'message' => __( 'drop-in 已移除。' ) ) );
+		wp_send_json_success( array( 'message' => __( 'drop-in 已移除。', 'at8-site-accelerator' ) ) );
 	}
 
 	/**

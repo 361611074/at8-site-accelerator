@@ -10,17 +10,17 @@
  * Redis 专属的那一半（孤儿索引集合）由 RedisBackendTest 覆盖，因为磁盘后端的
  * 路径不参与盐，观察不到顺序差异。
  *
- * @package AT8\SiteAccelerator\Tests
+ * @package AT8SA\Tests
  */
 
-namespace AT8\SiteAccelerator\Tests;
+namespace AT8SA\Tests;
 
-use AT8\SiteAccelerator\Cache\Backend\BackendFactory;
-use AT8\SiteAccelerator\Cache\Config;
-use AT8\SiteAccelerator\Core\Settings;
-use AT8\SiteAccelerator\Purge\Purger;
-use AT8\SiteAccelerator\Support\Filesystem;
-use AT8\SiteAccelerator\Support\Logger;
+use AT8SA\Cache\Backend\BackendFactory;
+use AT8SA\Cache\Config;
+use AT8SA\Core\Settings;
+use AT8SA\Purge\Purger;
+use AT8SA\Support\Filesystem;
+use AT8SA\Support\Logger;
 
 /**
  * Class PurgerTest

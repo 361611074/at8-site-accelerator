@@ -10,12 +10,12 @@
  * 关键细节：**首屏图片必须跳过**。给首屏大图加 lazy 会直接恶化 LCP，
  * 这是懒加载最常见的自伤方式。这里用"前 N 张 + 视口启发式"双重跳过。
  *
- * @package AT8\SiteAccelerator\Optimization
+ * @package AT8SA\Optimization
  */
 
-namespace AT8\SiteAccelerator\Optimization;
+namespace AT8SA\Optimization;
 
-use AT8\SiteAccelerator\Core\Settings;
+use AT8SA\Core\Settings;
 
 defined( 'ABSPATH' ) || exit;
 

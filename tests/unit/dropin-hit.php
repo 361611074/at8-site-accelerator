@@ -21,7 +21,7 @@
  *   命中 → 原样输出缓存内容（随后 exit）
  *   未命中 → 输出 "AT8SA_DROPIN_FELL_THROUGH"
  *
- * @package AT8\SiteAccelerator\Tests
+ * @package AT8SA\Tests
  */
 
 // phpcs:disable
@@ -35,8 +35,8 @@ require __DIR__ . '/wp-stubs.php';
 require AT8SA_PATH . 'includes/Cache/CachePath.php';
 require AT8SA_PATH . 'includes/Cache/RequestGuard.php';
 
-use AT8\SiteAccelerator\Cache\CachePath;
-use AT8\SiteAccelerator\Cache\RequestGuard;
+use AT8SA\Cache\CachePath;
+use AT8SA\Cache\RequestGuard;
 
 $at8sa_host     = 'example.test';
 $at8sa_cache    = AT8SA_CACHE_ROOT;

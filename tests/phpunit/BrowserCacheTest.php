@@ -5,12 +5,12 @@
  * 这个类会**直接改写站点的 .htaccess**，属于"写错一次就可能让整站 500"的操作。
  * 所以用例覆盖：危险组合告警、规则片段形态、以及"改文件前必须备份 + 幂等"。
  *
- * @package AT8\SiteAccelerator\Tests
+ * @package AT8SA\Tests
  */
 
-namespace AT8\SiteAccelerator\Tests;
+namespace AT8SA\Tests;
 
-use AT8\SiteAccelerator\Optimization\BrowserCache;
+use AT8SA\Optimization\BrowserCache;
 
 /**
  * Class BrowserCacheTest

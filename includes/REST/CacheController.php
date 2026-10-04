@@ -7,12 +7,12 @@
  *
  * 命名空间：`at8sa/v1`
  *
- * @package AT8\SiteAccelerator\REST
+ * @package AT8SA\REST
  */
 
-namespace AT8\SiteAccelerator\REST;
+namespace AT8SA\REST;
 
-use AT8\SiteAccelerator\Purge\Purger;
+use AT8SA\Purge\Purger;
 
 defined( 'ABSPATH' ) || exit;
 

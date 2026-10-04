@@ -11,15 +11,15 @@
  * `is_user_logged_in()` 等条件函数，把复杂判断放在那里极易产出"缓存了 404 页"
  * 之类的经典事故。
  *
- * @package AT8\SiteAccelerator\Cache
+ * @package AT8SA\Cache
  */
 
-namespace AT8\SiteAccelerator\Cache;
+namespace AT8SA\Cache;
 
-use AT8\SiteAccelerator\Cache\Backend\BackendFactory;
-use AT8\SiteAccelerator\Core\Settings;
-use AT8\SiteAccelerator\Optimization\HtmlMinifier;
-use AT8\SiteAccelerator\Support\Logger;
+use AT8SA\Cache\Backend\BackendFactory;
+use AT8SA\Core\Settings;
+use AT8SA\Optimization\HtmlMinifier;
+use AT8SA\Support\Logger;
 
 defined( 'ABSPATH' ) || exit;
 

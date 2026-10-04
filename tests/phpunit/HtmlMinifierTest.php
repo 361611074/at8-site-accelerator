@@ -7,12 +7,12 @@
  * `<pre>` / `<textarea>` / `<script>` / `<style>` / `<svg>` 里的内容、
  * 条件注释、以及压缩比异常时的安全阀。
  *
- * @package AT8\SiteAccelerator\Tests
+ * @package AT8SA\Tests
  */
 
-namespace AT8\SiteAccelerator\Tests;
+namespace AT8SA\Tests;
 
-use AT8\SiteAccelerator\Optimization\HtmlMinifier;
+use AT8SA\Optimization\HtmlMinifier;
 
 /**
  * Class HtmlMinifierTest

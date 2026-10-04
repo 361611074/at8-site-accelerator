@@ -16,12 +16,12 @@
  * 3. 异步补生成：保存后（响应已发出）在 shutdown 阶段重建该文章的 CSS，
  *    既保证源站先有文件，又绝不阻塞保存请求——2.x 曾因为同步重建导致 nginx 502。
  *
- * @package AT8\SiteAccelerator\Compatibility
+ * @package AT8SA\Compatibility
  */
 
-namespace AT8\SiteAccelerator\Compatibility;
+namespace AT8SA\Compatibility;
 
-use AT8\SiteAccelerator\Support\Logger;
+use AT8SA\Support\Logger;
 
 defined( 'ABSPATH' ) || exit;
 

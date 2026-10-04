@@ -8,12 +8,12 @@
  * 检测策略：不只看插件是否激活，还要判断它是否**真的在接管整页缓存**
  * （很多插件装了但功能是关的，误报会消耗用户的信任）。
  *
- * @package AT8\SiteAccelerator\Compatibility
+ * @package AT8SA\Compatibility
  */
 
-namespace AT8\SiteAccelerator\Compatibility;
+namespace AT8SA\Compatibility;
 
-use AT8\SiteAccelerator\Core\Settings;
+use AT8SA\Core\Settings;
 
 defined( 'ABSPATH' ) || exit;
 

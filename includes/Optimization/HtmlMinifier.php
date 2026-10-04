@@ -12,12 +12,12 @@
  *   连续空白（引号内的字符串跳过）；**不动**内联 JS——JS 的换行影响自动分号插入，
  *   风险与收益不成比例。绝不做变量名替换之类的"真压缩"（那需要解析器）。
  *
- * @package AT8\SiteAccelerator\Optimization
+ * @package AT8SA\Optimization
  */
 
-namespace AT8\SiteAccelerator\Optimization;
+namespace AT8SA\Optimization;
 
-use AT8\SiteAccelerator\Core\Settings;
+use AT8SA\Core\Settings;
 
 defined( 'ABSPATH' ) || exit;
 

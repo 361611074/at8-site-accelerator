@@ -5,12 +5,12 @@
  * 页面结构：顶部标签导航 + 单表单（所有标签页共用一个 <form>，一次保存全部生效）。
  * 这样做的好处是"保存"永远只有一个入口，用户不会因为切标签丢掉未保存的改动。
  *
- * @package AT8\SiteAccelerator\Admin
+ * @package AT8SA\Admin
  */
 
-namespace AT8\SiteAccelerator\Admin;
+namespace AT8SA\Admin;
 
-use AT8\SiteAccelerator\Core\Settings;
+use AT8SA\Core\Settings;
 
 defined( 'ABSPATH' ) || exit;
 

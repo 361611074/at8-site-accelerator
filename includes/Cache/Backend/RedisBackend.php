@@ -6,13 +6,13 @@
  * 多个站点，FLUSHDB 会连别人的缓存一起清掉。这里用"站点盐前缀 + 索引集合"
  * 双保险：先按索引集合精确 DEL，再用 SCAN 兜底扫一遍游离键。
  *
- * @package AT8\SiteAccelerator\Cache\Backend
+ * @package AT8SA\Cache\Backend
  */
 
-namespace AT8\SiteAccelerator\Cache\Backend;
+namespace AT8SA\Cache\Backend;
 
-use AT8\SiteAccelerator\Cache\CachePath;
-use AT8\SiteAccelerator\Support\RedisClient;
+use AT8SA\Cache\CachePath;
+use AT8SA\Support\RedisClient;
 
 defined( 'ABSPATH' ) || exit;
 

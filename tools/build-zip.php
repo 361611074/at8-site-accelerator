@@ -15,7 +15,7 @@
  *   dist/at8-site-accelerator-<版本>.zip
  *   ZIP 内层结构为 at8-site-accelerator/...（WordPress 可直接安装）
  *
- * @package AT8\SiteAccelerator\Tools
+ * @package AT8SA\Tools
  */
 
 // phpcs:disable

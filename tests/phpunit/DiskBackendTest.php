@@ -6,14 +6,14 @@
  * 1. **精准失效**：删一个 URL 只能删它自己的缓存，不能顺手清掉同路径的分页/参数变体；
  * 2. **原子写**：写入必须走"临时文件 + rename"，否则并发请求会读到半截 HTML。
  *
- * @package AT8\SiteAccelerator\Tests
+ * @package AT8SA\Tests
  */
 
-namespace AT8\SiteAccelerator\Tests;
+namespace AT8SA\Tests;
 
-use AT8\SiteAccelerator\Cache\Backend\DiskBackend;
-use AT8\SiteAccelerator\Cache\CachePath;
-use AT8\SiteAccelerator\Support\Filesystem;
+use AT8SA\Cache\Backend\DiskBackend;
+use AT8SA\Cache\CachePath;
+use AT8SA\Support\Filesystem;
 
 /**
  * Class DiskBackendTest

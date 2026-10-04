@@ -5,13 +5,13 @@
  * 探测结果用 transient 缓存，避免每个请求都吃一次 1 秒的 fsockopen 超时
  * （2.x 的老问题，这里保留并强化）。
  *
- * @package AT8\SiteAccelerator\Cache\Backend
+ * @package AT8SA\Cache\Backend
  */
 
-namespace AT8\SiteAccelerator\Cache\Backend;
+namespace AT8SA\Cache\Backend;
 
-use AT8\SiteAccelerator\Core\Settings;
-use AT8\SiteAccelerator\Support\Logger;
+use AT8SA\Core\Settings;
+use AT8SA\Support\Logger;
 
 defined( 'ABSPATH' ) || exit;
 

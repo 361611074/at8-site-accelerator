@@ -5,12 +5,12 @@
  * 这些开关的共同特征是"收益确定、风险低、可一键回退"，属于免费版最划算的部分。
  * 每一项都严格挂在 WordPress 官方钩子上，不使用任何字符串替换 HTML 的 hack。
  *
- * @package AT8\SiteAccelerator\Optimization
+ * @package AT8SA\Optimization
  */
 
-namespace AT8\SiteAccelerator\Optimization;
+namespace AT8SA\Optimization;
 
-use AT8\SiteAccelerator\Core\Settings;
+use AT8SA\Core\Settings;
 
 defined( 'ABSPATH' ) || exit;
 

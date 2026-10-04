@@ -12,13 +12,13 @@
  * - 依赖 GD 的 `imagewebp`，缺失时静默跳过，不报错、不降级到外部服务（那涉及隐私外传）；
  * - 删除附件时同步清理所有副本，不留垃圾。
  *
- * @package AT8\SiteAccelerator\Optimization
+ * @package AT8SA\Optimization
  */
 
-namespace AT8\SiteAccelerator\Optimization;
+namespace AT8SA\Optimization;
 
-use AT8\SiteAccelerator\Core\Settings;
-use AT8\SiteAccelerator\Support\Logger;
+use AT8SA\Core\Settings;
+use AT8SA\Support\Logger;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -186,7 +186,7 @@ final class Webp {
 
 		// 体积反而变大：删掉副本，避免"优化"变成负优化。
 		if ( filesize( $target ) >= filesize( $path ) ) {
-			@unlink( $target ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			wp_delete_file( $target );
 
 			$this->logger->debug( 'WebP 体积未变小，已放弃副本', array( 'file' => $path ) );
 
@@ -230,7 +230,7 @@ final class Webp {
 		$target = $path . '.webp';
 
 		if ( is_file( $target ) ) {
-			@unlink( $target ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			wp_delete_file( $target );
 		}
 	}
 }

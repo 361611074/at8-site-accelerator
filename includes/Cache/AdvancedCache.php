@@ -9,12 +9,12 @@
  * - 只增删带专属标记的那一行，绝不重写整文件；
  * - 卸载时只删自己写的那一行，恢复原状。
  *
- * @package AT8\SiteAccelerator\Cache
+ * @package AT8SA\Cache
  */
 
-namespace AT8\SiteAccelerator\Cache;
+namespace AT8SA\Cache;
 
-use AT8\SiteAccelerator\Support\Logger;
+use AT8SA\Support\Logger;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -124,7 +124,13 @@ final class AdvancedCache {
 			return true;
 		}
 
-		return (bool) @unlink( $this->dropin_path() ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		$target = $this->dropin_path();
+
+		wp_delete_file( $target );
+
+		// wp_delete_file() 没有返回值，用"文件是否还在"给出真实结果，
+		// 避免目录不可写时假装成功。
+		return ! is_file( $target );
 	}
 
 	/**

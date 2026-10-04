@@ -6,15 +6,15 @@
  * 不做"感谢安装本插件"这种噪声，也不做长期驻留的推广横幅。
  * 每条提示都必须是可执行的（告诉用户下一步点哪里），否则就不该存在。
  *
- * @package AT8\SiteAccelerator\Admin
+ * @package AT8SA\Admin
  */
 
-namespace AT8\SiteAccelerator\Admin;
+namespace AT8SA\Admin;
 
-use AT8\SiteAccelerator\Cache\AdvancedCache;
-use AT8\SiteAccelerator\Compatibility\CachePluginDetector;
-use AT8\SiteAccelerator\Core\Settings;
-use AT8\SiteAccelerator\Optimization\BrowserCache;
+use AT8SA\Cache\AdvancedCache;
+use AT8SA\Compatibility\CachePluginDetector;
+use AT8SA\Core\Settings;
+use AT8SA\Optimization\BrowserCache;
 
 defined( 'ABSPATH' ) || exit;
 

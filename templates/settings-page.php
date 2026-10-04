@@ -8,7 +8,7 @@
  * - 所有输出必须转义（esc_html / esc_attr / esc_url / wp_kses_post）；
  * - 所有开关一律用同一个渲染函数，保证 name 与设置键严格一致，杜绝拼写漂移。
  *
- * @package AT8\SiteAccelerator
+ * @package AT8SA
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -237,7 +237,7 @@ $at8sa_cache_on = ! empty( $at8sa_settings['page_cache'] );
 	</nav>
 
 	<form method="post" action="options.php">
-		<?php settings_fields( \AT8\SiteAccelerator\Core\Settings::GROUP ); ?>
+		<?php settings_fields( \AT8SA\Core\Settings::GROUP ); ?>
 
 		<!-- ============ 概览 ============ -->
 		<section class="at8sa-panel" data-panel="overview" role="tabpanel" hidden>

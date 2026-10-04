@@ -5,10 +5,10 @@
  * 所有递归删除都做了路径白名单校验（计划书 §69 Path Traversal 防护）：
  * 只允许删除 WP_CONTENT_DIR/cache 之下的路径，杜绝任何形式的手滑越界。
  *
- * @package AT8\SiteAccelerator\Support
+ * @package AT8SA\Support
  */
 
-namespace AT8\SiteAccelerator\Support;
+namespace AT8SA\Support;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -108,11 +108,15 @@ final class Filesystem {
 			if ( is_dir( $path ) && ! is_link( $path ) ) {
 				self::rrmdir( $path );
 			} else {
-				@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				wp_delete_file( $path );
 			}
 		}
 
-		return @rmdir( $dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		// rmdir 没有对应的 WordPress API：WP_Filesystem 需要先做凭证/传输层初始化，
+		// 在"每次清缓存都要递归删目录"这种高频内部路径上既无收益、又有失败风险。
+		// 这里的路径已由 is_inside_cache_root() 白名单校验，只会删缓存根内的空目录。
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir, WordPress.PHP.NoSilencedErrors.Discouraged
+		return @rmdir( $dir );
 	}
 
 	/**
@@ -183,10 +187,12 @@ final class Filesystem {
 		}
 
 		if ( in_array( 'index.php', $items, true ) ) {
-			@unlink( $dir . '/index.php' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			wp_delete_file( $dir . '/index.php' );
 		}
 
-		return @rmdir( $dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		// 同 rrmdir()：rmdir 无 WordPress 等价 API，路径已受白名单保护。
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir, WordPress.PHP.NoSilencedErrors.Discouraged
+		return @rmdir( $dir );
 	}
 
 	/**
@@ -210,8 +216,12 @@ final class Filesystem {
 			return false;
 		}
 
-		if ( ! @rename( $tmp, $path ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-			@unlink( $tmp ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		// rename 是"原子写"的必需品：同目录临时文件 + rename 保证并发下不会读到半个
+		// HTML。WP_Filesystem::move() 在 FTP / SSH 传输模式会退化成"读出来再写回去"，
+		// 原子性直接消失，并发时访客就会读到半截页面。
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename, WordPress.PHP.NoSilencedErrors.Discouraged
+		if ( ! @rename( $tmp, $path ) ) {
+			wp_delete_file( $tmp );
 			return false;
 		}
 

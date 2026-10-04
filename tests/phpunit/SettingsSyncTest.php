@@ -11,19 +11,19 @@
  * `update_option()` 也不触发钩子，"钩子挂没挂上"在测试里恒为真。
  * 本文件同时覆盖了修好的桩和修好的产品代码。
  *
- * @package AT8\SiteAccelerator\Tests
+ * @package AT8SA\Tests
  */
 
-namespace AT8\SiteAccelerator\Tests;
+namespace AT8SA\Tests;
 
-use AT8\SiteAccelerator\Cache\AdvancedCache;
-use AT8\SiteAccelerator\Cache\Backend\BackendFactory;
-use AT8\SiteAccelerator\Cache\Config;
-use AT8\SiteAccelerator\Core\Settings;
-use AT8\SiteAccelerator\Core\SettingsSync;
-use AT8\SiteAccelerator\Purge\Purger;
-use AT8\SiteAccelerator\Support\Filesystem;
-use AT8\SiteAccelerator\Support\Logger;
+use AT8SA\Cache\AdvancedCache;
+use AT8SA\Cache\Backend\BackendFactory;
+use AT8SA\Cache\Config;
+use AT8SA\Core\Settings;
+use AT8SA\Core\SettingsSync;
+use AT8SA\Purge\Purger;
+use AT8SA\Support\Filesystem;
+use AT8SA\Support\Logger;
 
 /**
  * Class SettingsSyncTest

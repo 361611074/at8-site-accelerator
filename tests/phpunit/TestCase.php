@@ -10,10 +10,10 @@
  * 会泄漏到下一个用例——典型症状是单跑绿、全跑红，或者反过来。
  * 所以这里在 setUp / tearDown 双向重置，而不是只在 setUp 里清一次。
  *
- * @package AT8\SiteAccelerator\Tests
+ * @package AT8SA\Tests
  */
 
-namespace AT8\SiteAccelerator\Tests;
+namespace AT8SA\Tests;
 
 use PHPUnit\Framework\TestCase as BaseTestCase;
 
@@ -129,15 +129,15 @@ abstract class TestCase extends BaseTestCase {
 	 * 造一个 Settings 实例，并预置若干选项值。
 	 *
 	 * @param array $overrides 覆盖的选项（键 => 值）。
-	 * @return \AT8\SiteAccelerator\Core\Settings
+	 * @return \AT8SA\Core\Settings
 	 */
 	protected function make_settings( array $overrides = array() ) {
-		$defaults = ( new \AT8\SiteAccelerator\Core\Settings() )->defaults();
+		$defaults = ( new \AT8SA\Core\Settings() )->defaults();
 		$stored   = array_merge( $defaults, $overrides );
 
-		$GLOBALS['at8sa_test_options'][ \AT8\SiteAccelerator\Core\Settings::OPTION ] = $stored;
+		$GLOBALS['at8sa_test_options'][ \AT8SA\Core\Settings::OPTION ] = $stored;
 
-		return new \AT8\SiteAccelerator\Core\Settings();
+		return new \AT8SA\Core\Settings();
 	}
 
 	/**
@@ -154,8 +154,8 @@ abstract class TestCase extends BaseTestCase {
 				'cache_logged_in' => 0,
 				'cache_mobile'   => 1,
 				'cookie_hash'    => COOKIEHASH,
-				'excluded_paths' => \AT8\SiteAccelerator\Cache\RequestGuard::default_excluded_paths(),
-				'bypass_cookies' => \AT8\SiteAccelerator\Cache\RequestGuard::default_bypass_cookies(),
+				'excluded_paths' => \AT8SA\Cache\RequestGuard::default_excluded_paths(),
+				'bypass_cookies' => \AT8SA\Cache\RequestGuard::default_bypass_cookies(),
 				'ignore_query'   => array(),
 			),
 			$overrides

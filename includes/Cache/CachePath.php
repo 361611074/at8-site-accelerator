@@ -14,10 +14,10 @@
  *
  * 这样 `purge_url()` 就是"删掉一个目录"，而不是"扫全库找 md5"。
  *
- * @package AT8\SiteAccelerator\Cache
+ * @package AT8SA\Cache
  */
 
-namespace AT8\SiteAccelerator\Cache;
+namespace AT8SA\Cache;
 
 defined( 'ABSPATH' ) || exit;
 

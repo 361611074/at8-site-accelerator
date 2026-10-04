@@ -5,10 +5,10 @@
  * 所有后端都必须支持"按键精准删除"，这是计划书 §64 禁止"任何小修改清空整站"的
  * 技术前提——没有精准删除，就只做得出全量 flush。
  *
- * @package AT8\SiteAccelerator\Cache\Backend
+ * @package AT8SA\Cache\Backend
  */
 
-namespace AT8\SiteAccelerator\Cache\Backend;
+namespace AT8SA\Cache\Backend;
 
 defined( 'ABSPATH' ) || exit;
 

@@ -6,12 +6,12 @@
  * 拖垮 LCP，而 `data:` 占位图再懒一次则会让图片永久不显示。
  * 所以用例重点是**跳过规则**是否齐全。
  *
- * @package AT8\SiteAccelerator\Tests
+ * @package AT8SA\Tests
  */
 
-namespace AT8\SiteAccelerator\Tests;
+namespace AT8SA\Tests;
 
-use AT8\SiteAccelerator\Optimization\LazyLoad;
+use AT8SA\Optimization\LazyLoad;
 
 /**
  * Class LazyLoadTest

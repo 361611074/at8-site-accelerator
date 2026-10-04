@@ -8,10 +8,10 @@
  * - 键名与 2.x 保持同名，迁移即"整体拷贝 + 补新键"，避免用户升级后行为漂移。
  * - 迁移是幂等的：只有旧选项存在、且新选项尚未标记已迁移时才执行。
  *
- * @package AT8\SiteAccelerator\Core
+ * @package AT8SA\Core
  */
 
-namespace AT8\SiteAccelerator\Core;
+namespace AT8SA\Core;
 
 defined( 'ABSPATH' ) || exit;
 

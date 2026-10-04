@@ -10,10 +10,10 @@
  *   all     = 对照组（整站清空），用来证明差异确实来自策略
  */
 
-use AT8\SiteAccelerator\Cache\Backend\BackendFactory;
-use AT8\SiteAccelerator\Core\Plugin;
-use AT8\SiteAccelerator\Core\Settings;
-use AT8\SiteAccelerator\Purge\Purger;
+use AT8SA\Cache\Backend\BackendFactory;
+use AT8SA\Core\Plugin;
+use AT8SA\Core\Settings;
+use AT8SA\Purge\Purger;
 
 $container = Plugin::instance()->container();
 $purger    = $container->get( Purger::class );

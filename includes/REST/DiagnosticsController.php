@@ -5,12 +5,12 @@
  * 只读，且只返回事实性数据（计划书 §61）。不会返回任何密钥、Cookie、
  * 数据库凭据或站点内容。
  *
- * @package AT8\SiteAccelerator\REST
+ * @package AT8SA\REST
  */
 
-namespace AT8\SiteAccelerator\REST;
+namespace AT8SA\REST;
 
-use AT8\SiteAccelerator\Diagnostics\Diagnostics;
+use AT8SA\Diagnostics\Diagnostics;
 
 defined( 'ABSPATH' ) || exit;
 

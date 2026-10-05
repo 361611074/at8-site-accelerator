@@ -20,6 +20,10 @@ msgstr ""
 msgid "AT8 Site Accelerator"
 msgstr ""
 
+#: templates/settings-page.php
+msgid "AT8 Site Accelerator Pro"
+msgstr ""
+
 #: at8-site-accelerator.php
 msgid "AT8 Site Accelerator 需要 PHP %1$s 或更高版本，当前为 %2$s。插件未加载。"
 msgstr ""
@@ -33,7 +37,7 @@ msgid "AT8 Site Accelerator：<code>advanced-cache.php</code> 尚未安装，缓
 msgstr ""
 
 #: includes/Admin/Notices.php
-msgid "AT8 Site Accelerator：<code>wp-config.php</code> 中的 <code>WP_CACHE</code> 未启用，高级缓存 drop-in 不会生效。可到 %s 一键启用（会自动备份 wp-config.php）。"
+msgid "AT8 Site Accelerator：<code>wp-config.php</code> 中的 <code>WP_CACHE</code> 未启用，高级缓存 drop-in 不会生效。可到 %s 一键启用（写入前临时备份，校验通过后立即删除）。"
 msgstr ""
 
 #: includes/Admin/Notices.php
@@ -86,6 +90,10 @@ msgstr ""
 
 #: templates/settings-page.php
 msgid "PHP 只能给 HTML 文档设置缓存头；CSS/JS/图片由 Web 服务器直接返回，需要服务器规则。到「工具」标签页可以复制对应你服务器的规则片段。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Pro 是独立插件，需在本插件之外手动上传安装；免费版不提供自动下载或安装。"
 msgstr ""
 
 #: templates/settings-page.php
@@ -145,7 +153,7 @@ msgid "drop-in 已移除。"
 msgstr ""
 
 #: templates/settings-page.php
-msgid "drop-in 把缓存命中提前到 WordPress 启动之前。启用 WP_CACHE 会修改 wp-config.php，修改前会自动备份为 wp-config.php.at8sa.bak，写入后会做完整性校验，校验失败立即回滚。"
+msgid "drop-in 把缓存命中提前到 WordPress 启动之前。启用 WP_CACHE 会修改 wp-config.php：写入前先做一份临时备份用于回滚，写入后立即做完整性校验，校验失败立即还原。无论成功还是失败，这份临时文件都会在同一次操作里被删除，不会在磁盘上留下可下载的副本。"
 msgstr ""
 
 #: includes/Admin/Ajax.php
@@ -277,7 +285,7 @@ msgid "为移动端单独缓存"
 msgstr ""
 
 #: templates/settings-page.php
-msgid "也为登录用户缓存"
+msgid "了解 Pro"
 msgstr ""
 
 #: includes/Diagnostics/Diagnostics.php
@@ -465,6 +473,10 @@ msgid "卸载行为"
 msgstr ""
 
 #: templates/settings-page.php
+msgid "发布后自动预热：文章或页面发布后自动预热该条内容"
+msgstr ""
+
+#: templates/settings-page.php
 msgid "只删除该 URL 的缓存目录（含桌面与移动端两个变体），不影响其它页面。"
 msgstr ""
 
@@ -481,7 +493,7 @@ msgid "只移除这一张卡片，站点健康、浏览器与 PHP 版本提示�
 msgstr ""
 
 #: templates/settings-page.php
-msgid "只缓存未登录访客的 GET 请求。后台、AJAX、REST、预览、搜索、404、购物车与结算页一律自动绕过。"
+msgid "只缓存未登录访客的 GET 请求。后台、AJAX、REST、预览、搜索、404、购物车与结算页一律自动绕过。登录用户始终不进入公共缓存——缓存键不区分用户，共享会导致访客看到他人页面。"
 msgstr ""
 
 #: templates/settings-page.php
@@ -601,6 +613,10 @@ msgid "失效策略"
 msgstr ""
 
 #: templates/settings-page.php
+msgid "如果你还需要下面这些能力，可以了解 Pro 版本："
+msgstr ""
+
+#: templates/settings-page.php
 msgid "如遇旧插件报错请关闭。"
 msgstr ""
 
@@ -649,7 +665,7 @@ msgid "已启用"
 msgstr ""
 
 #: includes/Cache/AdvancedCache.php
-msgid "已启用 WP_CACHE。原文件已备份至 %s。"
+msgid "已启用 WP_CACHE。"
 msgstr ""
 
 #: includes/Admin/SettingsPage.php
@@ -773,7 +789,7 @@ msgid "文章修订版"
 msgstr ""
 
 #: includes/Cache/AdvancedCache.php
-msgid "无法创建 wp-config.php 备份，操作已中止（安全优先）。"
+msgid "无法创建 wp-config.php 临时备份，操作已中止（安全优先）。"
 msgstr ""
 
 #: includes/Diagnostics/Diagnostics.php
@@ -890,6 +906,10 @@ msgstr ""
 
 #: includes/Diagnostics/Diagnostics.php
 msgid "本插件最低要求 WordPress 5.8。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "本插件的免费版已经包含完整可用的页面缓存、WebP、懒加载、HTML 压缩、浏览器缓存与数据库瘦身，不需要账号、不连接任何外部服务器。"
 msgstr ""
 
 #: includes/Admin/Ajax.php includes/Admin/SettingsPage.php
@@ -1093,6 +1113,10 @@ msgid "缓存目录可写"
 msgstr ""
 
 #: templates/settings-page.php
+msgid "缓存预热：队列化 + 限速地批量生成全站缓存，带进度显示，可随时停止"
+msgstr ""
+
+#: templates/settings-page.php
 msgid "自动清理计划"
 msgstr ""
 
@@ -1130,6 +1154,10 @@ msgstr ""
 
 #: templates/settings-page.php
 msgid "让缓存命中在 WordPress 启动前就返回，TTFB 收益最大。需要在「工具」里确保 drop-in 已安装且 WP_CACHE 已启用。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "许可证管理：本地开发环境自动免授权"
 msgstr ""
 
 #: includes/Admin/SettingsPage.php
@@ -1260,6 +1288,10 @@ msgstr ""
 msgid "风险组合：「移除静态资源 ?ver= 版本号」与「静态资源长缓存」同时开启。主题或插件更新后，访客可能长期使用旧的 CSS/JS。建议关闭其中一项。"
 msgstr ""
 
+#: includes/Admin/SettingsPage.php
+msgid "高级版"
+msgstr ""
+
 #: templates/settings-page.php
 msgid "高级缓存 drop-in"
 msgstr ""
@@ -1278,10 +1310,6 @@ msgstr ""
 
 #: templates/settings-page.php
 msgid "默认保留。关闭后卸载会删除本插件的所有选项与临时数据（缓存目录无论开关都会清理）。"
-msgstr ""
-
-#: templates/settings-page.php
-msgid "默认关闭。开启后登录用户会看到彼此相同的页面（含管理栏差异），除非你确定站点没有个性化内容，否则不要开。"
 msgstr ""
 
 #: templates/settings-page.php

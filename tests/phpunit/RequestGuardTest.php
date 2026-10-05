@@ -178,11 +178,12 @@ final class RequestGuardTest extends TestCase {
 	}
 
 	/**
-	 * **职责归属回归测试**：登录态 Cookie 不允许出现在本表里。
+ * **职责归属回归测试**：登录态 Cookie 不允许出现在本表里。
 	 *
-	 * 登录态只由 `has_auth_cookie()` + `cache_logged_in` 开关负责。
-	 * 一旦有人"顺手"把 `wordpress_logged_in_*` 加回本表，`cache_logged_in`
-	 * 就会变成永远无效的死开关——这个坑已经踩过一次。
+	 * 登录态只由 `has_auth_cookie()` 负责，3.0.5 起**无条件**触发、无任何开关。
+	 * 一旦有人"顺手"把 `wordpress_logged_in_*` 加回本表，两条路径就会重复，
+	 * 更糟的是会让 `default_bypass_cookies()` 这个公开方法的语义变得含糊不清
+	 * （它到底是"放行规则"还是"身份检测"？）。
 	 *
 	 * @return void
 	 */
@@ -193,7 +194,7 @@ final class RequestGuardTest extends TestCase {
 			$this->assertStringNotContainsString(
 				'wordpress_logged_in',
 				$rule,
-				'登录态 Cookie 不应出现在 bypass 表里，否则 cache_logged_in 开关失效'
+				'登录态 Cookie 不应出现在 bypass 表里：身份检测只走 has_auth_cookie()'
 			);
 			$this->assertStringNotContainsString( 'wordpress_sec', $rule );
 		}
@@ -357,20 +358,32 @@ final class RequestGuardTest extends TestCase {
 	}
 
 	/**
-	 * 明确"开启缓存登录用户"后，登录态不再放行。
+	 * 登录态必须**无条件**绕过，配置里写什么都不例外。
 	 *
-	 * 这个开关默认关闭；打开它意味着站长接受"登录用户之间共享缓存"，
-	 * 所以必须显式验证它能生效（否则开关是假的）。
+	 * 3.0.5 之前这里有一个 `cache_logged_in` 开关，打开后登录态不再放行。
+	 * 那个开关已被彻底移除，因为缓存键只有「站点盐 + host + URI + 移动标记」，
+	 * **没有任何用户维度** —— 一旦共享，用户 A 的页面就会被返回给用户 B。
+	 *
+	 * 关键在于「无条件」：老站点的 `at8sa_settings` 里可能还存着
+	 * `cache_logged_in => 1`，如果哪天有人"顺手"把这个配置读回来，
+	 * 越权就会静默复活。所以这里显式传 `1` 进去，断言**依然**绕过 ——
+	 * 让"这个键彻底失效"成为被测试钉死的事实，而不是靠注释提醒。
 	 *
 	 * @return void
 	 */
-	public function test_cache_logged_in_allows_logged_in_visitors() {
+	public function test_logged_in_bypasses_even_when_config_says_otherwise() {
 		$this->set_request( array( 'REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/' ) );
 		$this->set_cookies( array( 'wordpress_logged_in_' . COOKIEHASH => 'x' ) );
 
-		$this->assertFalse(
-			RequestGuard::should_bypass( $this->make_runtime_config( array( 'cache_logged_in' => 1 ) ) )
+		// 传 `cache_logged_in => 1`：模拟老站库里残留的值。
+		$this->assertTrue(
+			RequestGuard::should_bypass( $this->make_runtime_config( array( 'cache_logged_in' => 1 ) ) ),
+			'cache_logged_in 必须完全失效：即使配置为 1，登录态也必须绕过缓存'
 		);
+
+		// 传 `false` / 不传：同样绕过。
+		$this->assertTrue( RequestGuard::should_bypass( $this->make_runtime_config() ) );
+		$this->assertTrue( RequestGuard::should_bypass( $this->make_runtime_config( array( 'cache_logged_in' => 0 ) ) ) );
 	}
 
 	/**

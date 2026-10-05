@@ -67,12 +67,53 @@ final class Notices {
 	}
 
 	/**
+	 * 当前 screen 是否是本插件允许显示提示的页面。
+	 *
+	 * 插件目录指南 11 明确禁止「劫持后台」：不得在**别的**页面顶部插自己的横幅。
+	 * `admin_notices` 是全局钩子，挂上去就意味着「全站每一个后台页面」都会执行到，
+	 * 所以必须用**白名单**而不是「排除法」——白名单里没列到的 screen 一律不显示。
+	 *
+	 * 为什么保留 `admin_notices` 而不是彻底改成设置页内联：
+	 * 「drop-in 被别的缓存插件占着」这类问题如果只在设置页显示，管理员在
+	 * 插件列表页点「停用」时会以为是自己操作弄坏的，缺少一个全局的出口。
+	 * 所以保留钩子，但把可见范围收到插件自己的两个页面。
+	 *
+	 * @return bool
+	 */
+	private function is_allowed_screen() {
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+
+		// 拿不到 screen（例如某些 AJAX / REST 上下文）时一律不显示。
+		// `WP_Screen::$id` 是必填属性，`get_current_screen()` 返回的对象一定有值，
+		// 所以只需判空对象本身。
+		if ( ! $screen ) {
+			return false;
+		}
+
+		$allowed = array(
+			// 插件自己的设置页。
+			'toplevel_page_' . SettingsPage::SLUG,
+			// 插件列表页：让"drop-in 装不上"这类问题在用户最可能看到的地方有出口。
+			'plugins',
+			// 仪表盘：只显示这一类必须用户处理的问题。
+			'dashboard',
+		);
+
+		return in_array( $screen->id, $allowed, true );
+	}
+
+	/**
 	 * 输出提示。
 	 *
 	 * @return void
 	 */
 	public function render() {
 		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		// 屏幕白名单：不在自己的页面里，一概不输出。
+		if ( ! $this->is_allowed_screen() ) {
 			return;
 		}
 
@@ -109,7 +150,7 @@ final class Notices {
 					'warning',
 					sprintf(
 						/* translators: %s: settings page URL */
-						__( 'AT8 Site Accelerator：<code>wp-config.php</code> 中的 <code>WP_CACHE</code> 未启用，高级缓存 drop-in 不会生效。可到 %s 一键启用（会自动备份 wp-config.php）。', 'at8-site-accelerator' ),
+						__( 'AT8 Site Accelerator：<code>wp-config.php</code> 中的 <code>WP_CACHE</code> 未启用，高级缓存 drop-in 不会生效。可到 %s 一键启用（写入前临时备份，校验通过后立即删除）。', 'at8-site-accelerator' ),
 						$this->link()
 					)
 				);

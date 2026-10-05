@@ -139,6 +139,19 @@ final class CachePath {
 	/**
 	 * 归一化主机名（小写、去掉端口以外的杂质）。
 	 *
+	 * 这里的产物会**直接变成磁盘目录名**（`disk_dir()`）与 Redis 键的一段，
+	 * 所以规则不只是"好看"，而是安全边界。
+	 *
+	 * 1. 非白名单字符（含 `/` `\`）全部替换为 `_` —— 挡掉路径穿越。
+	 *    实测 `../../evil` → `.._.._evil`：其中的 `..` 是**普通字符**（斜杠已被替换），
+	 *    不构成目录跳转。
+	 * 2. 但纯点值必须**单独拦掉** —— `.` 与 `..` 全由白名单字符组成，第 1 条放它们过关，
+	 *    于是 `Host: ..` 会让缓存目录真的落到缓存根目录**之外**（实测
+	 *    `<root>/../__root` → 父目录 realpath 解析到 root 的上一级）。
+	 *    攻击者只要发一个 `Host: ..` 的请求，就能在缓存根目录外面创建/覆盖文件。
+	 * 3. 结尾的点与连字符要剥掉：`example.com.` 是合法 FQDN 写法，但 `example.com.`
+	 *    落盘成目录名在某些文件系统（Windows / SMB）上会与 `example.com` 撞车或报错。
+	 *
 	 * @param string $host 主机名。
 	 * @return string
 	 */
@@ -152,7 +165,15 @@ final class CachePath {
 		// 只保留字母数字、点、连字符、冒号（IPv6）、下划线，其余替换掉。
 		$host = preg_replace( '/[^a-z0-9.\-:_]/', '_', $host );
 
-		return '' === $host ? 'unknown-host' : substr( $host, 0, 190 );
+		// 剥掉结尾的点/连字符（`example.com.` → `example.com`）。
+		$host = rtrim( (string) $host, '.-' );
+
+		// 纯点值会逃出缓存根目录，必须换成占位名。
+		if ( '' === $host || '.' === $host || '..' === $host ) {
+			return 'unknown-host';
+		}
+
+		return substr( $host, 0, 190 );
 	}
 
 	/**

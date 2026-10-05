@@ -33,6 +33,7 @@
 	},
 	"scripts": {
 		"smoke": "php tests/unit/smoke.php",
+		"integration": "php tests/unit/round2-integration.php",
 		"phpunit": "phpunit",
 		"phpstan": "phpstan analyse --memory-limit=2G",
 		"phpcs": "phpcs --standard=phpcs.xml.dist --report=summary",
@@ -41,6 +42,7 @@
 			"@phpcs",
 			"@phpstan",
 			"@smoke",
+			"@integration",
 			"@phpunit"
 		]
 	}

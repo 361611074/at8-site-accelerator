@@ -120,7 +120,9 @@ final class RequestGuard {
 	 * 就永远被本表拦下，开关变成死开关。
 	 *
 	 * 所以现在的职责划分是**单一归属**：
-	 * - 登录态 Cookie → 只由 `has_auth_cookie()` 管，受 `cache_logged_in` 控制；
+	 * - 登录态 Cookie → 只由 `has_auth_cookie()` 管，**无条件**绕过
+	 *   （"缓存登录用户"功能已在 3.0.5 移除，理由见 `CacheEngine::should_cache_response()`：
+	 *   缓存 key 不含用户维度，登录态进公共缓存等于越权读取）；
 	 * - 其它会话 Cookie → 只由本表管，无条件绕过（它们代表"这份内容因人而异"，
 	 *   不是"是不是登录用户"的问题，不给开关）。
 	 *
@@ -221,7 +223,10 @@ final class RequestGuard {
 		}
 
 		// 未登录访客才允许共享缓存。
-		if ( empty( $config['cache_logged_in'] ) && self::has_auth_cookie( $config ) ) {
+		//
+		// 无条件绕过：登录态页面一律不进公共缓存。这里不再看`cache_logged_in`，
+		// 那个开关已在 3.0.5 移除（缓存 key 无用户维度，登录态共享必然越权）。
+		if ( self::has_auth_cookie( $config ) ) {
 			return true;
 		}
 

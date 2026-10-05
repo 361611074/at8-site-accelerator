@@ -255,7 +255,14 @@ final class CacheEngine {
 			return false;
 		}
 
-		if ( is_user_logged_in() && ! $this->settings->is_on( 'cache_logged_in' ) ) {
+		if ( is_user_logged_in() ) {
+			// 登录用户一律不共享缓存（3.0.5 起该功能已移除，此处无条件放行）。
+			//
+			// 原本这里受 `cache_logged_in` 开关控制，但缓存 key 只由
+			// 「站点盐 + host + URI + 移动标记」构成，**不含任何用户维度**。
+			// 开启后用户 A 访问会写入一份公共缓存，用户 B 随后读到的是 A 的页面
+			// （含 A 的管理栏、昵称、权限可见内容）。这是实打实的越权读取，
+			// 因此不再提供"开/关"，直接从判定里去掉。
 			return false;
 		}
 
@@ -263,8 +270,12 @@ final class CacheEngine {
 			return false;
 		}
 
-		if ( ! $this->settings->is_on( 'cache_logged_in' ) && function_exists( 'is_cart' ) ) {
-			// WooCommerce 动态页面：购物车 / 结算 / 我的账户永远不缓存（计划书 §67）。
+		// WooCommerce 动态页面：购物车 / 结算 / 我的账户永远不缓存（计划书 §67）。
+		//
+		// 这里原本也被 `! cache_logged_in` 包着——那等于"一旦开启登录用户缓存，
+		// 购物车页也会被缓存"，是同一类越权。现在登录用户已在上面无条件放行，
+		// 这里的判断不再需要任何开关。
+		if ( function_exists( 'is_cart' ) ) {
 			if ( ( function_exists( 'is_cart' ) && is_cart() )
 				|| ( function_exists( 'is_checkout' ) && is_checkout() )
 				|| ( function_exists( 'is_account_page' ) && is_account_page() )

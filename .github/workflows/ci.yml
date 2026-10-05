@@ -52,6 +52,15 @@ jobs:
       - name: 冒烟测试
         run: php tests/unit/smoke.php
 
+      # 第二轮整改新增的行为级验收。
+      #
+      # smoke.php 证明「代码里写了 if」，这个脚本证明「if 真的会拦」——
+      # 逐个调用 admin_notices 渲染、真实写/回滚 wp-config.php、realpath 实测
+      # Host 归一化能否逃出缓存根。缺了它，这三类回归只能靠人工点后台才能发现。
+      # 它要读发行包，所以必须排在 build-zip 之后（见 round2-verify 任务）。
+      - name: 第二轮集成验收
+        run: php tests/unit/round2-integration.php
+
       - name: 翻译模板是否与源码同步
         run: |
           set -e
@@ -330,6 +339,13 @@ jobs:
           echo ""
           echo "--- 顶层结构 ---"
           echo "$LIST" | awk -F/ 'NF>1 {print $2} NF==1 {print "(根)"$1}' | sort -u
+
+      # 到了这一步 dist/ 里已经有真包了，重跑一次集成验收——
+      # 这次「发行包级」那几组断言不再 SKIP，而是真的对着产物执行：
+      # 单层目录、无 Pro 商业目录、无远程安装代码、无 License 校验代码。
+      # 放在上传之前是因为上传完再失败，等于把不合规的包已经传出去了。
+      - name: 第二轮集成验收（对真实产物）
+        run: php tests/unit/round2-integration.php
 
       - name: 上传产物
         uses: actions/upload-artifact@v4

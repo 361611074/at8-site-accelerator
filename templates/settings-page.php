@@ -285,12 +285,11 @@ $at8sa_cache_on = ! empty( $at8sa_settings['page_cache'] );
 		<section class="at8sa-panel" data-panel="cache" role="tabpanel" hidden>
 			<div class="at8sa-card">
 				<h2><?php esc_html_e( '① 页面缓存', 'at8-site-accelerator' ); ?></h2>
-				<p class="at8sa-card-note"><?php esc_html_e( '只缓存未登录访客的 GET 请求。后台、AJAX、REST、预览、搜索、404、购物车与结算页一律自动绕过。', 'at8-site-accelerator' ); ?></p>
+				<p class="at8sa-card-note"><?php esc_html_e( '只缓存未登录访客的 GET 请求。后台、AJAX、REST、预览、搜索、404、购物车与结算页一律自动绕过。登录用户始终不进入公共缓存——缓存键不区分用户，共享会导致访客看到他人页面。', 'at8-site-accelerator' ); ?></p>
 
 				<?php $at8sa_toggle( 'page_cache', __( '启用访客页面缓存', 'at8-site-accelerator' ) ); ?>
 				<?php $at8sa_toggle( 'advanced_cache', __( '启用 advanced-cache.php 高级缓存', 'at8-site-accelerator' ), __( '让缓存命中在 WordPress 启动前就返回，TTFB 收益最大。需要在「工具」里确保 drop-in 已安装且 WP_CACHE 已启用。', 'at8-site-accelerator' ) ); ?>
 				<?php $at8sa_toggle( 'cache_mobile', __( '为移动端单独缓存', 'at8-site-accelerator' ), __( '开启后桌面与移动端各存一份，避免响应式主题给移动端输出不同结构时串页。会同时发送 Vary: User-Agent。', 'at8-site-accelerator' ) ); ?>
-				<?php $at8sa_toggle( 'cache_logged_in', __( '也为登录用户缓存', 'at8-site-accelerator' ), __( '默认关闭。开启后登录用户会看到彼此相同的页面（含管理栏差异），除非你确定站点没有个性化内容，否则不要开。', 'at8-site-accelerator' ) ); ?>
 
 				<div class="at8sa-row">
 					<?php $at8sa_number( 'cache_ttl', __( '缓存有效期（秒）', 'at8-site-accelerator' ), 60, 2592000, 60 ); ?>
@@ -548,7 +547,7 @@ $at8sa_cache_on = ! empty( $at8sa_settings['page_cache'] );
 		<section class="at8sa-panel" data-panel="tools" role="tabpanel" hidden>
 			<div class="at8sa-card">
 				<h2><?php esc_html_e( '高级缓存 drop-in', 'at8-site-accelerator' ); ?></h2>
-				<p class="at8sa-card-note"><?php esc_html_e( 'drop-in 把缓存命中提前到 WordPress 启动之前。启用 WP_CACHE 会修改 wp-config.php，修改前会自动备份为 wp-config.php.at8sa.bak，写入后会做完整性校验，校验失败立即回滚。', 'at8-site-accelerator' ); ?></p>
+				<p class="at8sa-card-note"><?php esc_html_e( 'drop-in 把缓存命中提前到 WordPress 启动之前。启用 WP_CACHE 会修改 wp-config.php：写入前先做一份临时备份用于回滚，写入后立即做完整性校验，校验失败立即还原。无论成功还是失败，这份临时文件都会在同一次操作里被删除，不会在磁盘上留下可下载的副本。', 'at8-site-accelerator' ); ?></p>
 
 				<table class="at8sa-diag-table">
 					<tbody>
@@ -685,6 +684,32 @@ $at8sa_cache_on = ! empty( $at8sa_settings['page_cache'] );
 			<div class="at8sa-card at8sa-danger-zone">
 				<h2><?php esc_html_e( '卸载行为', 'at8-site-accelerator' ); ?></h2>
 				<?php $at8sa_toggle( 'keep_data_on_uninstall', __( '卸载插件时保留设置数据', 'at8-site-accelerator' ), __( '默认保留。关闭后卸载会删除本插件的所有选项与临时数据（缓存目录无论开关都会清理）。', 'at8-site-accelerator' ) ); ?>
+			</div>
+		</section>
+
+		<!-- Pro 介绍面板 -->
+		<section class="at8sa-panel" data-panel="pro" role="tabpanel" hidden>
+			<div class="at8sa-card at8sa-card--pro">
+				<h2><?php esc_html_e( 'AT8 Site Accelerator Pro', 'at8-site-accelerator' ); ?></h2>
+
+				<p class="at8sa-card-note"><?php esc_html_e( '本插件的免费版已经包含完整可用的页面缓存、WebP、懒加载、HTML 压缩、浏览器缓存与数据库瘦身，不需要账号、不连接任何外部服务器。', 'at8-site-accelerator' ); ?></p>
+				<p class="at8sa-card-note"><?php esc_html_e( '如果你还需要下面这些能力，可以了解 Pro 版本：', 'at8-site-accelerator' ); ?></p>
+
+				<ul class="at8sa-pro-list">
+					<li><?php esc_html_e( '缓存预热：队列化 + 限速地批量生成全站缓存，带进度显示，可随时停止', 'at8-site-accelerator' ); ?></li>
+					<li><?php esc_html_e( '发布后自动预热：文章或页面发布后自动预热该条内容', 'at8-site-accelerator' ); ?></li>
+					<li><?php esc_html_e( '许可证管理：本地开发环境自动免授权', 'at8-site-accelerator' ); ?></li>
+				</ul>
+
+				<p class="at8sa-card-note">
+					<?php esc_html_e( 'Pro 是独立插件，需在本插件之外手动上传安装；免费版不提供自动下载或安装。', 'at8-site-accelerator' ); ?>
+				</p>
+
+				<div class="at8sa-actions">
+					<a class="button button-primary" href="https://www.at8.fun/product/at8-site-accelerator-pro/" target="_blank" rel="noopener noreferrer">
+						<?php esc_html_e( '了解 Pro', 'at8-site-accelerator' ); ?>
+					</a>
+				</div>
 			</div>
 		</section>
 

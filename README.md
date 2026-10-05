@@ -4,7 +4,7 @@
 优先 Redis 对象缓存、不可用时自动降级为磁盘缓存，内置 Elementor / WooCommerce
 兼容层与第三方缓存插件冲突检测。
 
-- 当前版本：**3.0.1**
+- 当前版本：**3.0.5**
 - 环境要求：**PHP 7.4+ / WordPress 5.8+**
 - 许可：**GPL-2.0-or-later**
 
@@ -50,14 +50,15 @@
 1. 将 `at8-site-accelerator` 目录放入 `wp-content/plugins/`
 2. 在 WordPress 后台「插件」页面启用
 3. 启用后自动写入 `advanced-cache.php` drop-in 并改写 `wp-config.php`
-   中的 `WP_CACHE` 常量（改写前会自动备份，失败自动回滚）
+   中的 `WP_CACHE` 常量（改写前只做临时备份，写入校验不通过即回滚，
+   无论成败都会立即删除该临时文件，不在磁盘上留明文副本）
 4. 进入「设置 → AT8 Site Accelerator」调整参数
 
 也可直接使用打包好的发行版：
 
 ```
 php tools/build-zip.php
-# 产出 dist/at8-site-accelerator-3.0.1.zip
+# 产出 dist/at8-site-accelerator-3.0.5.zip
 ```
 
 ---
@@ -88,6 +89,30 @@ at8-site-accelerator/
 
 ---
 
+## Free / Pro
+
+本仓库是 **Free 版**，功能完整、可独立运行：
+
+```text
+独立安装 · 独立激活 · 不依赖 Pro · 无需注册账号 · 无需授权 · 不连接任何外部服务器
+```
+
+Free 版不包含任何授权校验代码，也不会自动下载或安装任何东西。
+
+Pro 版是**可选**的商业增强版本，功能边界见
+[`docs/FREE_PRO_MATRIX.md`](docs/FREE_PRO_MATRIX.md)（基于两个仓库的真实代码整理）。
+Pro 只能在官网产品页由用户主动获取、手动上传安装：
+
+```text
+Free 设置页「高级版」 → 用户点击链接 → 浏览器打开产品页 → 用户主动购买 / 下载
+→ 后台手动上传安装
+```
+
+Free 版对 Pro 的介绍是**完全静态**的：设置页里一个说明区域 + 一个普通链接，
+不使用全局后台通知、不弹窗、不自动跳转、不做用户追踪。
+
+---
+
 ## 开发
 
 ### 运行测试
@@ -96,9 +121,12 @@ at8-site-accelerator/
 
 ```bash
 php tests/unit/smoke.php
+php tests/unit/round2-integration.php
 ```
 
-覆盖 24 个分组、236 项断言，包含 drop-in 命中路径的子进程测试。
+冒烟测试 318 项（静态断言，含 drop-in 命中路径的子进程测试），
+第二轮集成验收 70 项（行为断言：逐个后台页面验证通知作用域、
+真实写/回滚 `wp-config.php` 后确认无临时备份残留、`realpath()` 实测 Host 归一化）。
 
 ### 生成翻译模板
 
@@ -122,7 +150,8 @@ php tools/build-zip.php
 |---|---|
 | `docs/ARCHITECTURE.md` | 目录结构、请求生命周期、缓存布局、扩展点 |
 | `docs/PRODUCT_SPEC.md` | 产品定位、全部功能清单与默认值、REST API |
-| `docs/FREE_PRO_MATRIX.md` | Free / Pro 功能边界与划分理由 |
+| `docs/FREE_PRO_MATRIX.md` | Free / Pro 功能边界（基于真实代码审计）与划分理由 |
+| `docs/FREE_PRO_ROADMAP.md` | Free / Pro 后续规划（尚未实现的设想，非现有功能） |
 | `docs/SECURITY_AUDIT.md` | 路径穿越、CSRF、文件写入、日志脱敏、Redis 安全 |
 | `docs/COMPATIBILITY.md` | 运行环境、主题/插件兼容、多站点、主机环境 |
 | `docs/TEST_REPORT.md` | 测试策略、覆盖清单、已修复问题表 |

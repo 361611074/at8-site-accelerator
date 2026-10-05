@@ -4,7 +4,7 @@
  *
  * 计划书 §104 明令"禁止自动修改 WordPress Core"。这里只动 `wp-content/advanced-cache.php`
  * 与 `wp-config.php` 两个**用户配置文件**，且：
- * - 改 wp-config.php 前强制备份；
+ * - 改 wp-config.php 前强制做**临时**备份，校验结束后立即删除（不留在磁盘上）；
  * - 改完做完整性校验（文件非空、仍含 DB_NAME、仍含 wp-settings.php 引入），任一不满足立即回滚；
  * - 只增删带专属标记的那一行，绝不重写整文件；
  * - 卸载时只删自己写的那一行，恢复原状。
@@ -418,7 +418,24 @@ final class AdvancedCache {
 	}
 
 	/**
-	 * 写 wp-config.php：备份 → 写入 → 校验 → 失败回滚。
+	 * 写 wp-config.php：临时备份 → 写入 → 校验 → 失败回滚 → **立即删除临时备份**。
+	 *
+	 * 为什么必须删掉备份（这不是洁癖，是安全问题）：
+	 * `wp-config.php` 里是数据库密码、AUTH_KEY / SECURE_AUTH_KEY / LOGGED_IN_KEY /
+	 * NONCE_KEY 以及 8 个 SALT。备份文件如果**长期**留在 `ABSPATH` 下，
+	 * 它就是一个只要猜到路径就能直接下载的明文凭据文件 ——
+	 * 任何访客、任何扫 `.bak` 后缀的爬虫、任何一次目录列举都能拿到整站密钥。
+	 * 早前版本把备份长期留在原地（文件名形如 `wp-config.php` + 备份后缀），
+	 * 属于 WordPress.org 会直接判 P0 的问题。
+	 *
+	 * 现在的流程严格遵循「临时文件」语义：
+	 * 1. 备份到 `wp-config.php` **同目录**的临时文件（同目录才能保证 `rename()`
+	 *    是原子操作，不会因为跨文件系统而失败）；
+	 * 2. 写入 → 校验；
+	 * 3. 成功或失败，**都在 `finally` 语义下删掉临时文件**。
+	 *
+	 * 真正需要"留底"的场景是写入失败且回滚也失败 —— 那种情况下内容还在内存里，
+	 * 已通过日志记录路径告知管理员手工恢复，不再依赖磁盘上的明文副本。
 	 *
 	 * @param string $path     路径。
 	 * @param string $original 原始内容。
@@ -426,16 +443,36 @@ final class AdvancedCache {
 	 * @return array{ok:bool,message:string}
 	 */
 	private function write_wp_config( $path, $original, $updated ) {
-		$backup = $path . '.at8sa.bak';
+		$backup = $path . '.at8sa.tmp';
 
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 		if ( false === @file_put_contents( $backup, $original ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 			return array(
 				'ok'      => false,
-				'message' => __( '无法创建 wp-config.php 备份，操作已中止（安全优先）。', 'at8-site-accelerator' ),
+				'message' => __( '无法创建 wp-config.php 临时备份，操作已中止（安全优先）。', 'at8-site-accelerator' ),
 			);
 		}
 
+		$result = $this->apply_wp_config( $path, $original, $updated );
+
+		// 无论成败都立刻删除临时副本，不给明文凭据留任何在 Web Root 里的时间。
+		$this->discard_wp_config_backup( $backup );
+
+		return $result;
+	}
+
+	/**
+	 * 实际执行「写入 → 校验 → 失败回滚」，并返回面向用户的结果。
+	 *
+	 * 与 {@see write_wp_config()} 分开，是为了让临时备份的清理只有一个出口，
+	 * 不会因为将来有人在中间加 early return 而漏删。
+	 *
+	 * @param string $path     路径。
+	 * @param string $original 原始内容。
+	 * @param string $updated  新内容。
+	 * @return array{ok:bool,message:string}
+	 */
+	private function apply_wp_config( $path, $original, $updated ) {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 		if ( false === @file_put_contents( $path, $updated ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 			return array(
@@ -456,15 +493,39 @@ final class AdvancedCache {
 			);
 		}
 
-		$this->logger->info( 'wp-config.php 已更新', array( 'backup' => $backup ) );
+		$this->logger->info( 'wp-config.php 已更新（临时备份已删除）' );
 
 		return array(
 			'ok'      => true,
-			'message' => sprintf(
-				/* translators: %s: backup file path */
-				__( '已启用 WP_CACHE。原文件已备份至 %s。', 'at8-site-accelerator' ),
-				basename( $backup )
-			),
+			'message' => __( '已启用 WP_CACHE。', 'at8-site-accelerator' ),
+		);
+	}
+
+	/**
+	 * 删除 wp-config.php 的临时备份。
+	 *
+	 * 用 `unlink()` 而不是 `wp_delete_file()`：这个文件在站点根目录下、且刚刚
+	 * 由本方法自己创建，WP 的文件 API 会额外做路径规范化与 `is_readable()` 探测，
+	 * 对"必须删掉否则泄露凭据"这个诉求反而可能因为一次 stat 失败而静默跳过。
+	 *
+	 * 删除失败只记日志不报错 —— 写入本身已经成功，不该因为收尾动作让用户以为
+	 * 整次操作失败。但失败要**大声记录**，因为那意味着磁盘上多了一份明文凭据。
+	 *
+	 * @param string $backup 临时备份路径。
+	 * @return void
+	 */
+	private function discard_wp_config_backup( $backup ) {
+		if ( ! file_exists( $backup ) ) {
+			return;
+		}
+
+		if ( @unlink( $backup ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			return;
+		}
+
+		$this->logger->error(
+			'wp-config.php 临时备份删除失败，磁盘上可能残留明文凭据文件，请手动删除',
+			array( 'backup' => $backup )
 		);
 	}
 

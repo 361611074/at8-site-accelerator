@@ -72,7 +72,14 @@ final class Config {
 			'salt'            => $this->factory->salt(),
 			'cache_root'      => AT8SA_CACHE_ROOT,
 			'cache_mobile'    => (int) $settings->is_on( 'cache_mobile' ),
-			'cache_logged_in' => (int) $settings->is_on( 'cache_logged_in' ),
+			// 恒为 0：登录用户缓存已在 3.0.5 移除。
+			//
+			// 这里**不能**改回 `$settings->is_on( 'cache_logged_in' )`。老站点的
+			// `at8sa_settings` 里可能已经存着 `cache_logged_in => 1`，若照读，
+			// 升级后仍会走进登录态缓存；而缓存 key 只有「站点盐 + host + URI +
+			// 移动标记」，**没有任何用户维度**，等于用户 A 写、用户 B 读。
+			// 硬钉 0 是让历史配置失效的唯一可靠办法。
+			'cache_logged_in' => 0,
 			'ttl'             => (int) $settings->get( 'cache_ttl', 3600 ),
 			'excluded_paths'  => $this->excluded_paths(),
 			'bypass_cookies'  => $this->bypass_cookies(),

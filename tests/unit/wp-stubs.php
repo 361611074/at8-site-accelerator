@@ -667,6 +667,24 @@ function get_current_blog_id() {
 }
 
 function get_current_screen() {
+	/*
+	 * 行为级测试需要控制「当前在哪个后台页面」，因此这里读全局而不是写死。
+	 *
+	 * 写死成 `toplevel_page_at8-site-accelerator` 的后果是：
+	 * 任何「通知会不会跑到别的页面上去」的测试都测不到真实分支——
+	 * 桩让所有页面都长成设置页，断言就恒真。第二轮整改恰好就是要治这个，
+	 * 所以这里必须做成可注入的：`$GLOBALS['at8sa_test_screen_id']`
+	 * 未设置时保持原默认（= 插件自己的设置页），已设置时返回对应 screen；
+	 * 显式设为 null 时返回 null，模拟「拿不到 screen」的 AJAX / REST 上下文。
+	 *
+	 * @return object|null
+	 */
+	if ( array_key_exists( 'at8sa_test_screen_id', $GLOBALS ) ) {
+		$id = $GLOBALS['at8sa_test_screen_id'];
+
+		return null === $id ? null : (object) array( 'id' => $id );
+	}
+
 	return (object) array( 'id' => 'toplevel_page_at8-site-accelerator' );
 }
 

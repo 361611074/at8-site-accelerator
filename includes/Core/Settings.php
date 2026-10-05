@@ -76,7 +76,7 @@ final class Settings {
 			'advanced_cache'         => 1,
 			'cache_backend'          => 'auto',
 			'cache_ttl'              => 3600,
-			'cache_logged_in'        => 0,
+			// 'cache_logged_in' 于 3.0.5 移除，登录用户一律不进公共缓存。
 			'cache_mobile'           => 1,
 			'exclude_urls'           => '',
 			'bypass_cookies'         => '',
@@ -162,7 +162,9 @@ final class Settings {
 		return array(
 			'page_cache',
 			'advanced_cache',
-			'cache_logged_in',
+			// 'cache_logged_in' 已在 3.0.5 移除（缓存键无用户维度，登录态共享会越权）。
+			// 从白名单里去掉后，`sanitize()` 重建数组时不会再写这个键，
+			// 用户下次保存设置即完成历史数据清理。
 			'cache_mobile',
 			'purge_home_on_save',
 			'preload_enable',

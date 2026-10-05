@@ -4,7 +4,7 @@ Tags: cache, page cache, redis, lazy load, webp
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 3.0.4
+Stable tag: 3.0.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -32,7 +32,7 @@ Once "advanced cache" is enabled, the plugin writes `wp-content/advanced-cache.p
 
 = Modules =
 
-**1. Page cache** - full-page caching, TTL, separate mobile variant, whether to cache logged-in users, URL/cookie/query-argument bypass rules.
+**1. Page cache** - full-page caching, TTL, separate mobile variant, URL/cookie/query-argument bypass rules. Logged-in visitors are always excluded from the shared cache.
 
 **2. Invalidation strategy** - surgical invalidation (default) or full purge; whether saving a post should also purge the home page.
 
@@ -64,9 +64,21 @@ Once "advanced cache" is enabled, the plugin writes `wp-content/advanced-cache.p
 
 * It will not modify WordPress core files.
 * It will not overwrite your `.htaccess` (it only gives you rule snippets; you decide whether to apply them).
+* It will not leave a copy of `wp-config.php` on disk. When the plugin enables `WP_CACHE`, the original is written to a temporary file that is deleted as soon as the change has been verified - whether it succeeded or was rolled back.
+* It will not cache pages for logged-in users.
 * It will not delete your settings or cache on deactivation.
 * It will not delete your data on uninstall unless you explicitly turn off "keep data on uninstall".
 * It does not use `FLUSHDB`, does not use `eval`, and does not call any shell command.
+* It contains no licence key check, no activation server, and no code that downloads or installs anything.
+* It contacts no external server. The only outbound link is the optional Pro information link on the plugin's own settings screen, and it is a normal link you have to click.
+
+== Pro Version ==
+
+AT8 Site Accelerator has an optional Pro edition that adds licence management, manual cache preheating and single-post post-publish preheating.
+
+The Free edition is complete on its own: it is not a demo, nothing is locked after a trial period, and no feature asks for a purchase. Pro is installed separately, at your own initiative, by uploading it through the normal WordPress plugin installer.
+
+[AT8 Site Accelerator Pro](https://www.at8.fun/product/at8-site-accelerator-pro/)
 
 == Installation ==
 
@@ -88,11 +100,23 @@ That is by design - see "Why surgical invalidation" above. If you really want a 
 
 No. Every key carries a per-site salt prefix - the plugin's own namespace plus the site's blog ID, its home URL and the cache version - so invalidation only deletes keys under this site's prefix, and `FLUSHDB` does not appear anywhere in the codebase.
 
+= Why don't logged-in visitors get the page cache anymore? =
+
+Because a cache entry is not tied to a specific person. Caching a page for a signed-in visitor would mean one visitor could be served a page that was generated for another. Since 3.0.5 signed-in visitors always bypass the cache, and the old "also cache logged-in users" switch has been removed together with its stored setting.
+
 = Is Multisite supported? =
 
 Yes. Each site gets its own cache directory and its own Redis key prefix.
 
 == Changelog ==
+
+= 3.0.5 =
+* Fixed: **enabling "WP_CACHE" used to leave a readable copy of your `wp-config.php` on the web server.** That file contains your database password, your four secret keys and all eight salts, and the copy sat next to the original where any visitor - or any bot - could have asked for it. The original is now only ever written to a temporary file that is deleted the moment the change has been checked, whether it was applied or rolled back.
+* Fixed: **plugin notices were shown on every admin screen.** They are now limited to this plugin's own settings screen plus the Plugins and Dashboard screens, so nothing appears on other plugins' pages or on your posts, media, users or tools screens.
+* Removed: **the "also cache pages for logged-in visitors" option.** The cache key did not contain anything visitor-specific, so one visitor's page could have been handed to another. Logged-in visitors are now always excluded from the shared cache, and the option is gone from the settings screen.
+* Fixed: a request with a `Host` header of "." or ".." could have made the plugin read and write cache files outside its own cache directory. Host names are now normalised, and such values are rejected.
+* Added: a read-only "Pro" tab on the settings screen with a short description and a link. It is static text - no popup, no automatic download, no tracking, and no notice anywhere else in the admin.
+* Verified with the full test suite: 318 checks pass, including new checks for every item above.
 
 = 3.0.4 =
 * Fixed: **the plugin no longer overwrites another caching plugin's `advanced-cache.php`.** That file is a single shared slot, and previously merely activating this plugin would silently replace a drop-in left there by WP Super Cache, W3 Total Cache, LiteSpeed Cache or a host environment. Installation is now skipped whenever the existing file does not belong to this plugin, and the reason is shown instead of failing quietly. Removal was already restricted to the plugin's own file and still is.
@@ -141,6 +165,9 @@ Yes. Each site gets its own cache directory and its own Redis key prefix.
 The full technical change list (including the reason behind every fix) is in `CHANGELOG.md` at the root of the repository.
 
 == Upgrade Notice ==
+
+= 3.0.5 =
+Recommended for every 3.0.4 user. This release removes a leftover copy of `wp-config.php` that could expose your database password and secret keys, stops plugin notices from appearing across the whole admin, and removes the option that allowed logged-in visitors to share cached pages. If you were using "cache logged-in users", the cached pages built with it are discarded automatically - after this update, logged-in visitors always bypass the cache. No action is required.
 
 = 3.0.3 =
 Recommended for all users, especially sites running WooCommerce. Fixes a case where the shopping-cart cookie stopped being honoured by the cache, so a page that should never have been cached could be stored. No settings changes are needed.

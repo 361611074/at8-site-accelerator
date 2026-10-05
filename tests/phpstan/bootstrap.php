@@ -35,7 +35,7 @@ if ( ! defined( 'AT8SA_BASENAME' ) ) {
 	define( 'AT8SA_BASENAME', 'at8-site-accelerator/at8-site-accelerator.php' );
 }
 if ( ! defined( 'AT8SA_VERSION' ) ) {
-	define( 'AT8SA_VERSION', '3.0.1' );
+	define( 'AT8SA_VERSION', '3.0.5' );
 }
 // 这里刻意用字面量而不是拼接 WP_CONTENT_DIR / WP_CONTENT_URL：
 // 后者在 wordpress-stubs 里并不保证存在，会让引导文件自己抛

@@ -243,6 +243,7 @@ final class SettingsPage {
 			'database' => __( '数据库', 'at8-site-accelerator' ),
 			'compat'   => __( '兼容与诊断', 'at8-site-accelerator' ),
 			'tools'    => __( '工具', 'at8-site-accelerator' ),
+			'pro'      => __( '高级版', 'at8-site-accelerator' ),
 		);
 	}
 

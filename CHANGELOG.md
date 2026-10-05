@@ -6,6 +6,146 @@
 
 ---
 
+## 3.0.5 — 第二轮 WordPress.org 审核整改 + Free / Pro 架构定稿
+
+> 起因：3.0.4 通过 Plugin Review 后，按第二轮规范继续自查。
+> 本轮重点不是"改到扫描器变绿"，而是清掉三类会被下一轮审核盯上的问题：
+> 凭据落盘、后台作用域、越权缓存；同时按规范建立**基于真实代码**的 Free / Pro 矩阵，
+> 并加入克制的 Pro 介绍（仅静态文案 + 一个链接）。
+> 自测矩阵：冒烟测试 318 项全通过（原 297 项，本次新增 21 项整改专项断言），
+> **新增行为级集成验收 70 项**（`tests/unit/round2-integration.php`），
+> PHPUnit 212 项全通过，PHPStan level 5 零错误，PHPCS 42/42 文件零告警，
+> `E_ALL` 下 stderr 为 0 字节（零 Warning / Notice / Deprecated / Fatal）。
+>
+> 为什么新写一套集成验收而不是只用冒烟测试：冒烟证明的是「源码里写了 if」，
+> 而这三项P0/P1 需要证明的是「if 真的会拦」。集成验收用真实调用把它们钉住：
+> 逐个渲染 41 个非本插件后台页面确认零输出、真实写/校验失败回滚/停用
+> `wp-config.php` 三条路径后确认磁盘无`.at8sa*` 残留、用 `realpath()` 实测
+> 恶意 `Host` 无法把路径解析到缓存根之外。
+
+### P0-1：禁止持久化 `wp-config.php` 明文备份
+
+**问题**：`AdvancedCache::write_wp_config()` 在改写 `wp-config.php` 前，
+把原文长期留在 `wp-config.php.at8sa.bak`。该文件位于 Web Root，可被任意 HTTP 请求读取，
+而 `wp-config.php` 内含数据库密码、4 个 SECRET KEY 与 8 个 SALT。这是本轮最严重的问题——
+比"缓存投毒"更直接，因为它把凭据整份交出去。
+
+**修复**：按规范 20.2 的推荐流程实现「临时备份 → 改写 → 校验 → 删除」：
+
+| 方法 | 职责 |
+|---|---|
+| `write_wp_config()` | 建临时备份 → 调 `apply_wp_config()` → **无条件**调`discard_wp_config_backup()` |
+| `apply_wp_config()` | 写入 → 校验（`WP_CACHE` 已定义且可回滚）→ 不通过则回滚 |
+| `discard_wp_config_backup()` | `file_exists` + `@unlink`，失败只写 error 日志、不阻断 |
+
+关键设计：清理只有**一个出口**，因此不存在"写入成功但备份没删"的分支。
+临时文件后缀由 `.at8sa.bak` 改为 `.at8sa.tmp`，语义上就不再可能被误当成长期备份。
+用户提示文案也不再告知备份文件名（避免引导用户去找/保留它）。
+
+### P0-2：`admin_notices` 作用域收窄
+
+**问题**：`Notices` 类挂全局 `admin_notices`，只在排除自己页面后渲染——
+等于在**所有其他后台页面**（文章、媒体、用户、工具、设置、其他插件页）都显示插件通知。
+这是 Guidelines 第 11 条"不得劫持后台"的典型形态，也是审核员最反感的一类。
+
+**修复**：新增 `is_allowed_screen()` 白名单方法，`render()` 入口立即校验：
+
+```php
+$allowed = array(
+    'toplevel_page_' . SettingsPage::SLUG,
+    'plugins',
+    'dashboard',
+);
+return in_array( $screen->id, $allowed, true );
+```
+
+`get_current_screen()` 返回空（前端/AJAX/CLI）时直接 `false`，不做任何输出。
+
+### P1-1：彻底移除 `cache_logged_in`（越权缓存）
+
+**问题**：缓存键 `redis_key( $salt, $host, $uri, $mobile )` 不含任何用户维度。
+一旦允许登录用户进入共享缓存，用户 A 登录后的页面会被存进公共键，用户 B 读取到 A 的页面。
+这是规范 22.2 描述的场景，属于**设计层面的越权**，不是配置疏漏。
+
+**修复**：不提供"安全实现"，直接取消该能力并清理全部遗留：
+
+| 文件 | 处理 |
+|---|---|
+| `Cache/CacheEngine.php` | `is_user_logged_in()` 改为**无条件** `return false`；WooCommerce 判定不再依赖该键 |
+| `Cache/Config.php` | `'cache_logged_in' => 0` **硬钉**，防止老站数据库里存着 `1` 继续生效 |
+| `Cache/RequestGuard.php` | `has_auth_cookie()` 改为无条件触发绕过 |
+| `Core/Settings.php` | 从 `defaults()` 与 `boolean_keys()` 移除，用户下次保存即清理历史数据 |
+| `templates/settings-page.php` | 删除该开关，说明文案补充「登录用户始终不进入公共缓存」 |
+
+### P1-2：Host Header 缓存投毒
+
+**问题**：`CachePath::normalize_host()` 的产物直接成为**磁盘目录名**与 **Redis 键**。
+原实现只过滤字符集 `[a-z0-9.\-:_]`，而纯点值 `.` / `..` 完全由白名单字符组成，
+可通过字符过滤直达 `realpath()`——`Host: ..` 实测确实逃出缓存根目录。
+
+**修复**：加 `rtrim( $host, '.-' )` 剥掉结尾点，并把纯点值降级为 `unknown-host`：
+
+```php
+$host = preg_replace( '/[^a-z0-9.\-:_]/', '_', $host );
+$host = rtrim( (string) $host, '.-' );
+if ( '' === $host || '.' === $host || '..' === $host ) {
+    return 'unknown-host';
+}
+```
+
+> 补充教训：本次验证脚本自身曾误报一次——把归一化后的字面量 `.._.._evil`
+> 中的 `..` 当成目录穿越。严格用 `realpath()` 复测证明路径穿越不成立（斜杠已被替换），
+> 但换到真实存在目录里测`Host: ..` 立刻暴露真漏洞。**结论：静态推理必须用 `realpath()`落地验证。**
+
+### P1-3：三项复核确认无需改动
+
+| 项 | 复核结论 |
+|---|---|
+| WebP 能力检测 | 3.0.4 已按格式逐项检测 GD 能力，无能力即跳过，不 Fatal |
+| Mobile `Vary` | `CacheEngine::send_header()` 与 drop-in HIT 分支条件完全一致，统一出口已闭环 |
+| 后台 CSS scope | 全部规则已 scoped 到 `.at8sa-wrap`，无裸 `body` / `.notice` 选择器 |
+
+### 顺手发现并修掉的文档失真
+
+P0-1 改完之后，全项目搜 `wp-config` 相关文案，发现三处仍在告诉用户
+"会（自动）备份 wp-config.php"：`Notices.php` 的提示语、设置页工具卡说明、
+`AdvancedCache` 的类级文档。这不只是文案过时——它会让用户**主动去找那个备份文件**
+并保留下来，等于把刚修掉的风险又请回来。三处已统一为"临时备份、校验后立即删除"。
+
+### 本轮的方法论教训
+
+第 3～7 次误判全部来自同一个动作：**先写断言，再猜产品行为**。四次修法：
+
+| 误判 | 真实情况 | 修法 |
+|---|---|---|
+| 目录排除失效导致 vendor 命中 | Windows 路径分隔符是 `\` | 路径先归一化再排除 |
+| `.example.com` 应归一为 `example.com` | 前导点无害，剥掉反会让不同 Host 撞进同一目录 | 改期望值，并保留 realpath 实测作证据 |
+| CSS 有未作用域选择器 | `.at8sa-wrap h1` 里的 `h1` 本就在作用域内 | 判定规则改为「任意一段带 `.at8sa-` 即算限住」 |
+| `!important` 违规 1 处 | 命中的是注释里"禁止使用 !important"这句中文 | 检查前先剥注释 |
+| wp-config 校验失败 | 手拼的内容缺 `WP_CACHE_MARKER`，没过可逆性检查 | 改调真实的 `enable_wp_cache()`，别自己拼 |
+
+**规律**：验证代码行为时，要么调真实入口，要么让断言的期望值来自真实契约；
+自己拼输入 + 自己猜期望，等于同时放弃了两个信息源。
+
+### Free / Pro 架构定稿
+
+**功能矩阵**：原 `docs/FREE_PRO_MATRIX.md` 写的是规划意图（含 Critical CSS、AVIF、白标等
+代码里根本不存在的功能），已移出为 `docs/FREE_PRO_ROADMAP.md`，
+矩阵文件按 Pro 仓库实际代码重写。审计结论分两类，这点必须诚实：
+
+- Pro **开箱可用** 3 项：许可证管理、手动缓存预热、发布后单条预热
+- Pro **代码存在但不可用** 6 项：JS 延迟、CDN 接入、CSS/JS 压缩、高级数据库分析、性能趋势、自定义清理规则
+
+**Pro 介绍**：新增「高级版」标签页（`SettingsPage::tabs()` 加 `pro` 键），
+内容为静态说明 + 一个普通外链，落在 `templates/settings-page.php` 的 `data-panel="pro"`。
+刻意**没有**做：全局 `admin_notices` 广告、激活弹窗、`utm_*` / affiliate 参数、iframe 嵌入、远程请求。
+
+**Free 独立性**：`tests/unit/smoke.php` 新增 6 条断言，把规范第十三、十四、三十六节
+变成可执行约束——Free 包内不含 `download_url` / `Plugin_Upgrader` / `eval(` / `unzip_file` /
+`wp_remote_post`，不含任何 `license_*` 校验代码。
+
+---
+
 ## 3.0.4 — WordPress.org Plugin Review 整改
 
 > 起因：WordPress.org Plugin Review Team 的 AUTOPREREVIEW 提出 8 项 P0。

@@ -1045,7 +1045,21 @@ check( '已写入 WP_CACHE 为 true', false !== strpos( $after, "define( 'WP_CAC
 check( '已写入归属标记', false !== strpos( $after, AdvancedCache::WP_CACHE_MARKER ) );
 check( '原有 salt 未被破坏', false !== strpos( $after, 'NONCE_SALT' ) && false !== strpos( $after, 'oLQghWCYC5z' ) );
 check( 'DB_PASSWORD 含括号未受影响', false !== strpos( $after, 'p@ss{word}' ) );
-check( '已生成备份文件', is_file( $wp_config_path . '.at8sa.bak' ) );
+
+// wp-config.php 里是数据库密码、4 个 KEY 与 8 个 SALT。任何以明文形式留在
+// Web Root 里的副本，都能被 `https://站点/wp-config.php.at8sa.bak` 直接下载走。
+// 所以这里断言的是**没有残留**，而不是"有备份"——这正是 3.0.5 改掉的行为。
+check(
+	'wp-config 临时备份用完即删，不留明文凭据',
+	! is_file( $wp_config_path . '.at8sa.bak' ) && ! is_file( $wp_config_path . '.at8sa.tmp' )
+);
+
+// 目录里连一个以 .at8sa 开头的残留文件都不该有（防止将来换后缀名时又漏掉）。
+$at8sa_strays = glob( $wp_config_path . '.at8sa*' );
+check(
+	'wp-config 目录无任何 .at8sa* 残留文件',
+	is_array( $at8sa_strays ) && array() === $at8sa_strays
+);
 
 // 可逆性：删掉带标记的整行必须精确还原原文。
 $stripped = preg_replace(
@@ -1541,7 +1555,7 @@ $rendered = ob_get_clean();
 check( '模板渲染无致命错误', is_string( $rendered ) && strlen( $rendered ) > 5000, '长度 ' . strlen( $rendered ) );
 check( '模板输出了表单', false !== strpos( $rendered, 'options.php' ) );
 check( '模板输出了所有标签页', 7 === substr_count( $rendered, 'class="at8sa-tab"' ), substr_count( $rendered, 'class="at8sa-tab"' ) );
-check( '模板输出了所有面板', 7 === substr_count( $rendered, 'data-panel=' ), substr_count( $rendered, 'data-panel=' ) );
+check( '模板输出了所有面板', 8 === substr_count( $rendered, 'data-panel=' ), substr_count( $rendered, 'data-panel=' ) );
 check( '模板未泄漏 PHP 标签', false === strpos( $rendered, '<?php' ) );
 check( '模板转义了设置值', false === strpos( $rendered, '<script>alert(1)</script>' ) );
 
@@ -2000,6 +2014,53 @@ check(
 	''
 );
 
+// ── 第二轮审核 P1：登录用户缓存必须已被彻底移除 ──
+//
+// 缓存键只有「站点盐 + host + URI + 移动标记」，**没有用户维度**。只要登录态
+// 能进公共缓存，就是用户 A 写、用户 B 读。这几条锁死"该功能不存在"，
+// 防止日后有人看到`defaults` 里没有这个键、以为是漏掉了而"补回来"。
+$at8sa_config_src = (string) file_get_contents( AT8SA_PATH . 'includes/Cache/Config.php' );
+$at8sa_guard_src= (string) file_get_contents( AT8SA_PATH . 'includes/Cache/RequestGuard.php' );
+$at8sa_engine_src = (string) file_get_contents( AT8SA_PATH . 'includes/Cache/CacheEngine.php' );
+$at8sa_settings_src = (string) file_get_contents( AT8SA_PATH . 'includes/Core/Settings.php' );
+
+// 剥掉注释后再查，避免把说明文字当成真实引用。
+$at8sa_strip = static function ( $code ) {
+	return (string) preg_replace( array( '#/\*.*?\*/#s', '#//[^\n]*#' ), '', $code );
+};
+
+$at8sa_config_code = $at8sa_strip( $at8sa_config_src );
+$at8sa_engine_code = $at8sa_strip( $at8sa_engine_src );
+$at8sa_settings_code = $at8sa_strip( $at8sa_settings_src );
+
+check(
+	'运行配置里 cache_logged_in 恒为 0（历史配置无法再开启登录态缓存）',
+	preg_match( "/'cache_logged_in'\s*=>\s*0\s*,/", $at8sa_config_code ) > 0
+		&& false === strpos( $at8sa_config_code, "is_on( 'cache_logged_in' )" )
+);
+
+check(
+	'登录用户无条件不进公共缓存（CacheEngine 不再看该开关）',
+	false === strpos( $at8sa_engine_code, "is_on( 'cache_logged_in' )" )
+);
+
+check(
+	'drop-in 放行判定不再受该开关控制（无条件绕过登录态）',
+	false === strpos( $at8sa_strip( $at8sa_guard_src ), "empty( \$config['cache_logged_in'] )" )
+);
+
+check(
+	'设置项白名单已移除 cache_logged_in（保存时自动清理历史数据）',
+	preg_match( '/boolean_keys\(\).*?array\((.*?)\)/s', $at8sa_settings_code, $at8sa_bk )
+		&& false === strpos( $at8sa_bk[1], 'cache_logged_in' )
+);
+
+// 设置页不该再露出这个开关。
+check(
+	'设置页不再提供「为登录用户缓存」开关',
+	false === strpos( (string) file_get_contents( AT8SA_PATH . 'templates/settings-page.php' ), "at8sa_toggle( 'cache_logged_in'" )
+);
+
 // 卸载路径同样必须有归属校验（只能删自己的）。
 $at8sa_uninstall_src = (string) file_get_contents( AT8SA_PATH . 'uninstall.php' );
 
@@ -2267,6 +2328,98 @@ foreach ( explode( "\n", strip_php_comments( $at8sa_admin_css ) ) as $line ) {
 
 check( '后台 CSS 无全局元素选择器', empty( $at8sa_global_sel ), implode( ' | ', $at8sa_global_sel ) );
 
+// ── 第二轮：Free / Pro 合规边界（规范第四十六节「绝对禁止事项」）──
+//
+// Free 版的 Pro 宣传必须**静态化**：只在自己设置页里放一段说明 + 一个链接。
+// 下面这几条把"禁止项"变成可执行的断言，防止日后有人顺手加个全局横幅。
+
+$at8sa_pro_settings = (string) file_get_contents( AT8SA_PATH . 'templates/settings-page.php' );
+$at8sa_pro_code     = $at8sa_strip( $at8sa_pro_settings );
+
+// 1. Pro 介绍必须存在，且在自己的设置页内。
+check(
+	'Pro 介绍区存在于插件自己的设置页',
+	false !== strpos( $at8sa_pro_settings, 'data-panel="pro"' )
+		&& false !== strpos( $at8sa_pro_settings, 'at8-site-accelerator-pro' )
+);
+
+// 2. 链接必须是明确的真实产品页，且新窗口打开要带 noopener（防止 window.opener 被利用）。
+check(
+	'Pro 链接指向明确产品页且带 noopener',
+	false !== strpos( $at8sa_pro_settings, 'https://www.at8.fun/product/at8-site-accelerator-pro/' )
+		&& preg_match( '/rel="[^"]*noopener/', $at8sa_pro_settings ) > 0
+);
+
+// 3. 禁止隐藏跳转 / 追踪参数。
+check(
+	'Pro 链接无跳转中间层与追踪参数',
+	false === strpos( $at8sa_pro_code, 'bit.ly' )
+		&& false === stripos( $at8sa_pro_code, 'utm_' )
+		&& false === stripos( $at8sa_pro_code, 'affiliate' )
+		&& false === stripos( $at8sa_pro_code, 'tracking_id' )
+);
+
+// 4. Free 版不得自动下载 / 安装 / 远程执行任何东西。
+//    （tools/benchmark 里的 wp_remote_get 是压测工具、不进发行包，已被 build-zip 白名单排除）
+$at8sa_shipped = array();
+$at8sa_it      = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( AT8SA_PATH, FilesystemIterator::SKIP_DOTS ) );
+foreach ( $at8sa_it as $at8sa_f ) {
+	if ( strtolower( $at8sa_f->getExtension() ) !== 'php' ) {
+		continue;
+	}
+	// 先把路径统一成正斜杠，保证 Windows 与 Linux 上行为一致。
+	$at8sa_abs = str_replace( '\\', '/', $at8sa_f->getPathname() );
+	$at8sa_rel = '/' . ltrim( str_replace( rtrim( str_replace( '\\', '/', AT8SA_PATH ), '/' ), '', $at8sa_abs ), '/' );
+	// 排除不进包的开发目录（本测试文件与vendor 也在其中，避免关键字自匹配）。
+	if ( preg_match( '#/(tests|tools|vendor|docs|dist|node_modules|\.git|\.github)(/|$)#', $at8sa_rel ) ) {
+		continue;
+	}
+	$at8sa_shipped[ $at8sa_rel ] = $at8sa_strip( (string) file_get_contents( $at8sa_f->getPathname() ) );
+}
+
+$at8sa_forbidden = array(
+	'download_url'      => '下载插件 ZIP',
+	'Plugin_Upgrader'   => '调用插件安装器',
+	'eval('             => '动态执行代码',
+	'unzip_file'        => '解压下载包',
+	'wp_remote_post'    => '向外发送数据',
+);
+$at8sa_hits = array();
+foreach ( $at8sa_shipped as $at8sa_rel => $at8sa_code ) {
+	foreach ( $at8sa_forbidden as $at8sa_kw => $at8sa_why ) {
+		if ( false !== strpos( $at8sa_code, $at8sa_kw ) ) {
+			$at8sa_hits[] = $at8sa_rel . ' => ' . $at8sa_kw . '（' . $at8sa_why . '）';
+		}
+	}
+}
+
+check(
+	'Free 版无远程安装 / 动态执行代码的能力',
+	empty( $at8sa_hits ),
+	implode( ' | ', $at8sa_hits )
+);
+
+// 5. Free 版不得含任何授权 / 许可校验代码。
+$at8sa_license_hits = array();
+foreach ( $at8sa_shipped as $at8sa_rel => $at8sa_code ) {
+	if ( preg_match( '/\b(license_key|license_server|activate_license|deactivate_license|license_api)\b/', $at8sa_code ) ) {
+		$at8sa_license_hits[] = $at8sa_rel;
+	}
+}
+
+check(
+	'Free 版不含任何 License 校验代码',
+	empty( $at8sa_license_hits ),
+	implode( ' | ', $at8sa_license_hits )
+);
+
+// 6. 后台提示必须有 screen 白名单（已在下面单独断言，这里确保 Pro 面板不会
+//    顺带把 Notices 的作用域放开）。
+check(
+	'Pro 介绍仅限设置页，未改动全局通知作用域',
+	false === strpos( $at8sa_pro_settings, 'admin_notices' )
+);
+
 // admin_notices 不得全站无差别弹（须有 screen 守卫）。
 $at8sa_notices_src = at8sa_source_by_suffix( $php_files, '/Admin/Notices.php' );
 
@@ -2280,6 +2433,99 @@ check(
 	'后台提示在插件自身页面不重复显示',
 	false !== strpos( $at8sa_notices_src, 'toplevel_page_' ),
 	''
+);
+
+// 第二轮 P0-2：Notices 走的是全局 `admin_notices` 钩子，一旦缺少 screen 白名单，
+// 就会在**每一个**后台页面（含别人的插件页）插入 AT8 的横幅 —— 目录指南 11
+// 明令禁止的"劫持后台"。这里断言白名单机制存在且可静态识别。
+check(
+	'后台提示有 screen 白名单守卫（is_allowed_screen）',
+	false !== strpos( $at8sa_notices_src, 'is_allowed_screen' )
+);
+
+check(
+	'后台提示在 render() 入口就做 screen 白名单校验',
+	preg_match(
+		'/public function render\(\).*?is_allowed_screen\(\)/s',
+		$at8sa_notices_src
+	) > 0,
+	''
+);
+
+// 白名单只能列本插件自己的页面；一旦有人把 'index.php'（仪表盘之外的
+// 通用兜底）等其它页面的 id 加进去，这条就会失败。
+check(
+	'后台提示白名单只含插件自身页面',
+	preg_match( '/function is_allowed_screen\(\).*?\$allowed\s*=\s*array\((.*?)\)\s*;/s', $at8sa_notices_src, $at8sa_wl )
+		&& false !== strpos( $at8sa_wl[1], 'toplevel_page_' )
+		&& false === strpos( $at8sa_wl[1], "'index.php'" ),
+	''
+);
+
+// ── 第二轮 P1：Host Header 不得让缓存写出缓存根目录 ──
+//
+// `normalize_host()` 的产物会直接变成目录名。斜杠/反斜杠已被替换成 `_`，
+// 所以 `../../evil` → `.._.._evil` 里的 `..` 是普通字符、不是目录跳转；
+// 但**纯点值** `.` / `..` 全由白名单字符组成，会被放行，
+// 于是 `Host: ..` 能让缓存真的落到缓存根目录之外。
+$at8sa_norm = static function ( $host ) {
+	// 复刻 CachePath 的白名单替换与 rtrim 之外的拦截逻辑。
+	$h = strtolower( trim( (string) $host ) );
+	if ( '' === $h ) {
+		return 'unknown-host';
+	}
+	$h = preg_replace( '/[^a-z0-9.\-:_]/', '_', $h );
+	$h = rtrim( (string) $h, '.-' );
+	if ( '' === $h || '.' === $h || '..' === $h ) {
+		return 'unknown-host';
+	}
+	return substr( $h, 0, 190 );
+};
+
+$at8sa_path_code = $at8sa_strip( (string) file_get_contents( AT8SA_PATH . 'includes/Cache/CachePath.php' ) );
+
+// 纯点值必须被降级成占位名。
+check(
+	'Host 纯点值被拦截（否则缓存目录会逃出根目录）',
+	'unknown-host' === $at8sa_norm( '.' ) && 'unknown-host' === $at8sa_norm( '..' ),
+	'实际: ' . $at8sa_norm( '.' ) . ' / ' . $at8sa_norm( '..' )
+);
+
+// 拦截逻辑必须真的写在源码里（防止只改测试没改实现）。
+check(
+	'normalize_host 源码含纯点值拦截',
+	preg_match( "/'\.'\s*===\s*\\\$host/", $at8sa_path_code ) > 0
+		&& preg_match( "/'\.\.'\s*===\s*\\\$host/", $at8sa_path_code ) > 0
+);
+
+// 结尾的点要剥掉，否则 `example.com.` 与 `example.com` 在部分文件系统上会撞同一个目录。
+check(
+	'Host 结尾点被剥离（避免文件系统归一化后撞目录）',
+	'example.com' === $at8sa_norm( 'example.com.' )
+);
+
+// 回归：正常 host 必须照常工作，否则缓存命中率会塌。
+check(
+	'Host 归一化未破坏正常域名',
+	'example.com' === $at8sa_norm( 'example.com' )
+		&& 'example.com' === $at8sa_norm( 'EXAMPLE.COM' )
+		&& 'example.com:8080' === $at8sa_norm( 'example.com:8080' )
+		&& 'sub.example.com' === $at8sa_norm( 'sub.example.com' )
+);
+
+// 路径穿越：斜杠被替换后不得再具备跳转能力。
+$at8sa_traversal = $at8sa_norm( '../../evil' );
+check(
+	'Host 路径穿越输入被消解为无害字符串',
+	false === strpos( $at8sa_traversal, '/' )
+		&& false === strpos( $at8sa_traversal, '\\' )
+);
+
+// 拿不到 screen 的上下文必须不显示（宁可少提示，不可乱弹）。
+// 用正则而非精确字符串：phpcbf 可能调整空白，锁死字面量会误报。
+check(
+	'后台提示拿不到 screen 时不显示',
+	preg_match( '/if\s*\(\s*!\s*\$screen\s*\)/', $at8sa_notices_src ) > 0
 );
 
 // ── 20b-9. 激活流程必须零输出 ──

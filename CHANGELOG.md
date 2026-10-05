@@ -14,19 +14,41 @@
 ### 修复 1：`unlink_unlink` ERROR（会阻断审核）
 
 `includes/Cache/AdvancedCache.php` 的 `discard_wp_config_backup()` 直接用
-`@unlink()` 删wp-config.php 的临时备份，被判`WordPress.WP.AlternativeFunctions.unlink_unlink`。
+`@unlink` 删 wp-config.php 的临时备份，被判
+`WordPress.WP.AlternativeFunctions.unlink_unlink`。
 
-**没有选择"加个 `phpcs:ignore` 了事"**，而是改成两段式删除：
+**这一项走了两次才改对，过程值得记下来：**
 
-1. 先走 `wp_delete_file()` —— 这是 WordPress 规定的文件删除入口，除了删除本身
-   还会触发 `wp_delete_file` 动作，站点的审计钩子能观测到"含凭据的文件已删除"；
-2. 失败则**兜底再 `unlink()` 一次**。
+**第一次尝试：两段式删除（失败）**
+先 `wp_delete_file()`，失败再兜底 `unlink()`，兜底行加精确豁免：
 
-第2 段为什么必须保留：`wp_delete_file()` 内部先 `is_file()` 再 `unlink()`，
-只要 stat 因任何原因失败（权限、符号链接、`open_basedir`）就直接返回 false。
-对一个"绝不能留在磁盘上"的明文凭据文件，静默跳过删除是不能接受的。
-兜底那次会跳过 stat 直接尝试删除。该行保留精确豁免
-（`phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink`）并写明理由。
+```
+// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- 理由…
+if ( @unlink( $backup ) ) { return; }
+```
+
+本地 `phpcs` 认这个注解（`--sniffs=WordPress.WP.AlternativeFunctions` 报 0 条），
+但**官方 Plugin Check 照样报 ERROR**。结论：对该 ERROR 级规则，
+**`phpcs:ignore` 注解挡不住，只要源码里出现 `unlink` 调用就报**。
+本地通过不等于过检 —— 判据只能是 Plugin Check 的实际输出。
+
+**第二次：彻底移除 `unlink`，只留 `wp_delete_file()`**
+
+放弃兜底不是妥协，是重新权衡后认为它**不值这么贵的门票**：
+
+- 本方法开头已用 `file_exists()` 确认文件可 stat，能走到删除那一步说明
+  stat 通路是好的，此时 `wp_delete_file()` 内部的 `is_file()` 同样会通过；
+- 若真是权限问题导致 `is_file()` 失败，`unlink` 也会因**同一个权限**失败；
+- 换言之兜底几乎用不上，代价却是一条阻断上架的 ERROR。
+
+降级方式改为**大声告警**：删除失败时记 error 日志点名残留文件路径，
+站长能手动清掉。不是静默跳过，仍有可观测、可处理的出口。
+注释里已写明这段反转的来龙去脉，避免日后有人"善意地"把兜底加回来。
+
+**另修一处误导性注释**：`remove_dropin()` 里写着
+"`wp_delete_file()` 没有返回值" —— 真实 WP 是返回 bool 的。
+原代码用 `clearstatcache()` + `! is_file()` 回查其实更稳，
+注释已改为说明"刻意不依赖返回值，改为回查真实状态"。
 
 原实现里"用 `unlink()` 而不是 `wp_delete_file()`"的注释已随之重写 —— 
 它当初的理由（怕 WP 的 stat 探测导致静默跳过）现在只适用于兜底那一段。
@@ -62,16 +84,22 @@ wp-config 明文副本已移除、通知不再全后台显示、"缓存登录用
 —— 与真实站点上的执行路径恰好相反。已改为返回 `bool`，并加两个测试开关：
 记录主路径调用次数、强制主路径失败。
 
-### 集成验收新增 2 项（67 项）
+### 集成验收新增 3 项（73 项）
 
-光断言"文件最终没了"不够 —— 两段式和裸 `unlink()` 都能让它通过。
-所以补了两条针对**走哪条路**的断言：
+光断言"文件最终没了"不够 —— 裸 `unlink` 同样能让它通过。
+所以补了针对**走哪条路**以及**失败后怎么降级**的断言：
 
 - 临时备份确实经 `wp_delete_file()` 删除（桩记录调用）；
-- 主路径被强制失败时，兜底删除仍能清掉凭据文件。
+- 测试日志开关真的生效（否则下一条读不到东西，会假通过）；
+- 强制主路径失败后，会记 error 日志点名残留文件 —— 证明不是静默跳过。
 
-这两条已做**变异测试**验证：把主路径分支删掉、退回裸 `unlink()`，
-第一条断言立刻变红 —— 证明它真的在检测执行路径，不是恒真。
+其中日志那条没法用替身：`Logger` 是 `final` 类，且
+`AdvancedCache::__construct( Logger $logger )` 有类型提示，既不能继承
+也无法鸭子类型替换。最后改成**走真实日志路径**：开日志开关 → 强制失败 →
+读日志文件增量。比替身更可信，连 `log()` 里的级别阈值判断一起测了。
+
+这三条已做**变异测试**：把 `wp_delete_file()` 换回裸 `unlink`，
+断言立刻变红 —— 证明它们真的在检测执行路径，不是恒真。
 
 ### 顺手修掉：README 引用了一个从未提交的文件
 
@@ -82,8 +110,9 @@ wp-config 明文副本已移除、通知不再全后台显示、"缓存登录用
 
 ### 自测矩阵
 
-冒烟测试 318 项、第二轮集成验收 67 项、PHPUnit 212 项（541 断言）全部通过；
-PHPCS 42/42 文件零告警；`tools/check-upgrade-notice.php` 5 个条目全部合规。
+冒烟测试 318 项、第二轮集成验收 73 项（带包 78 项）、PHPUnit 212 项（541 断言）
+全部通过；PHPCS 42/42 文件零告警；
+`tools/check-upgrade-notice.php` 5 个条目全部合规。
 
 > 本机 PHPStan 报1000+ `class.notFound`，经与改动前基线对比确认为**既有环境问题**
 > （本机 vendor 状态导致插件自身类未被索引），非本次改动引入；

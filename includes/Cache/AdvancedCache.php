@@ -263,8 +263,10 @@ final class AdvancedCache {
 		// 把一次成功的删除报成失败。
 		clearstatcache( true, $target );
 
-		// wp_delete_file() 没有返回值，用"文件是否还在"给出真实结果，
-		// 避免目录不可写时假装成功。
+		// 刻意不依赖 `wp_delete_file()` 的返回值，而是清完 stat 缓存后回查
+		// "文件是否还在"：返回值只能说明"那一次删除调用的结果"，
+		// 而回查能覆盖任何原因造成的未删除（目录不可写、文件被占用、
+		// 其它插件的 wp_delete_file 钩子改写行为），避免目录不可写时假装成功。
 		return ! is_file( $target );
 	}
 
@@ -504,18 +506,30 @@ final class AdvancedCache {
 	/**
 	 * 删除 wp-config.php 的临时备份。
 	 *
-	 * 两段式删除，不是重复劳动：
+	 * 只用 `wp_delete_file()`，不再保留 `@unlink` 兜底。
 	 *
-	 * 1. 先走 `wp_delete_file()` —— 这是 WordPress 规定的文件删除入口，除了
-	 *    `unlink()` 还会触发 `wp_delete_file` 动作，让站点自己的审计钩子能看到
-	 *    "这份含凭据的文件已被删除"。
-	 * 2. 失败则**兜底再 unlink 一次**。原因是 `wp_delete_file()` 内部先
-	 *    `is_file()` 再 `unlink()`，只要 stat 因为任何原因失败（权限、符号链接、
-	 *    open_basedir）就直接返回 false —— 而对一个"绝不能留在磁盘上"的明文
-	 *    凭据文件，静默跳过删除是不能接受的。兜底那一次会跳过 stat 直接尝试删除。
+	 * 这里经历过一次方向反转，理由必须写清楚，免得日后有人"善意地"把兜底加回来：
 	 *
-	 * 删除失败只记日志不报错 —— 写入本身已经成功，不该因为收尾动作让用户以为
-	 * 整次操作失败。但失败要**大声记录**，因为那意味着磁盘上多了一份明文凭据。
+	 * 上一版是"先 `wp_delete_file()`、失败再 `@unlink`"的两段式，动机是
+	 * `wp_delete_file()` 内部先 `is_file()` 再 `unlink`，一旦 stat 失败
+	 * （权限、符号链接、open_basedir）就返回 false，对"绝不能留在磁盘上的明文
+	 * 凭据文件"来说，静默跳过删除不能接受。
+	 *
+	 * 但实测下来这个兜底**保不住**：Plugin Check 的
+	 * `WordPress.WP.AlternativeFunctions.unlink_unlink` 是 ERROR 级硬门槛，
+	 * 只要源码里出现 `unlink` 调用就报，`phpcs:ignore` 注解挡不住
+	 * （本地 phpcs 认豁免、Plugin Check 照样报 —— 两者行为不一致）。
+	 *
+	 * 而兜底的实际收益近乎为零：本方法开头已经用 `file_exists()` 确认过文件
+	 * 可 stat，能走到这一步说明 stat 通路是好的，此时 `wp_delete_file()` 里的
+	 * `is_file()` 同样会通过；反过来说，若真是权限问题导致 `is_file()` 失败，
+	 * `unlink` 也会因为同一个权限而失败。用一个"几乎用不上的兜底"去换
+	 * 一条阻断上架的 ERROR，不划算。
+	 *
+	 * 现在的降级方式改为**大声告警**：删除失败时在日志里点名残留文件路径，
+	 * 让站长能手动清掉 —— 不是静默跳过，仍然有可观测、可处理的出口。
+	 * 另有一层兜底在更上游：临时文件只在一次请求内存活，绝大多数情况下
+	 * 它还没被扫到就已经不存在了。
 	 *
 	 * @param string $backup 临时备份路径。
 	 * @return void
@@ -525,12 +539,10 @@ final class AdvancedCache {
 			return;
 		}
 
-		if ( function_exists( 'wp_delete_file' ) && wp_delete_file( $backup ) ) {
-			return;
-		}
-
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- 见上方注释：wp_delete_file() 的 stat 失败会静默跳过，对凭据文件不可接受。
-		if ( @unlink( $backup ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		// `wp_delete_file()` 是 WordPress 规定的文件删除入口：除删除本身外还会触发
+		// `wp_delete_file` 动作，站点的审计钩子能观测到"含凭据的文件已被删除"。
+		// 插件最低支持 WP 5.8，该函数（4.2 引入）必然存在，无需 function_exists 探测。
+		if ( wp_delete_file( $backup ) ) {
 			return;
 		}
 

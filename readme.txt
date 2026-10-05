@@ -102,7 +102,7 @@ No. Every key carries a per-site salt prefix - the plugin's own namespace plus t
 
 = Why don't logged-in visitors get the page cache anymore? =
 
-Because a cache entry is not tied to a specific person. Caching a page for a signed-in visitor would mean one visitor could be served a page that was generated for another. Since 3.0.5 signed-in visitors always bypass the cache, and the old "also cache logged-in users" switch has been removed together with its stored setting.
+Because a cache entry is not tied to a specific person. Caching a page for a signed-in visitor would mean one visitor could be served a page that was generated for another. Since 3.0.5 signed-in visitors always bypass the cache. The old "also cache logged-in users" switch is gone from the settings screen, and any value an older version saved for it is ignored rather than acted upon.
 
 = Is Multisite supported? =
 
@@ -113,7 +113,7 @@ Yes. Each site gets its own cache directory and its own Redis key prefix.
 = 3.0.5 =
 * Fixed: **enabling "WP_CACHE" used to leave a readable copy of your `wp-config.php` on the web server.** That file contains your database password, your four secret keys and all eight salts, and the copy sat next to the original where any visitor - or any bot - could have asked for it. The original is now only ever written to a temporary file that is deleted the moment the change has been checked, whether it was applied or rolled back.
 * Fixed: **plugin notices were shown on every admin screen.** They are now limited to this plugin's own settings screen plus the Plugins and Dashboard screens, so nothing appears on other plugins' pages or on your posts, media, users or tools screens.
-* Removed: **the "also cache pages for logged-in visitors" option.** The cache key did not contain anything visitor-specific, so one visitor's page could have been handed to another. Logged-in visitors are now always excluded from the shared cache, and the option is gone from the settings screen.
+* Removed: **the "also cache pages for logged-in visitors" option.** The cache key did not contain anything visitor-specific, so one visitor's page could have been handed to another. Logged-in visitors are now always excluded from the shared cache, the option is gone from the settings screen, and any value an older version saved for it is ignored.
 * Fixed: a request with a `Host` header of "." or ".." could have made the plugin read and write cache files outside its own cache directory. Host names are now normalised, and such values are rejected.
 * Added: a read-only "Pro" tab on the settings screen with a short description and a link. It is static text - no popup, no automatic download, no tracking, and no notice anywhere else in the admin.
 * Verified with the full test suite: 318 checks pass, including new checks for every item above.

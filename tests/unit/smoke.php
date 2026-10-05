@@ -2056,9 +2056,53 @@ check(
 );
 
 // 设置页不该再露出这个开关。
+//
+// 两条都测，缺一不可：上一版只测了 `at8sa_toggle( 'cache_logged_in'`（控件已删），
+// 却漏了 `bypass_cookies` 说明里那句"登录态 Cookie 由上方「缓存登录用户」开关
+// 单独控制" —— 控件没了，文案还在指向一个不存在的开关，用户照着找只会更困惑。
+// 删控件不等于删干净，**描述里对它的引用同样算残留**。
+$at8sa_settings_page_src = (string) file_get_contents( AT8SA_PATH . 'templates/settings-page.php' );
+
 check(
-	'设置页不再提供「为登录用户缓存」开关',
-	false === strpos( (string) file_get_contents( AT8SA_PATH . 'templates/settings-page.php' ), "at8sa_toggle( 'cache_logged_in'" )
+	'设置页不再提供「为登录用户缓存」开关（控件）',
+	false === strpos( $at8sa_settings_page_src, "at8sa_toggle( 'cache_logged_in'" )
+);
+
+check(
+	'设置页文案不再引用已被移除的「缓存登录用户」开关',
+	false === strpos( $at8sa_settings_page_src, '「缓存登录用户」' )
+		&& false === strpos( $at8sa_settings_page_src, 'cache_logged_in' ),
+	'删掉控件不等于删干净：说明文字里的引用同样是残留'
+);
+
+// ── readme.txt 与插件版本 / 与代码实现的一致性 ──
+//
+// `Stable tag` 决定 wp.org 目录给用户下载哪一版，它一旦和插件头不一致，
+// 用户装到的就是旧包。这条必须由机器卡住，不能靠人记得改。
+$at8sa_readme_src = (string) file_get_contents( AT8SA_PATH . 'readme.txt' );
+
+preg_match( '/^Stable tag:\s*(\S+)/m', $at8sa_readme_src, $at8sa_stable_m );
+
+check(
+	'readme.txt 的 Stable tag 等于插件实际版本',
+	isset( $at8sa_stable_m[1] ) && $at8sa_stable_m[1] === AT8SA_VERSION,
+	isset( $at8sa_stable_m[1] ) ? "readme {$at8sa_stable_m[1]} / 插件 " . AT8SA_VERSION : 'readme.txt 里没找到 Stable tag'
+);
+
+check(
+	'readme.txt 的 Changelog 顶部条目等于插件实际版本',
+	preg_match( '/==\s*Changelog\s*==.*?^=\s*([0-9][0-9A-Za-z.\-]*)\s*=/ms', $at8sa_readme_src, $at8sa_chg_m )
+		&& $at8sa_chg_m[1] === AT8SA_VERSION,
+	isset( $at8sa_chg_m[1] ) ? "Changelog 顶部 {$at8sa_chg_m[1]}" : '未找到 Changelog 条目'
+);
+
+// §7 允许旧值留在库里（只是被硬钉为 0），所以 readme 不能说"存储值也一起删了"——
+// 那是假的，而且会让人误以为需要手动清库。
+check(
+	'readme.txt 不谎称旧存储值已被删除（与数据库兼容策略矛盾）',
+	false === strpos( $at8sa_readme_src, 'removed together with its stored setting' )
+		&& false !== strpos( $at8sa_readme_src, 'any value an older version saved for it is ignored' ),
+	''
 );
 
 // 卸载路径同样必须有归属校验（只能删自己的）。

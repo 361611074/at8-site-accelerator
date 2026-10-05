@@ -221,16 +221,30 @@
 - [x] 推 `main` 并确认 Actions 全绿（见第零节）
 - [x] 打 git tag `v3.0.5`
 - [x] 创建 GitHub Release（附上 ZIP，由 CI 自动挂载）
-- [x] `readme.txt` 的 `Tested up to` 更新为当前 WordPress 版本
+- [x] `readme.txt` 的 `Tested up to` = **7.1**，且**有实跑依据**（不能只是"填个当前版本"）：
+      本机 WordPress 测试台 `wp core version` = 7.1（PHP 8.2 + SQLite），
+      在其上实跑了 Plugin Check 与「激活 → 停用 → 重新激活 → 卸载」全流程，
+      结果见第十一节。若将来升级到更高的 WP 而没真跑过，这个字段就必须改回去。
 - [x] 记录发布日志到 `docs/PHASE_REPORT.md`
 
 ## 十一、wp.org 上架前必须补的验证
 
 以下**无法**在本仓库内自动完成，上架前必须实跑：
 
-- [ ] **wp.org 官方 Plugin Check** —— 需`wp plugin check`，本机无 Composer 时跑不了
+- [x] **wp.org 官方 Plugin Check** —— 已实跑，结果 **ERROR 0 / WARNING 0**
+
+  环境：本机 WordPress 测试台（WP 7.1 + PHP 8.2 + SQLite），`plugin-check 2.1.0`。
+  被测对象是 `dist/` 里的发行包（先解包到 `wp-content/plugins/`），不是源码目录：
+
+  ```bash
+  php wp-cli.phar --path=wp plugin check at8-site-accelerator --allow-root
+  ```
+
+  **必须做的反向验证**：往包里注入一个 `unlink()` 探针后复跑，检查器要能报出
+  `unlink_unlink` ERROR。只跑一次"通过"不足以采信——有可能是检查器根本没扫到。
+
 - [ ] Elementor 真机验证（3.0.1 时遗留，测试站未装 Elementor）
 - [ ] WooCommerce 真机验证（3.0.1 时遗留，测试站未装 WooCommerce）
 
-> 前两项的代码路径已被冒烟断言与 `RequestCacheGuardTest` 的 Cookie 矩阵覆盖，
-> 但静态检查替代不了官方校验器的结论——它有自己的规则集。
+> 后两项的代码路径已被冒烟断言与 `RequestGuardTest` 的 Cookie 矩阵覆盖，
+> 但静态检查替代不了真机联装。

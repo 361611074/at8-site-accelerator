@@ -125,7 +125,7 @@ php tests/unit/round2-integration.php
 php tools/check-upgrade-notice.php
 ```
 
-冒烟测试 321 项（静态断言，含 drop-in 命中路径的子进程测试），
+冒烟测试 325 项（静态断言，含 drop-in 命中路径的子进程测试），
 第二轮集成验收 73 项（行为断言：逐个后台页面验证通知作用域、
 真实写/回滚 `wp-config.php` 后确认无临时备份残留、
 验证删除临时备份确实走 `wp_delete_file()` 且失败时记 error 日志而非静默、

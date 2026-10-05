@@ -3,8 +3,39 @@
 > 对应开发计划书 §87（发布产物）、§133（Phase 交付物）。
 > 每次发布新版本前逐项勾选，**不允许跳过**。
 
-版本：`3.0.1`
-类型：真机验证修复版
+版本：`3.0.4`
+类型：WordPress.org Plugin Review 整改版
+
+---
+
+## 零、发布顺序（先看这一节，3.0.4 在这里翻过车）
+
+**唯一正确的顺序：**
+
+```
+1. 改代码 → 提交 → 推 main
+2. 等 GitHub Actions 全绿（Actions 页看，全部 success）
+3. 全绿之后才打 tag
+4. 打 tag 触发打包，ZIP 自动挂到 Release
+5. 核对 Release 附件可下载
+```
+
+**绝对不要先打 tag。** tag 是不可变引用，一旦分发出去就不能改（改就是破坏性操作）。
+3.0.4 就是先打了 tag 才push，结果：
+
+- CI 红了（PHPStan 6 错 + PHPCS 2 警），但 tag 已经指向有问题的提交；
+- 打包作业被 `needs` 依赖链挡掉，一直 skipped，**Release 里没有任何 ZIP 附件**；
+- 补救方式是强推 tag 到修复提交，而不是删 tag 重打。
+
+**已经先打了 tag 怎么办**：不要删 tag。用 Actions 页面上的
+**Run workflow → 填入 `tag` 输入框**（例如 `v3.0.4`）手动重跑，
+该入口会按 tag 检出代码、重新打包、并覆盖 Release 附件。
+
+### 推完之后必须做的事
+
+- [ ] **打开 Actions 页面确认这次推送的运行结果是全绿**，不是"推了就当完事"
+- [ ] 如果有红项：先修→ 重新推送 → 再等绿 → tag 才有意义
+- [ ] 核对Release 页面上确实有 `.zip` 附件
 
 ---
 
@@ -76,15 +107,19 @@
 
 ## 六、版本号一致性
 
-发布前必须四处一致，缺一处就会出现"用户装的版本和你说的是两个版本"：
+发布前必须五处一致，缺一处就会出现"用户装的版本和你说的是两个版本"：
 
-- [x] 插件头 `Version: 3.0.1`
-- [x] `define( 'AT8SA_VERSION', '3.0.1' )`
-- [x] `readme.txt` 的 `Stable tag: 3.0.1`
-- [x] `CHANGELOG.md` 最新条目为 `3.0.1`
+- [x] 插件头 `Version: 3.0.4`
+- [x] `define( 'AT8SA_VERSION', '3.0.4' )`
+- [x] `readme.txt` 的 `Stable tag: 3.0.4`
+- [x] `CHANGELOG.md` 最新条目为 `3.0.4`
 - [x] `languages/at8-site-accelerator.pot` 的 `Project-Id-Version`
+- [x] tag 名与版本号对应（`v3.0.4`）
 
 > 版本号规则：十进制封十进一（`1.2.9` → `1.3.0`），不存在 `1.2.10`。
+
+> `tools/build-zip.php` 的版本号是从插件头正则读取的，不是独立维护的常量——
+> 所以只要插件头改了，产物文件名自动跟随，不存在"打包版本对不上"的可能。
 
 ## 七、仓库卫生
 
@@ -93,10 +128,11 @@
 - [x] `dist/` 不入库
 - [x] `vendor/` 与 `composer.lock` 不入库（分发时不带开发依赖）
 - [x] 无 `.env` / 凭证文件入库
-- [x] CI 配置已就绪：`.github/ci-workflow.yml.disabled`
+- [x] CI 已激活：`.github/workflows/ci.yml`
       （PHP 7.4–8.3 矩阵 + Redis 冒烟/单元 + PHPUnit 矩阵 + PHPStan + PHPCS + 打包）
-- [ ] ⚠️ CI 尚未激活：令牌缺 `workflow` scope，文件暂存于 `.github/` 根目录；
-      重命名回 `.github/workflows/ci.yml` 后流水线即生效
+- [x] CI 打包作业支持 `workflow_dispatch` 手动触发（可指定 tag 重打包）
+- [x] CI 打包产物自动挂到对应 Release，无需人工上传
+- [x] `package` 作业是唯一持有 `contents: write` 的作业，其余维持只读
 - [x] `phpcs.xml.dist` 已配置，豁免项均有理由说明
 - [x] 测试用 Redis 库号固定为 15（`tests/unit/wp-stubs.php`），不会碰真实站点的 2 号库
 
@@ -104,9 +140,19 @@
 
 - [x] `php tools/build-zip.php` 执行成功
 - [x] ZIP 内层结构为 `at8-site-accelerator/...`（WordPress 可直接安装）
-- [x] ZIP 白名单式收录，不含 `tests/` `docs/` `tools/` `.github/` `dist/`
+- [x] ZIP 白名单式收录，不含 `tests/` `docs/` `tools/` `.github/` `dist/` `.wordpress-org/`
 - [x] 打包脚本内置回读自检（发现禁入路径即失败退出）
+- [x] CI 侧再叠一道目录段精确匹配自检（能区分 `docs/` 与 `DocsHelper.php`）
 - [x] ZIP 版本号与插件头版本号一致
+- [x] **产物已上传到 GitHub Release 附件**（不在仓库里，去 Release 页下载）
+
+> 产物实际内容：49 个文件 / 约 183 KB，顶层 9 项——
+> `includes/`(38) `assets/`(3) `templates/`(2) `languages/`(1)
+> 加`at8-site-accelerator.php`、`uninstall.php`、`readme.txt`、`CHANGELOG.md`、`LICENSE`。
+>
+> 注意别把**仓库根目录**误当成打包产物：仓库里有 `.github`、`docs`、`tests`、
+> `tools`、`README.md`（仓库说明）这些，它们不该进发行包。
+> 两者的可靠区分点：发行包里只有 `readme.txt`，没有 `README.md`。
 
 ## 九、发布前人工复核（必须在真实站点做）
 
@@ -172,7 +218,19 @@
 
 ## 十、发布后
 
-- [ ] 打 git tag `v3.0.1`
-- [ ] 创建 GitHub Release 并附上 ZIP
-- [ ] 在 `readme.txt` 的 `Tested up to` 更新为当前 WordPress 版本
-- [ ] 记录发布日志到 `docs/PHASE_REPORT.md`
+- [x] 推 `main` 并确认 Actions 全绿（见第零节）
+- [x] 打 git tag `v3.0.4`
+- [x] 创建 GitHub Release（附上 ZIP，由 CI 自动挂载）
+- [x] `readme.txt` 的 `Tested up to` 更新为当前 WordPress 版本
+- [x] 记录发布日志到 `docs/PHASE_REPORT.md`
+
+## 十一、wp.org 上架前必须补的验证
+
+以下**无法**在本仓库内自动完成，上架前必须实跑：
+
+- [ ] **wp.org 官方 Plugin Check** —— 需`wp plugin check`，本机无 Composer 时跑不了
+- [ ] Elementor 真机验证（3.0.1 时遗留，测试站未装 Elementor）
+- [ ] WooCommerce 真机验证（3.0.1 时遗留，测试站未装 WooCommerce）
+
+> 前两项的代码路径已被冒烟断言与 `RequestCacheGuardTest` 的 Cookie 矩阵覆盖，
+> 但静态检查替代不了官方校验器的结论——它有自己的规则集。

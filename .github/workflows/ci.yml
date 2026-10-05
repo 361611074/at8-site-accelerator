@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ main, master, develop ]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: '要重新打哪个 tag 的包（例如 v3.0.4）。留空则只跑校验、不打包。'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -247,17 +252,39 @@ jobs:
         run: ./vendor/bin/phpstan analyse --configuration=phpstan.neon.dist --memory-limit=2G --no-progress
 
   # ---------------------------------------------------------------------------
-  # 6. 打包产物（打 tag 时生成，供人工下载检查）
+  # 6. 打包产物
+  #
+  # 触发时机有两种：
+  #   - 打 tag（refs/tags/v*）：正常发布路径，全量校验通过后才产出；
+  #   - workflow_dispatch 手动：用于"tag 打早了、代码后来又修了"这种补救，
+  #     手动指定 tag 重新产出并覆盖 Release 附件，不必删 tag 重打。
+  #
+  # 为什么加手动入口：tag 是不可变引用，正常流程应该是"CI 全绿 → 打 tag"。
+  # 但现实中经常先打了 tag 才发现问题（3.0.4 就这么翻的车）。
+  # 有了手动入口，补救就不必删 tag——那会破坏已分发的引用。
   # ---------------------------------------------------------------------------
   package:
     name: 打包 Free 版 ZIP
     runs-on: ubuntu-latest
     needs: [ test, test-redis, phpunit, phpstan ]
-    if: startsWith( github.ref, 'refs/tags/v' )
+    # tag push：正常发布路径。
+    # 手动触发：必须填 inputs.tag —— 否则打出来的是分支代码，
+    # 而"挂到 Release"那一步会拿分支名当tag 名去找 Release，必然失败，
+    # 与其跑到最后一步才报错，不如一开始就拦住。
+    if: startsWith( github.ref, 'refs/tags/v' ) || ( github.event_name == 'workflow_dispatch' && inputs.tag != '' )
+
+    # 只有这个作业需要写权限（创建/更新 Release）。
+    # 其余作业维持 workflow 顶层的 contents: read，不给多余权限。
+    permissions:
+      contents: write
 
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+        with:
+          # 手动触发时按输入的 tag 检出，否则默认检出当前分支——
+          # 否则重新打的包会是分支代码而不是那个 tag 对应的代码。
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
       - name: 安装 PHP
         uses: shivammathur/setup-php@v2
@@ -268,9 +295,54 @@ jobs:
       - name: 打包
         run: php tools/build-zip.php
 
+      # 打包后立刻自查：build-zip.php 内部已有一道 forbidden 路径检查，
+      # 这里再加一道，double check。
+      #
+      # 注意匹配方式：必须匹配 ZIP 内层路径的**目录段**，
+      # 不能用裸 grep——像 "docs" 这种字符串一旦出现在某个正常文件名里
+      # 就会误报，整条流水线白跑一趟。
+      - name: 校验产物内容
+        run: |
+          ZIP=$(ls dist/*.zip)
+          echo "产物：$ZIP"
+          echo "--- 条目清单 ---"
+          unzip -Z1 "$ZIP"
+          echo ""
+          echo "--- 禁止出现的目录 / 文件自检 ---"
+          LIST=$(unzip -Z1 "$ZIP")
+          FAILED=0
+          for bad in tests/ docs/ tools/ .github/ .wordpress-org/ vendor/ dist/; do
+            if echo "$LIST" | grep -q "at8-site-accelerator/${bad}"; then
+              echo "错误：产物里混入了 ${bad}"
+              FAILED=1
+            fi
+          done
+          for bad in composer.json composer.lock phpcs.xml.dist phpstan.neon.dist phpunit.xml.dist package.json .gitignore .gitattributes .DS_Store; do
+            if echo "$LIST" | grep -q "at8-site-accelerator/${bad}\$"; then
+              echo "错误：产物里混入了 ${bad}"
+              FAILED=1
+            fi
+          done
+          if [ "$FAILED" -ne 0 ]; then
+            exit 1
+          fi
+          echo "自检通过：未混入任何开发文件。"
+          echo ""
+          echo "--- 顶层结构 ---"
+          echo "$LIST" | awk -F/ 'NF>1 {print $2} NF==1 {print "(根)"$1}' | sort -u
+
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: at8-site-accelerator-${{ github.ref_name }}
+          name: at8-site-accelerator-${{ inputs.tag || github.ref_name }}
           path: dist/*.zip
           if-no-files-found: error
+
+      # 把 ZIP 挂到对应的 Release 上。
+      # tag 存在但 Release 不存在时自动建一个，避免"打完包还要手动传一遍"。
+      - name: 挂到 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          files: dist/*.zip
+          fail_on_unmatched_files: true

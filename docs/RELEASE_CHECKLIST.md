@@ -3,8 +3,8 @@
 > 对应开发计划书 §87（发布产物）、§133（Phase 交付物）。
 > 每次发布新版本前逐项勾选，**不允许跳过**。
 
-版本：`3.0.4`
-类型：WordPress.org Plugin Review 整改版
+版本：`3.0.5`
+类型：WordPress.org 最终提交前整改版（第三轮）
 
 ---
 
@@ -109,12 +109,12 @@
 
 发布前必须五处一致，缺一处就会出现"用户装的版本和你说的是两个版本"：
 
-- [x] 插件头 `Version: 3.0.4`
-- [x] `define( 'AT8SA_VERSION', '3.0.4' )`
-- [x] `readme.txt` 的 `Stable tag: 3.0.4`
-- [x] `CHANGELOG.md` 最新条目为 `3.0.4`
+- [x] 插件头 `Version: 3.0.5`
+- [x] `define( 'AT8SA_VERSION', '3.0.5' )`
+- [x] `readme.txt` 的 `Stable tag: 3.0.5`
+- [x] `CHANGELOG.md` 最新条目为 `3.0.5`
 - [x] `languages/at8-site-accelerator.pot` 的 `Project-Id-Version`
-- [x] tag 名与版本号对应（`v3.0.4`）
+- [x] tag 名与版本号对应（`v3.0.5`）
 
 > 版本号规则：十进制封十进一（`1.2.9` → `1.3.0`），不存在 `1.2.10`。
 
@@ -219,7 +219,7 @@
 ## 十、发布后
 
 - [x] 推 `main` 并确认 Actions 全绿（见第零节）
-- [x] 打 git tag `v3.0.4`
+- [x] 打 git tag `v3.0.5`
 - [x] 创建 GitHub Release（附上 ZIP，由 CI 自动挂载）
 - [x] `readme.txt` 的 `Tested up to` 更新为当前 WordPress 版本
 - [x] 记录发布日志到 `docs/PHASE_REPORT.md`

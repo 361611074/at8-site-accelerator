@@ -6,11 +6,15 @@
  * 1. 建目录并放守卫文件；
  * 2. 迁移旧设置（保证后续步骤读到的是新结构）；
  * 3. 写 drop-in 运行时配置；
- * 4. 安装 drop-in；
- * 5. 尝试启用 WP_CACHE（失败不阻断激活，只记下结果给后台提示）。
+ * 4. 安装 drop-in（仅当「高级缓存」开启）；
+ * 5. 尝试启用 WP_CACHE（同样仅当「高级缓存」开启，且失败不阻断激活，
+ *    只记下结果）。
  *
  * 第 5 步放在最后、且失败不阻断——因为 wp-config.php 不可写是很常见的情况，
  * 不该因此让用户激活失败。
+ *
+ * 第 4、5 步共用「高级缓存」这道闸门：关着的时候既不装 drop-in，也不碰
+ * wp-config.php。写用户文件必须有用户明确的选择作为前提。
  *
  * @package AT8SA\Core
  */
@@ -77,9 +81,26 @@ final class Activator {
 		}
 
 		// 5. WP_CACHE。
-		$wp_cache                = $dropin->enable_wp_cache();
-		$result['wp_cache']      = $wp_cache['ok'];
-		$result['wp_cache_note'] = $wp_cache['message'];
+		//
+		// 与第 4 步共用同一道闸门：`advanced_cache` 关着时，装 drop-in 与写
+		// wp-config.php **都不该发生**。
+		//
+		// 早前这一步是无条件的：只要插件被激活，就会往 wp-config.php 里插入
+		// `define( 'WP_CACHE', true )`。写的内容本身无害（没有 drop-in 时
+		// WordPress 什么都不会做），但"用户没要的东西被写进用户自己的文件"
+		// 本身就是问题 —— 管理员在设置里明确关掉高级缓存后，停用再启用插件
+		// 又会被写回去，这与他刚刚表达的选择相反。
+		//
+		// 跳过时仍然留下可读的说明，而不是静默消失：管理员随时可以在设置页
+		// 「工具」里一键启用，那条手动入口与本处的自动入口并存。
+		if ( $settings->is_on( 'advanced_cache' ) ) {
+			$wp_cache                = $dropin->enable_wp_cache();
+			$result['wp_cache']      = $wp_cache['ok'];
+			$result['wp_cache_note'] = $wp_cache['message'];
+		} else {
+			$result['wp_cache']      = false;
+			$result['wp_cache_note'] = __( '未启用「高级缓存」，跳过写入 wp-config.php。需要时可在设置页「工具」中一键启用。', 'at8-site-accelerator' );
+		}
 
 		// 清理 2.x 遗留缓存，避免新旧两套目录并存。
 		foreach ( array( WP_CONTENT_DIR . '/cache/site-accelerator' ) as $legacy ) {

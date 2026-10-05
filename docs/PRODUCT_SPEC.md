@@ -41,7 +41,6 @@
 | `cache_backend` | `auto` | `auto` / `disk` / `redis` |
 | `cache_ttl` | 3600 | 60–2592000 秒 |
 | `cache_mobile` | 开 | 移动端独立缓存变体（按 UA 判定） |
-| `cache_logged_in` | 关 | 登录用户是否共享缓存（默认关，防止串号） |
 | `exclude_urls` | 空 | 额外绕过的 URL 片段（每行一个） |
 | `bypass_cookies` | 空 | 额外绕过的 Cookie 前缀（支持 `prefix*`） |
 | `ignore_query` | 空 | 额外忽略的查询参数（支持 `prefix_*` 与 `*`） |
@@ -56,8 +55,12 @@
 `woocommerce_items_in_cart`、`woocommerce_cart_hash`、`edd_items_in_cart`。
 
 登录态 Cookie（`wordpress_logged_in_*` / `wordpress_sec_*`）**刻意不在此列表内**，
-由 `has_auth_cookie()` + 「缓存登录用户」开关（`cache_logged_in`）单独控制。
-若把它放进本表，`cache_logged_in` 会变成永远无效的死开关。
+统一由 `has_auth_cookie()` 单一归属管理，命中即无条件绕过缓存。
+
+> **`cache_logged_in` 已于 3.0.5 彻底移除**（设置项、后台 UI、默认值、布尔白名单
+> 全部删除，仅 `Config` 落盘时仍硬钉为 `0` 以压制老站数据库里的历史残留值）。
+> 原因：缓存键不含用户维度，登录用户共享缓存必然越权串号。
+> 现在的规则是**无条件**的 —— `is_user_logged_in()` 为真即绕过，没有任何开关可以关掉。
 
 内置忽略查询参数：`utm_*`、`fbclid`、`gclid`、`gclsrc`、`dclid`、`msclkid`、
 `mc_*`、`igshid`、`twclid`、`yclid`、`_ga`、`_gl`、`wbraid`、`gbraid`、

@@ -148,11 +148,26 @@ foreach ( at8sa_collect( $at8sa_root, $at8sa_scan ) as $abs => $rel ) {
 
 ksort( $entries );
 
+// 版本号从插件头读取，不在这里硬编码。
+//
+// 为什么必须改：这里原先写死 `3.0.3`，于是插件升到 3.0.5 之后，pot 里的
+// `Project-Id-Version` 仍停在 3.0.3 —— 翻译者看到的版本和插件实际版本对不上，
+// 而且每次重新生成 pot 都会把版本"钉"回旧值，永远发现不了。
+// 版本号的真值来源只能有一处：`at8-site-accelerator.php` 头部。
+$at8sa_pot_entry = (string) file_get_contents( $at8sa_root . '/at8-site-accelerator.php' );
+
+if ( ! preg_match( '/^\s*\*\s*Version:\s*(\S+)/m', $at8sa_pot_entry, $at8sa_pot_m ) ) {
+	fwrite( STDERR, "错误：无法从 at8-site-accelerator.php 头部读取版本号。\n" );
+	exit( 1 );
+}
+
+$at8sa_pot_version = $at8sa_pot_m[1];
+
 $pot = "# Copyright (C) 2026 AT8\n"
 	. "# This file is distributed under the GPL-2.0-or-later license.\n"
 	. "msgid \"\"\n"
 	. "msgstr \"\"\n"
-	. "\"Project-Id-Version: AT8 Site Accelerator 3.0.3\\n\"\n"
+	. "\"Project-Id-Version: AT8 Site Accelerator {$at8sa_pot_version}\\n\"\n"
 	. "\"Report-Msgid-Bugs-To: https://www.at8.fun/\\n\"\n"
 	. "\"MIME-Version: 1.0\\n\"\n"
 	. "\"Content-Type: text/plain; charset=UTF-8\\n\"\n"

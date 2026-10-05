@@ -6,6 +6,80 @@
 
 ---
 
+## 3.0.5 — WordPress.org 提交前整改（第三轮）
+
+> 起因：提交前最后一轮审计（规范 §1–§30）。本轮刻意**不做重构**，
+> 只处理三类问题：版本一致性、`cache_logged_in` 残留、`admin_notices` 范围，
+> 外加一处由审计暴露出来的 wp-config.php 写入时机问题。
+
+### 修复 1：版本号不再有"第三处真相"
+
+`tools/make-pot.php` 里 `Project-Id-Version` **硬编码 3.0.3**，于是每次插件升版，
+`.pot` 的版本戳都落后两三个版本。改为从主插件头正则读取（与 `build-zip.php` 一致）：
+
+```php
+preg_match( '/^\s*\*\s*Version:\s*(\S+)/m', $at8sa_pot_entry, $at8sa_pot_m )
+```
+
+`docs/RELEASE_CHECKLIST.md` 里 7 处 `3.0.4` 一并更正为 `3.0.5`
+（CHANGELOG / ARCHITECTURE / SECURITY_AUDIT 里的 `3.0.4` 是**真实历史版本**，保留）。
+
+### 修复 2：`cache_logged_in` 的文档残留
+
+产品代码早在第二轮就只剩注释 + `Config.php` 的硬钉（`=> 0`），符合"旧数据可存在、
+但不得影响缓存行为"的要求。但 `docs/PRODUCT_SPEC.md` 的设置表里仍列着这个开关，
+读文档的人会以为它还在。已删除该行，并补一段说明它已于 3.0.5 彻底移除。
+
+### 修复 3：主插件文件的环境门槛提示补上页面白名单
+
+`at8-site-accelerator.php` 里那个"PHP / WordPress 版本不满足"的提示挂在
+`admin_notices` 上却**没有任何页面限制**，等于在文章编辑页、媒体页顶部也能弹。
+它与 `Admin\Notices` 受同一条指南约束（规范 §9），现在同样收窄到
+**插件列表页 / 仪表盘**（该提示触发时插件已拒绝加载，设置页并不存在）。
+
+拿不到 screen 的极端上下文仍然显示 —— 这是"插件未加载"的硬错误，
+因判定不出页面就沉默会让管理员完全没有线索。
+
+### 修复 4：激活流程不再无条件改写 wp-config.php
+
+`Activator::activate()` 第 5 步原先**裸调用** `enable_wp_cache()`：
+只要插件被激活，就往 `wp-config.php` 插入 `define( 'WP_CACHE', true )`，
+哪怕管理员刚在设置里把「高级缓存」关掉。写的内容本身无害
+（没有 drop-in 时 WordPress 什么都不会做），但**"用户没要的东西被写进用户
+自己的文件"本身就是问题**（规范 §14）。
+
+现在第 4、5 步共用同一道闸门 `is_on( 'advanced_cache' )`；跳过时不静默，
+在激活结果里留一句可读说明，手动入口（设置页「工具 → 一键启用」）照旧保留。
+
+### 回归断言（3 条，均做过变异测试）
+
+新增于 `tests/unit/smoke.php`：
+
+- 激活流程仅在「高级缓存」开启时才写 wp-config.php
+- 闸门关闭时给出可读说明（不是静默跳过）
+- 环境门槛提示同样只出现在插件页 / 仪表盘
+
+第一条刻意写成**结构式匹配**（闸门体内紧跟 `enable_wp_cache`），而不是
+"源码里出现过 `is_on( 'advanced_cache' )`" —— 后者在闸门被删掉时依然成立
+（装 drop-in 那一步也有这道闸门），等于恒真、测不出回归。
+
+变异测试：把闸门改回 `if ( true )`、把白名单段整段删掉后重跑，
+上述断言如期变红（319 通过 / 2 失败），确认非恒真。
+
+### 本轮实测结论
+
+| 项 | 结果 |
+| --- | --- |
+| Plugin Check（跑的是 `dist/` 发行包内容） | **ERROR 0 / WARNING 0** |
+| 验证方法 | 注入一个 `unlink()` 探针后复跑，检查器如期报 ERROR —— 确认不是"空跑通过" |
+| smoke（PHP 7.3 / 8.2） | 321 通过 / 0 失败 |
+| round2-integration（PHP 7.3 / 8.2） | 73 通过 / 0 失败 |
+| PHPUnit（PHP 8.2） | 212 用例 / 541 断言 / 0 失败（6 skipped） |
+| PHPCS | 42 文件 0 问题 |
+| Upgrade Notice | 5 条全部 ≤300 字符 |
+
+---
+
 ## 3.0.5 — Plugin Check 过检修复（1 ERROR + 1 WARNING）
 
 > 起因：3.0.5 推送后跑官方 Plugin Check，报 1 error + 1 warning。

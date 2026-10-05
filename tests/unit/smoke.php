@@ -2544,6 +2544,46 @@ check(
 	''
 );
 
+// ── 20b-10. 激活流程不得**无条件**改写 wp-config.php ──
+//
+// 为什么锁这条：`enable_wp_cache()` 早前在激活流程里是裸调用，只要插件被激活
+// 就往 wp-config.php 里插 `define( 'WP_CACHE', true )`，哪怕管理员刚在设置里
+// 把「高级缓存」关掉。写的内容本身无害（没有 drop-in 时 WordPress 什么都不做），
+// 但"用户没要的东西被写进用户自己的文件"正是插件目录指南要拦的行为
+// （规范 §14：不要在激活时无条件偷偷修改用户 wp-config.php）。
+//
+// 断言刻意写成"闸门之后紧跟 enable_wp_cache"的结构式匹配，而不是"源码里
+// 出现过 is_on( advanced_cache )" —— 后者在闸门被删掉时依然成立（因为装
+// drop-in 那一步也有这道闸门），等于恒真、测不出回归。
+check(
+	'激活流程仅在「高级缓存」开启时才写 wp-config.php',
+	preg_match( '/is_on\(\s*[\'"]advanced_cache[\'"]\s*\)\s*\)\s*\{[^}]{0,200}enable_wp_cache/', $at8sa_activator_src ) > 0,
+	'enable_wp_cache() 必须落在 is_on( advanced_cache ) 闸门体内'
+);
+
+check(
+	'闸门关闭时给出可读说明（不是静默跳过）',
+	false !== strpos( $at8sa_activator_src, 'wp_cache_note' )
+		&& preg_match( '/\}\s*else\s*\{/', $at8sa_activator_src ) > 0,
+	''
+);
+
+// ── 20b-11. 环境门槛提示同样必须收窄 ──
+//
+// 主插件文件里那个"PHP / WordPress 版本不满足"的提示也挂在 admin_notices 上，
+// 早前没有任何页面限制 —— 等于在文章编辑页、媒体页顶部也能弹。它与
+// Admin\Notices 受同一条指南约束（§9：只允许自己的设置页 / 仪表盘 / 插件页）。
+// 该提示触发时插件已拒绝加载、设置页根本不存在，所以白名单只剩后两个。
+$at8sa_entry_src = (string) file_get_contents( AT8SA_PATH . 'at8-site-accelerator.php' );
+
+check(
+	'环境门槛提示同样只出现在插件页 / 仪表盘',
+	false !== strpos( $at8sa_entry_src, "'admin_notices'" )
+		&& preg_match( '/get_current_screen/', $at8sa_entry_src ) > 0
+		&& preg_match( '/array\(\s*[\'"]plugins[\'"],\s*[\'"]dashboard[\'"]\s*\)/', $at8sa_entry_src ) > 0,
+	''
+);
+
 /* ---------------------------------------------------------------------------
  * 21. drop-in 命中路径（子进程真实执行）
  *

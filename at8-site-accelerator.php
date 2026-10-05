@@ -51,6 +51,14 @@ if ( ! defined( 'AT8SA_CACHE_ROOT' ) ) {
  * 用闭包而不是具名函数：主插件文件是全局作用域，具名函数会污染全局命名空间，
  * 且万一文件被重复 include 会直接 fatal（Cannot redeclare）。
  *
+ * 可见范围同样受插件目录指南 11 约束，与 `Admin\Notices::is_allowed_screen()`
+ * 用同一条白名单：`admin_notices` 是全局钩子，挂上去就等于"每一个后台页面
+ * 都会执行到"，不在白名单里的页面一律不输出。
+ *
+ * 白名单里只剩插件列表页与仪表盘：本闭包只在"环境门槛不满足、插件拒绝加载"
+ * 时执行，此时插件的设置页根本没有注册（后面直接 `return` 了），
+ * 而这两个页面恰好是管理员刚激活插件、或想确认"为什么没生效"时会去的地方。
+ *
  * @param string $message 提示内容。
  * @return void
  */
@@ -58,6 +66,15 @@ $at8sa_environment_notice = static function ( $message ) {
 	add_action(
 		'admin_notices',
 		static function () use ( $message ) {
+			$at8sa_screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+
+			// 拿不到 screen 时仍然显示：这是"插件未加载"的硬错误，
+			// 一旦因为判定不出页面而沉默，管理员就完全没有线索了。
+			// （正常运行时的 admin 页面一定能拿到 screen，这条分支几乎不会走到。）
+			if ( $at8sa_screen && ! in_array( $at8sa_screen->id, array( 'plugins', 'dashboard' ), true ) ) {
+				return;
+			}
+
 			echo '<div class="notice notice-error"><p>' . esc_html( $message ) . '</p></div>';
 		}
 	);

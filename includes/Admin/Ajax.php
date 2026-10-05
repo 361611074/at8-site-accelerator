@@ -240,7 +240,17 @@ final class Ajax {
 		/** @var AdvancedCache|null $dropin */
 		$dropin = $this->dep( 'advanced_cache' );
 
-		if ( ! $dropin || ! $dropin->install() ) {
+		if ( ! $dropin ) {
+			wp_send_json_error( array( 'message' => __( 'drop-in 写入失败，请检查 wp-content 目录权限。', 'at8-site-accelerator' ) ) );
+		}
+
+		// 槽位被别的缓存系统占用：明确告知原因，而不是笼统报"写入失败"。
+		// 这样用户知道该去停用哪个插件，而不是反复点"安装"然后一头雾水。
+		if ( $dropin->has_foreign_dropin() ) {
+			wp_send_json_error( array( 'message' => wp_kses_post( $dropin->blocked_reason() ) ) );
+		}
+
+		if ( ! $dropin->install() ) {
 			wp_send_json_error( array( 'message' => __( 'drop-in 写入失败，请检查 wp-content 目录权限。', 'at8-site-accelerator' ) ) );
 		}
 

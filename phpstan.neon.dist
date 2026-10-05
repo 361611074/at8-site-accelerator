@@ -49,14 +49,10 @@ parameters:
 	scanFiles:
 		- tests/phpstan/stubs/gd.php
 
-	# COOKIEHASH 由 WP 在 wp-includes/default-constants.php 里按站点 URL 动态算出，
-	# 某些早期上下文（如 drop-in）里可能尚未定义，所以产品代码里
-	# `defined( 'COOKIEHASH' ) && COOKIEHASH` 这个双保险是必要的。
-	# 不声明成 dynamic 的话，PHPStan 会把它当成"值已知的常量"，
-	# 于是那句判空被判成"恒真"。phpstan-wordpress 对 COOKIE_DOMAIN
-	# 做的就是这件事，这里照着补一个。
-	dynamicConstantNames:
-		- COOKIEHASH
+	# 3.0.4 起产品代码不再引用 `COOKIEHASH`：它是 WordPress 用于拼认证 Cookie 名的
+	# 常量（属于认证材料），3.0.3 之前被用作缓存命名空间并落进运行时配置。
+	# 站点盐现由插件自有前缀 + get_current_blog_id() + home_url() 派生值组成，
+	# 因此这里也不再需要把它声明成 dynamic constant。
 
 	# ------------------------------------------------------------------------
 	# 关键取舍：为什么把 treatPhpDocTypesAsCertain 关掉

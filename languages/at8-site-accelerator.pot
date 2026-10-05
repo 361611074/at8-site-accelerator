@@ -245,6 +245,10 @@ msgid "「仅相关页面」在内容更新时只失效受影响的页面，命�
 msgstr ""
 
 #: templates/settings-page.php
+msgid "「前台禁用」只对访客页面生效，后台（wp-admin）始终保留 WordPress 自带的心跳，以免影响自动保存与实时通知。后台若也想降频请选「降低频率」。"
+msgstr ""
+
+#: templates/settings-page.php
 msgid "上传时自动生成 WebP 副本"
 msgstr ""
 
@@ -294,6 +298,10 @@ msgstr ""
 
 #: templates/settings-page.php
 msgid "仅错误"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "仅隐藏仪表盘上的站点健康卡片与「工具 → 站点健康」菜单，不影响其它任何东西。排查站点问题时建议关掉。"
 msgstr ""
 
 #: templates/settings-page.php
@@ -421,11 +429,11 @@ msgid "利于 CDN 与浏览器缓存，但与静态资源长缓存同时开启�
 msgstr ""
 
 #: templates/settings-page.php
-msgid "前台禁用"
+msgid "前台禁用 Gutenberg 区块样式"
 msgstr ""
 
 #: templates/settings-page.php
-msgid "前台禁用 Gutenberg 区块样式"
+msgid "前台禁用（wp-admin 不受影响）"
 msgstr ""
 
 #: templates/settings-page.php
@@ -469,7 +477,15 @@ msgid "只折叠内联 <code>&lt;style&gt;</code> 里的连续空白，不动内
 msgstr ""
 
 #: templates/settings-page.php
+msgid "只移除这一张卡片，站点健康、浏览器与 PHP 版本提示都会保留。"
+msgstr ""
+
+#: templates/settings-page.php
 msgid "只缓存未登录访客的 GET 请求。后台、AJAX、REST、预览、搜索、404、购物车与结算页一律自动绕过。"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "只隐藏这两张版本提示卡片，不影响「站点健康」卡片与工具菜单。"
 msgstr ""
 
 #: templates/settings-page.php
@@ -886,6 +902,10 @@ msgstr ""
 
 #: templates/settings-page.php
 msgid "检测到 2.x 的旧设置，已自动迁移。原有开关与数值保持不变，旧选项仍保留在数据库中以便回滚。"
+msgstr ""
+
+#: includes/Cache/AdvancedCache.php
+msgid "检测到 <code>wp-content/advanced-cache.php</code> 已存在且不属于本插件，为避免破坏其它缓存系统已跳过安装。请先停用其它缓存插件，或手动移走该文件后再安装。"
 msgstr ""
 
 #: includes/Compatibility/CachePluginDetector.php

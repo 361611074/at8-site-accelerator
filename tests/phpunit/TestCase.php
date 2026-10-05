@@ -153,7 +153,6 @@ abstract class TestCase extends BaseTestCase {
 				'safe_mode'      => 0,
 				'cache_logged_in' => 0,
 				'cache_mobile'   => 1,
-				'cookie_hash'    => COOKIEHASH,
 				'excluded_paths' => \AT8SA\Cache\RequestGuard::default_excluded_paths(),
 				'bypass_cookies' => \AT8SA\Cache\RequestGuard::default_bypass_cookies(),
 				'ignore_query'   => array(),

@@ -121,7 +121,6 @@ $at8sa_config = array(
 	'cache_root'     => $at8sa_cache,
 	'cache_mobile'   => 'mobile' === $at8sa_mode ? 1 : 0,
 	'cache_logged_in' => 0,
-	'cookie_hash'    => COOKIEHASH,
 	'ttl'            => 3600,
 	'excluded_paths' => RequestGuard::default_excluded_paths(),
 	'bypass_cookies' => RequestGuard::default_bypass_cookies(),

@@ -60,9 +60,17 @@ final class Activator {
 		$result['config'] = $config->write( $config->runtime() );
 
 		// 4. drop-in。
+		//
+		// 安装前先确认槽位归属：`wp-content/advanced-cache.php` 若已被别的缓存
+		// 插件（或主机环境）占用，本插件必须让路而不是把它顶掉。被拒绝时把原因
+		// 记进激活结果，供后台明确提示管理员——静默跳过会让人以为装好了。
 		$dropin = $container->get( AdvancedCache::class );
 
-		if ( $settings->is_on( 'advanced_cache' ) ) {
+		if ( $dropin->has_foreign_dropin() ) {
+			$result['dropin']            = false;
+			$result['dropin_blocked']    = true;
+			$result['dropin_blocked_note'] = $dropin->blocked_reason();
+		} elseif ( $settings->is_on( 'advanced_cache' ) ) {
 			$result['dropin'] = $dropin->install();
 		} else {
 			$result['dropin'] = false;

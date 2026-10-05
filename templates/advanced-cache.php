@@ -6,6 +6,14 @@
  * 并把 `{{AT8SA_PATH}}` 替换为插件绝对路径。请勿直接编辑 wp-content 下的副本——
  * 插件会在设置保存 / 升级时用本模板覆盖它。
  *
+ * 归属标记（本文件的所有权声明，`AdvancedCache` 依赖它判断能否覆盖/删除）：
+ * - `Owner: at8-site-accelerator` —— 归属主标记；
+ * - `@at8sa-dropin-version` —— 版本戳，供升级自愈比对。
+ *
+ * 这两行是**安全边界而不是注释**：插件只在读到它们时才允许覆盖或删除
+ * `wp-content/advanced-cache.php`，避免静默顶掉其它缓存插件（WP Super Cache /
+ * W3 Total Cache / LiteSpeed Cache）或主机环境装在同一槽位上的 drop-in。
+ *
  * 运行时机：WordPress 的 wp-settings.php 极早期，**插件与主题都还没加载**。
  * 因此这里只能使用超全局变量，不能调用 `is_*()` / `wp_*()` 系列函数。
  *
@@ -19,6 +27,10 @@
  *    发现"这份 drop-in 是旧版的"并自动重装；
  * 3. 必须**自己发现自己是旧版**并主动让出（见下面的"版本自检"）——因为一旦命中缓存
  *    这里就 `exit` 了，第 2 条那套事后修复根本没机会跑。
+ *
+ * Plugin Name: AT8 Site Accelerator
+ * Drop-in: advanced-cache.php
+ * Owner: at8-site-accelerator
  *
  * @package AT8SA
  * @at8sa-dropin-version {{AT8SA_VERSION}}
@@ -178,6 +190,17 @@ if ( ! headers_sent() ) {
 	header( 'X-AT8-Cache-Backend: ' . ( 'redis' === $at8sa_backend ? 'Redis' : 'Disk' ) );
 	header( 'Cache-Control: public, max-age=' . max( 0, $at8sa_ttl ) );
 
+	/*
+	 * 移动端变体开启时，本响应代表"User-Agent 维度上的一份独立副本"，
+	 * 必须声明 Vary，否则 CDN / 反向代理会把桌面版回给移动端（或反之），
+	 * 正好毁掉"移动端单独缓存"要避免的串页。
+	 *
+	 * 这里的条件与 CacheEngine::send_header() 完全一致——两条命中路径
+	 * （drop-in 命中、插件侧命中）必须对同一开关给出一致的响应头，
+	 * 否则"发不发 Vary"就取决于哪条路径先接管，行为不可预测。
+	 *
+	 * `false` = 追加而非替换，允许与主题/其它插件已有的 Vary 共存。
+	 */
 	if ( ! empty( $at8sa_config['cache_mobile'] ) ) {
 		header( 'Vary: User-Agent', false );
 	}

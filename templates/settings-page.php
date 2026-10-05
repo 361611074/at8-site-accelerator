@@ -112,7 +112,7 @@ $at8sa_textarea = function ( $key, $label, $hint = '' ) use ( $at8sa_settings ) 
  * @param array  $choices 选项 value => label。
  * @return void
  */
-$at8sa_select = function ( $key, $label, array $choices ) use ( $at8sa_settings ) {
+$at8sa_select = function ( $key, $label, array $choices, $description = '' ) use ( $at8sa_settings ) {
 	$current = (string) $at8sa_settings[ $key ];
 	?>
 	<label class="at8sa-field">
@@ -124,6 +124,9 @@ $at8sa_select = function ( $key, $label, array $choices ) use ( $at8sa_settings 
 				</option>
 			<?php endforeach; ?>
 		</select>
+		<?php if ( '' !== (string) $description ) : ?>
+			<small class="at8sa-field-note"><?php echo esc_html( $description ); ?></small>
+		<?php endif; ?>
 	</label>
 	<?php
 };
@@ -436,8 +439,9 @@ $at8sa_cache_on = ! empty( $at8sa_settings['page_cache'] );
 						array(
 							'default' => __( '默认（15 秒）', 'at8-site-accelerator' ),
 							'reduce'  => __( '降低频率（60 秒）', 'at8-site-accelerator' ),
-							'disable' => __( '前台禁用', 'at8-site-accelerator' ),
-						)
+							'disable' => __( '前台禁用（wp-admin 不受影响）', 'at8-site-accelerator' ),
+						),
+						__( '「前台禁用」只对访客页面生效，后台（wp-admin）始终保留 WordPress 自带的心跳，以免影响自动保存与实时通知。后台若也想降频请选「降低频率」。', 'at8-site-accelerator' )
 					);
 					?>
 				</div>
@@ -445,9 +449,9 @@ $at8sa_cache_on = ! empty( $at8sa_settings['page_cache'] );
 
 			<div class="at8sa-card">
 				<h2><?php esc_html_e( '⑨ 后台瘦身', 'at8-site-accelerator' ); ?></h2>
-				<?php $at8sa_toggle( 'remove_site_health', __( '移除「站点健康」', 'at8-site-accelerator' ) ); ?>
-				<?php $at8sa_toggle( 'remove_events_news', __( '移除「WordPress 活动与新闻」', 'at8-site-accelerator' ) ); ?>
-				<?php $at8sa_toggle( 'disable_version_checks', __( '禁止浏览器 / PHP 版本检测提示', 'at8-site-accelerator' ) ); ?>
+				<?php $at8sa_toggle( 'remove_site_health', __( '移除「站点健康」', 'at8-site-accelerator' ), __( '仅隐藏仪表盘上的站点健康卡片与「工具 → 站点健康」菜单，不影响其它任何东西。排查站点问题时建议关掉。', 'at8-site-accelerator' ) ); ?>
+				<?php $at8sa_toggle( 'remove_events_news', __( '移除「WordPress 活动与新闻」', 'at8-site-accelerator' ), __( '只移除这一张卡片，站点健康、浏览器与 PHP 版本提示都会保留。', 'at8-site-accelerator' ) ); ?>
+				<?php $at8sa_toggle( 'disable_version_checks', __( '禁止浏览器 / PHP 版本检测提示', 'at8-site-accelerator' ), __( '只隐藏这两张版本提示卡片，不影响「站点健康」卡片与工具菜单。', 'at8-site-accelerator' ) ); ?>
 				<?php $at8sa_toggle( 'disable_large_thumbs', __( '不再生成 medium_large / 1536 / 2048 尺寸', 'at8-site-accelerator' ), __( '只影响新上传的图片，已有缩略图不会被删除。', 'at8-site-accelerator' ) ); ?>
 			</div>
 		</section>

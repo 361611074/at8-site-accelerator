@@ -73,7 +73,6 @@ final class Config {
 			'cache_root'      => AT8SA_CACHE_ROOT,
 			'cache_mobile'    => (int) $settings->is_on( 'cache_mobile' ),
 			'cache_logged_in' => (int) $settings->is_on( 'cache_logged_in' ),
-			'cookie_hash'     => defined( 'COOKIEHASH' ) ? (string) COOKIEHASH : '',
 			'ttl'             => (int) $settings->get( 'cache_ttl', 3600 ),
 			'excluded_paths'  => $this->excluded_paths(),
 			'bypass_cookies'  => $this->bypass_cookies(),

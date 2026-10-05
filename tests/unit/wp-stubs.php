@@ -654,6 +654,18 @@ function is_admin_bar_showing() {
 	return true;
 }
 
+/**
+ * 子站 ID。
+ *
+ * 站点令牌（`BackendFactory::site_token()`）用它做多站点隔离，
+ * 桩环境缺失它会让令牌丢掉 `blog` 段，进而掩盖真实行为。
+ *
+ * @return int
+ */
+function get_current_blog_id() {
+	return isset( $GLOBALS['at8sa_test_blog_id'] ) ? (int) $GLOBALS['at8sa_test_blog_id'] : 1;
+}
+
 function get_current_screen() {
 	return (object) array( 'id' => 'toplevel_page_at8-site-accelerator' );
 }
@@ -683,7 +695,9 @@ function wp_enqueue_script( $handle, $src = '', $deps = array(), $ver = false, $
 }
 
 function wp_script_is( $handle, $list = 'enqueued' ) {
-	unset( $list );
+	if ( 'registered' === $list ) {
+		return in_array( $handle, (array) $GLOBALS['at8sa_test_registered_scripts'], true );
+	}
 
 	return in_array( $handle, (array) $GLOBALS['at8sa_test_enqueued_scripts'], true );
 }
@@ -704,8 +718,44 @@ function wp_localize_script( $handle, $name, $data ) {
 	return true;
 }
 
+/**
+ * 模拟"WordPress 已注册 heartbeat 脚本"这个前置状态。
+ *
+ * `wp_deregister_script()` 的效果必须能被观测到，否则"前台被摘 / 后台不被摘"
+ * 这类断言只能写成静态字符串匹配，测不出真实行为。
+ *
+ * @param string $handle 脚本句柄。
+ * @return void
+ */
+function at8sa_test_register_scripts( array $handles ) {
+	$GLOBALS['at8sa_test_registered_scripts'] = array_values( $handles );
+}
+
+/**
+ * 模拟 WP 通过 `wp_default_scripts` 注册了 heartbeat。
+ *
+ * @return void
+ */
+function wp_scripts_maybe_registering() {
+	$GLOBALS['at8sa_test_registered_scripts'] = array( 'heartbeat', 'jquery' );
+	$GLOBALS['at8sa_test_enqueued_scripts']  = array( 'heartbeat', 'jquery' );
+}
+
+/**
+ * 观测 `wp_deregister_script()` 的结果。
+ *
+ * @param string $handle 脚本句柄。
+ * @return void
+ */
 function wp_deregister_script( $handle ) {
-	unset( $handle );
+	$GLOBALS['at8sa_test_registered_scripts'] = array_values(
+		array_diff( (array) $GLOBALS['at8sa_test_registered_scripts'], array( $handle ) )
+	);
+
+	$GLOBALS['at8sa_test_enqueued_scripts'] = array_values(
+		array_diff( (array) $GLOBALS['at8sa_test_enqueued_scripts'], array( $handle ) )
+	);
+
 	return true;
 }
 
@@ -772,8 +822,30 @@ function selected( $selected, $current = true, $echo = true ) {
 	return $result;
 }
 
+/**
+ * 记录 `remove_meta_box()` 的调用。
+ *
+ * 原始桩只是丢弃参数，于是"只删新闻、不动 Site Health"这类断言无从下手——
+ * 而这恰恰是审核指出的真实缺陷（一次回调顺手删了四个 meta box）。
+ * 记录下来才能真断言"哪个被删了、哪个没被删"。
+ *
+ * @param string $id      meta box ID。
+ * @param string $screen 所属屏幕。
+ * @param string $context 上下文。
+ * @return bool
+ */
 function remove_meta_box( $id, $screen, $context ) {
-	unset( $id, $screen, $context );
+	unset( $screen, $context );
+
+	if ( ! isset( $GLOBALS['at8sa_removed_meta_boxes'] ) ) {
+		$GLOBALS['at8sa_removed_meta_boxes'] = array();
+	}
+
+	$GLOBALS['at8sa_removed_meta_boxes'][ $id ] = array(
+		'id'      => $id,
+		'removed' => true,
+	);
+
 	return true;
 }
 

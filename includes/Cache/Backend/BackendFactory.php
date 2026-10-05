@@ -126,16 +126,49 @@ final class BackendFactory {
 	}
 
 	/**
+	 * 缓存命名空间前缀。
+	 *
+	 * 插件自有前缀，是所有缓存键（磁盘目录名、Redis 键前缀）的第一段。
+	 */
+	const NAMESPACE_PREFIX = 'at8sa';
+
+	/**
 	 * 站点令牌：隔离同服务器多站点。
+	 *
+	 * **为什么绝不能用 `COOKIEHASH`**：`COOKIEHASH` 是 WordPress 用于拼认证
+	 * Cookie 名（`wordpress_logged_in_<COOKIEHASH>` / `wordpress_sec_<COOKIEHASH>`）
+	 * 的常量。它属于认证材料，不是站点标识——把它当缓存命名空间，等于把一段
+	 * 认证相关值复制进缓存目录名、Redis 键、以及落盘的 drop-in 运行时配置文件，
+	 * 同时违反 WordPress.org 插件目录指南（不得暴露/持久化认证常量）与最小知情
+	 * 原则（缓存键的读者不需要知道站点的 Cookie 哈希）。
+	 *
+	 * 替代方案只用两个公开、稳定、非认证的信息量：
+	 * - `get_current_blog_id()`：多站点 / 子站隔离；
+	 * - `home_url()` 的规范化形式：同站多域名（主域名 / www / 反代域名）隔离。
+	 *
+	 * 两者都与认证无关，且跨请求稳定，能满足"精确失效不误伤兄弟站"的要求。
 	 *
 	 * @return string
 	 */
 	public function site_token() {
-		if ( defined( 'COOKIEHASH' ) && COOKIEHASH ) {
-			return (string) COOKIEHASH;
+		$parts = array( self::NAMESPACE_PREFIX );
+
+		// 多站点按子站 ID 隔离；单站点下 `get_current_blog_id()` 返回 1，同样稳定。
+		if ( function_exists( 'get_current_blog_id' ) ) {
+			$parts[] = 'blog' . (int) get_current_blog_id();
 		}
 
-		return md5( (string) home_url() );
+		$home = function_exists( 'home_url' ) ? (string) home_url() : '';
+
+		if ( '' === $home ) {
+			// 极端兜底：拿不到站点地址时退化为固定值，宁可牺牲跨域隔离
+			// 也不能让命名空间变成空串（空串会让所有站共用一个顶层目录）。
+			$parts[] = 'unknown';
+		} else {
+			$parts[] = substr( md5( $home ), 0, 12 );
+		}
+
+		return implode( '_', $parts );
 	}
 
 	/**

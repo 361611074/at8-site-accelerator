@@ -127,20 +127,24 @@ final class CachePluginDetector {
 
 		$conflicts = array();
 
-		if ( ! function_exists( 'get_plugins' ) ) {
-			require_once ABSPATH . 'wp-admin/includes/plugin.php';
-		}
-
-		$active = (array) get_option( 'active_plugins', array() );
-
-		// 多站点网络激活的插件。
-		if ( is_multisite() ) {
-			$network = (array) get_site_option( 'active_sitewide_plugins', array() );
-			$active  = array_merge( $active, array_keys( $network ) );
-		}
+		/*
+		 * 活跃插件列表：只读两个 option，**不加载任何 WordPress Core 文件**。
+		 *
+		 * 旧实现在这里 `require_once ABSPATH . 'wp-admin/includes/plugin.php'`
+		 * 以获得 `get_plugins()`，但下面从来没用过它——`get_plugins()` 读的是
+		 * `plugins` option 且返回全部已安装插件（含未激活的），对"谁正在接管整页
+		 * 缓存"这个问题毫无用处；而为了一个用不到的函数去 include Core 文件，
+		 * 既不符合插件目录指南（插件不应直接加载 wp-admin 的 Core 文件，前台请求
+		 * 上加载 admin 代码还会提前引入 `is_admin()` 相关依赖与额外内存开销），
+		 * 也会在 WordPress.org 自动审核里被直接标为不符合规范。
+		 *
+		 * `get_option( 'active_plugins' )` 与 `get_site_option( 'active_sitewide_plugins' )`
+		 * 是 Core 公开 API，插件侧无需 include 任何文件即可调用。
+		 */
+		$active = $this->active_plugin_files();
 
 		foreach ( $this->known_plugins() as $slug => $info ) {
-			if ( ! in_array( $info['file'], $active, true ) ) {
+			if ( ! $this->is_active( $active, $info['file'] ) ) {
 				continue;
 			}
 
@@ -152,6 +156,9 @@ final class CachePluginDetector {
 		}
 
 		// 检测是否有第三方 advanced-cache.php 占位（可能是别的缓存插件装的 drop-in）。
+		//
+		// 判定与 `AdvancedCache::has_foreign_dropin()` 用同一条规则（文件头是否含
+		// 本插件归属标记），避免"检测器说有冲突、插件自己却照样能装"这种自相矛盾。
 		$dropin = WP_CONTENT_DIR . '/advanced-cache.php';
 
 		if ( is_file( $dropin ) ) {
@@ -169,6 +176,57 @@ final class CachePluginDetector {
 		set_transient( self::CACHE_KEY, $conflicts, HOUR_IN_SECONDS );
 
 		return $conflicts;
+	}
+
+	/**
+	 * 当前处于激活状态的插件主文件路径集合（小写）。
+	 *
+	 * 数据来源全部是 Core 公开 option，**不加载 wp-admin 的 Core 文件**。
+	 * 逐项处理了文档要求的每一个边界：
+	 * - 单站：`active_plugins`（值是插件文件路径数组）；
+	 * - multisite：叠加 `active_sitewide_plugins`（键是插件文件路径，值为激活时间）；
+	 * - option 不存在 / 被写成非数组 → 一律降级为空数组，不产生 Warning；
+	 * - 统一小写后比较 → 规避文件系统大小写敏感差异。
+	 *
+	 * @return string[]
+	 */
+	private function active_plugin_files() {
+		$active = get_option( 'active_plugins', array() );
+
+		// option 可能被第三方插件写坏（存成字符串 / 对象），必须做类型兜底。
+		if ( ! is_array( $active ) ) {
+			$active = array();
+		}
+
+		if ( is_multisite() ) {
+			$network = get_site_option( 'active_sitewide_plugins', array() );
+
+			if ( is_array( $network ) ) {
+				// 网络激活表是 `文件路径 => 激活时间`，取键即可。
+				$active = array_merge( $active, array_keys( $network ) );
+			}
+		}
+
+		$files = array();
+
+		foreach ( $active as $file ) {
+			if ( is_string( $file ) && '' !== trim( $file ) ) {
+				$files[] = strtolower( trim( $file ) );
+			}
+		}
+
+		return array_values( array_unique( $files ) );
+	}
+
+	/**
+	 * 某个插件文件是否在激活集合里。
+	 *
+	 * @param string[] $active 已激活插件文件（小写）。
+	 * @param string   $file   待检测的插件文件路径。
+	 * @return bool
+	 */
+	private function is_active( array $active, $file ) {
+		return in_array( strtolower( (string) $file ), $active, true );
 	}
 
 	/**

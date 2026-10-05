@@ -6,6 +6,124 @@
 
 ---
 
+## 3.0.4 — WordPress.org Plugin Review 整改
+
+> 起因：WordPress.org Plugin Review Team 的 AUTOPREREVIEW 提出 8 项 P0。
+> 本次不是"改到扫描器变绿"，而是逐项重新设计，并给每一项补上可验证的回归断言。
+> 自测矩阵：冒烟测试 297 项全通过（原 249 项，本次新增 48 项整改专项断言），
+> 全量 `php -l` 无错，`E_ALL` 下零 Warning / Notice / Deprecated / Fatal。
+
+### P0-1：`COOKIEHASH` 不得作为缓存命名空间
+
+**问题**：`COOKIEHASH` 是 WordPress 拼认证 Cookie 名（`wordpress_logged_in_<COOKIEHASH>`）
+用的常量，属于认证材料。旧代码把它同时用作站点盐（`BackendFactory::site_token()`）
+和落盘运行时配置的一个键（`Config::runtime()['cookie_hash']`），
+等于把认证相关值复制进缓存目录名、Redis 键、`config/<host>.php` 与 JSON/PHP 配置。
+
+**改法**：
+- `site_token()` → `at8sa_blog<id>_<home_url 的 md5 前 12 位>`；
+  多站点用 `get_current_blog_id()` 隔离，同站多域名用 `home_url()` 隔离，
+  拿不到 `home_url()` 时退化为固定 `unknown`（绝不返回空串，否则所有站共用顶层目录）。
+- `cookie_hash` 键**从运行时配置中删除**。
+- `RequestGuard::has_auth_cookie()` 改为只按字面前缀 `wordpress_logged_in_` /
+  `wordpress_sec_` 判定。这两个前缀本来就覆盖任意哈希后缀，判定强度不变，
+  却彻底切断了插件与认证常量之间的联系。
+- `BackendFactory::NAMESPACE_PREFIX = 'at8sa'` 常量化前缀。
+
+### P0-2：移除无意义的 `require` WordPress Core 文件
+
+**问题**：`CachePluginDetector::scan()` 里有
+`require_once ABSPATH . 'wp-admin/includes/plugin.php'`，但加载后**从未使用**
+`get_plugins()`——判定活跃插件用的是 `get_option( 'active_plugins' )`。
+
+**改法**：删除该 require，新增私有方法 `active_plugin_files()` /
+`is_active()`，只用 `get_option( 'active_plugins' )` +
+`get_site_option( 'active_sitewide_plugins' )` 两个公开 option。
+逐项处理了文档要求的边界：单站 / multisite / 网络激活 / option 不存在 /
+被写成非数组（降级为空数组）/ 大小写（统一小写后比较）。
+
+### P0-3：`advanced-cache.php` 归属保护（本轮最重要）
+
+**问题**：`AdvancedCache::install()` 无条件 `file_put_contents()` 覆盖
+`wp-content/advanced-cache.php`。用户一激活本插件，别人的缓存就被静默顶掉。
+
+**改法**：
+- 新增 `has_foreign_dropin()`：文件存在且归属标记不是本插件 → true。
+- 新增 `blocked_reason()`：给管理员看的中文原因（用 `wp_kses()` 输出）。
+- `install()` 第一步就是归属判断，冲突时记 warning 并返回 false。
+- 模板文件头补 `Plugin Name` / `Drop-in` / `Owner: at8-site-accelerator` 标记。
+- `Activator::activate()` 把冲突结果写进激活结果 option（`dropin_blocked`）。
+- `Ajax::dispatch_install_dropin()` 返回**具体原因**而不是笼统的"写入失败"。
+- `Notices` 把归属冲突排在"未安装"之前提示——否则管理员会反复点安装却永远失败。
+
+`Plugin::ensure_dropin()` 这条自愈路径天然安全：`needs_reinstall()` 仅在归属标记
+属于本插件时才返回 true，且 `install()` 自身也有归属保护（双重保险）。
+
+### P0-4：Heartbeat 只影响前台
+
+**问题**：`heartbeat=disable` 时挂了两个回调，`heartbeat_disable_admin()`
+无条件 `wp_deregister_script( 'heartbeat' )`——设置页写"前台禁用"，
+实际把 wp-admin 的心跳也关了（影响自动保存与实时通知）。
+
+**改法**：删除 `heartbeat_disable_admin()` 与 `admin_enqueue_scripts` 的挂载；
+`heartbeat_disable_front()` 改为 `if ( is_admin() ) return;`。
+UI 文案改为「前台禁用（wp-admin 不受影响）」并补说明。
+
+### P0-5：Dashboard 小组件精确移除
+
+**问题**：`remove_dashboard_widgets()` 把四个 meta box 写死在同一个回调里，
+任一开关开启就整组执行——"移除新闻"顺手带走了 Site Health / 浏览器 / PHP 版本提示。
+**附带缺陷**：它传的上下文是 `'side'`，而 WordPress Core 把 `dashboard_primary`
+注册在 `normal`，所以这个开关**从来就没生效过**（死开关）。
+
+**改法**：按开关分派，`remove_site_health` 只删 `dashboard_site_health`，
+`remove_events_news` 只删 `dashboard_primary`（`normal` 与 `side` 都调用，
+覆盖被第三方挪过位置的场景）。
+
+### P0-6：WebP 的 GD 能力按格式检测
+
+**问题**：`supported()` 只查 `imagewebp()` + `imagecreatefromjpeg()`，
+而 PNG 路径调用 `imagecreatefrompng()`——缺少该函数的 GD 构建上直接 Fatal。
+
+**改法**：
+- 新增 `REQUIRED_FUNCTIONS` 常量表（按格式列出 decoder + encoder）。
+- 新增公开方法 `can_convert_format( $ext )`：`extension_loaded('gd')` +
+  该格式所需的**全部**函数 `function_exists()`。
+- `supported()` 改为对 jpg/jpeg/png 逐个判定（全支持才算支持）。
+- `convert()` 在进入任何 GD 调用**之前**按实际格式再判定一次；
+  `load()` 内部对两个解码函数各留一道 `function_exists()` 兜底。
+
+### P0-7：移动端缓存统一发送 `Vary: User-Agent`
+
+**问题**：只有 drop-in 的 HIT 分支发 Vary，插件侧 HIT / MISS / MISS-SAVED / BYPASS
+全都没发。移动端变体开启时，MISS 与新生成的响应缺少 Vary，
+CDN / 反向代理据此缓存会把桌面版发给移动端——正是这个功能要避免的串页。
+
+**改法**：收敛到 `CacheEngine::send_header()`——它是**所有**缓存响应路径的
+唯一公共出口。`header( 'Vary: User-Agent', false )` 追加而非替换，与 drop-in 一致。
+"开启移动端缓存 → 所有响应都带 Vary"从此成为一条不变量。
+
+### P1：后台 UI 作用域审计
+
+- `SettingsPage::enqueue_assets()` 已有 `toplevel_page_<slug>` 守卫；
+  `Notices::render()` 已有 `current_user_can( 'manage_options' )` +
+  自身页面不重复显示。均已加断言锁定，防回归。
+- `assets/css/admin.css` 无任何全局元素选择器（`body` / `.notice` / `.button` /
+  `input` / `select` / `table` / `h1`…），全部作用域限定在 `.at8sa-*` 下。
+- REST 全部 `permission_callback` → `manage_options`，无 `__return_true`。
+
+### 测试侧的配套改动
+
+- `wp-stubs.php`：`remove_meta_box()` 记录调用（否则"只删新闻"无从断言）；
+  `wp_deregister_script()` / `wp_script_is( ..., 'registered' )` 变成可观测的
+  真实模拟；补 `get_current_blog_id()` 与 `wp_scripts_maybe_registering()`。
+- `smoke.php`：新增 `strip_php_strings()`（与 `strip_php_comments()` 取舍相反，
+  用于区分"真的 require 了 Core 文件"与"拿那段文本当字符串锚点用"）；
+  新增 `at8sa_source_by_suffix()`（Windows 下 `$php_files` 键会残留 `includes/`
+  前缀，硬编码键名会变成静默假绿）；新增第 20b 节共 48 条整改专项断言。
+
+---
+
 ## 3.0.3 — Cookie 绕过判定一致性修复
 
 > 起因：对 3.0.2 做独立真机复验时，发现 `bypass_cookies` 列表里的

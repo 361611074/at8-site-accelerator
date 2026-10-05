@@ -233,6 +233,14 @@
 	line-height: 1.6;
 }
 
+/* 下拉/输入框下方的补充说明。作用域限定在插件前缀内，避免影响 wp-admin 其它表单。 */
+.at8sa-field .at8sa-field-note {
+	max-width: 520px;
+	font-size: 12px;
+	line-height: 1.6;
+	color: var(--at8sa-text-muted);
+}
+
 .at8sa-sub {
 	color: var(--at8sa-text-muted);
 	font-size: 12px;

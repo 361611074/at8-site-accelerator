@@ -146,7 +146,8 @@ WordPress 的 nonce 有 12–24 小时有效期，且与用户会话绑定。
 ## 六、多站点（Multisite）
 
 - 每个站点有独立的缓存目录（`cache/at8-site-accelerator/<host>/…`）；
-- Redis 键前缀基于各站 `COOKIEHASH`，**同服务器多站点共用一台 Redis 不会互相覆盖**；
+- Redis 键前缀基于各站自有命名空间（`at8sa_blog<子站ID>_<home_url 派生值>`），
+  **同服务器多站点共用一台 Redis 不会互相覆盖**；
 - 网络激活时，冲突检测会检查全网络范围的插件列表；
 - 缓存清理只影响当前站点。
 

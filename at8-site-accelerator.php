@@ -3,7 +3,7 @@
  * Plugin Name:       AT8 Site Accelerator
  * Plugin URI:        https://www.at8.fun/at8-site-accelerator/
  * Description:       轻量级整页缓存 + 精准失效 + 智能预加载 + 浏览器缓存 + HTML 压缩 + 图片懒加载 + WebP 自动转换 + 数据库瘦身，多合一站点加速。优先 Redis（不可用时自动降级磁盘），内置 Elementor / WooCommerce 兼容层与第三方缓存冲突检测。
- * Version:           3.0.3
+ * Version:           3.0.4
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            漫步白月光
@@ -24,7 +24,7 @@ defined( 'ABSPATH' ) || exit;
  * ----------------------------------------------------------------------
  */
 
-define( 'AT8SA_VERSION', '3.0.3' );
+define( 'AT8SA_VERSION', '3.0.4' );
 define( 'AT8SA_FILE', __FILE__ );
 define( 'AT8SA_PATH', plugin_dir_path( __FILE__ ) );
 define( 'AT8SA_URL', plugin_dir_url( __FILE__ ) );

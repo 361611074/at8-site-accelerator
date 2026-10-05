@@ -4,7 +4,7 @@ Tags: cache, page cache, redis, lazy load, webp
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 3.0.3
+Stable tag: 3.0.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -86,13 +86,24 @@ That is by design - see "Why surgical invalidation" above. If you really want a 
 
 = Can Redis wipe data belonging to other sites? =
 
-No. Every key carries a per-site salt prefix (derived from this site's `COOKIEHASH` and the cache version), invalidation only deletes keys under this site's prefix, and `FLUSHDB` does not appear anywhere in the codebase.
+No. Every key carries a per-site salt prefix - the plugin's own namespace plus the site's blog ID, its home URL and the cache version - so invalidation only deletes keys under this site's prefix, and `FLUSHDB` does not appear anywhere in the codebase.
 
 = Is Multisite supported? =
 
 Yes. Each site gets its own cache directory and its own Redis key prefix.
 
 == Changelog ==
+
+= 3.0.4 =
+* Fixed: **the plugin no longer overwrites another caching plugin's `advanced-cache.php`.** That file is a single shared slot, and previously merely activating this plugin would silently replace a drop-in left there by WP Super Cache, W3 Total Cache, LiteSpeed Cache or a host environment. Installation is now skipped whenever the existing file does not belong to this plugin, and the reason is shown instead of failing quietly. Removal was already restricted to the plugin's own file and still is.
+* Fixed: the drop-in file now carries an explicit owner marker, so "is this file ours?" is answered by the file itself rather than by guessing from its contents.
+* Fixed: **"Disable Heartbeat on the front end" was also disabling it inside wp-admin.** The setting said front end only, but the backend Heartbeat was deregistered too, which can break autosave and live notifications. The wp-admin Heartbeat is now always left alone; use "Reduce frequency" to slow the backend down as well.
+* Fixed: **"Remove WordPress Events and News" was also removing Site Health, the browser-version notice and the PHP-version notice.** Each switch now removes only its own card. The Events and News switch also never actually worked, because it targeted the wrong dashboard column.
+* Fixed: uploading a PNG could cause a fatal error on servers whose GD build lacks PNG support. Support is now detected per image format before any GD function is called, so an unsupported format is skipped instead of failing.
+* Fixed: when "Cache separately for mobile" was enabled, only cache hits sent `Vary: User-Agent`; misses, newly stored pages and fallback responses did not, so a CDN or reverse proxy could still serve the desktop page to a phone. Every cache response now sends it.
+* Changed: cache keys and the generated runtime configuration no longer contain the site's `COOKIEHASH`. Cache namespacing now uses the plugin's own identifier together with the site's blog ID and home URL, which isolates sites just as well without copying an authentication-related value into cache directory names, Redis keys and on-disk configuration.
+* Changed: the conflict scanner no longer loads WordPress admin core files; it reads the same information through public WordPress APIs.
+* Changed: notices, dashboard notices and the settings-page layout were verified to load only on this plugin's own screen, and the settings descriptions now state exactly what each switch does.
 
 = 3.0.3 =
 * Fixed: **with WooCommerce active, requests carrying the `woocommerce_items_in_cart` cookie were no longer excluded from the cache.** WooCommerce's `WC_Cart_Session` removes that cookie from `$_COOKIE` while the request is being handled, so the second cache-admission check - the one that runs after WordPress has loaded - could no longer see it and stored a response it should have skipped. Both checks now read the same snapshot of the cookies as the browser sent them, taken before any plugin can modify them. This applies to every cart and session cookie in the exclusion list, not just this one.

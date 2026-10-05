@@ -386,6 +386,19 @@ final class CacheEngine {
 	/**
 	 * 发送诊断响应头。
 	 *
+	 * 同时统一处理 `Vary: User-Agent`——这是本方法必须承担的第二职责，
+	 * 因为它是**所有**缓存响应路径（BYPASS / MISS / HIT / MISS-SAVED）的
+	 * 唯一公共出口。旧实现在 drop-in 的 HIT 分支单独发了一次 Vary，
+	 * 插件侧的其它路径一个都没发，于是：
+	 * - 移动端变体开启时，MISS 与新生成的缓存响应缺少 Vary；
+	 * - CDN / 反向代理据此缓存时会把桌面版发给移动端（或反之），正是
+	 *   "移动端单独缓存"这个功能要避免的串页。
+	 *
+	 * 收敛到一处后，"开启移动端缓存 → 所有响应都带 Vary"成为一条不变量，
+	 * 不再有"漏了某条分支"的可能。
+	 *
+	 * 用 `header( ..., false )` 追加而非替换，语义与 drop-in 保持一致。
+	 *
 	 * @param string $state 状态。
 	 * @return void
 	 */
@@ -395,5 +408,9 @@ final class CacheEngine {
 		}
 
 		header( 'X-AT8-Cache: ' . $state );
+
+		if ( $this->settings->is_on( 'cache_mobile' ) ) {
+			header( 'Vary: User-Agent', false );
+		}
 	}
 }

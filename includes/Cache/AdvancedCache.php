@@ -86,6 +86,41 @@ final class AdvancedCache {
 	}
 
 	/**
+	 * 目标路径上是否存在**不属于本插件**的 drop-in。
+	 *
+	 * 这是"绝不能覆盖别人的文件"这条铁律的判断入口。返回 true 表示：
+	 * `wp-content/advanced-cache.php` 已经存在，且归属标记不是本插件的——
+	 * 极可能是 WP Super Cache / W3 Total Cache / LiteSpeed Cache / 主机环境
+	 * 装上去的。此时插件**必须**放弃写入，把决定权交还管理员。
+	 *
+	 * @return bool
+	 */
+	public function has_foreign_dropin() {
+		$path = $this->dropin_path();
+
+		// 文件不存在 → 没有归属冲突，可以安装。
+		if ( ! is_file( $path ) ) {
+			return false;
+		}
+
+		// 文件是我们自己的 → 属于升级覆盖，不算冲突。
+		return '' === $this->dropin_head();
+	}
+
+	/**
+	 * drop-in 安装被拒绝的原因（可展示给管理员）。
+	 *
+	 * @return string 空串代表没有阻塞原因。
+	 */
+	public function blocked_reason() {
+		if ( ! $this->has_foreign_dropin() ) {
+			return '';
+		}
+
+		return __( '检测到 <code>wp-content/advanced-cache.php</code> 已存在且不属于本插件，为避免破坏其它缓存系统已跳过安装。请先停用其它缓存插件，或手动移走该文件后再安装。', 'at8-site-accelerator' );
+	}
+
+	/**
 	 * 读取已安装 drop-in 的文件头（仅当它属于本插件时）。
 	 *
 	 * 返回空串有两种含义，都必须与"是本插件的 drop-in"区分开：
@@ -111,11 +146,31 @@ final class AdvancedCache {
 	}
 
 	/**
-	 * 安装 drop-in（幂等）。
+	 * 安装 drop-in（幂等 + 归属保护）。
+	 *
+	 * **绝不覆盖别人的文件**：`wp-content/advanced-cache.php` 是全站唯一的
+	 * 整页缓存 drop-in 槽位，可能已被 WP Super Cache / W3 Total Cache /
+	 * LiteSpeed Cache / 主机环境占用。旧实现在这里无条件 `file_put_contents()`，
+	 * 意味着"用户一激活本插件，别人的缓存就被静默顶掉"——这既会弄坏站点，
+	 * 也正是 WordPress.org 审核明确点出的问题。
+	 *
+	 * 现在的判定顺序：
+	 * 1. 文件不存在 → 允许安装；
+	 * 2. 文件存在且归属标记是本插件 → 允许覆盖（这是升级 / 自愈路径，必须能覆盖）；
+	 * 3. 文件存在但**不属于**本插件 → 拒绝，记 warning，返回 false。
 	 *
 	 * @return bool
 	 */
 	public function install() {
+		if ( $this->has_foreign_dropin() ) {
+			$this->logger->warning(
+				'advanced-cache.php 已被其它系统占用，跳过安装（不覆盖）',
+				array( 'path' => $this->dropin_path() )
+			);
+
+			return false;
+		}
+
 		$template = $this->template_path();
 
 		if ( ! is_readable( $template ) ) {

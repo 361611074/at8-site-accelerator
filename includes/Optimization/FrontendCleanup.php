@@ -92,8 +92,18 @@ final class FrontendCleanup {
 		if ( 'reduce' === $heartbeat ) {
 			add_filter( 'heartbeat_settings', array( $this, 'heartbeat_reduce' ) );
 		} elseif ( 'disable' === $heartbeat ) {
+			/*
+			 * 「前台禁用」**只作用于非 wp-admin 请求**。
+			 *
+			 * 旧实现在这里额外挂了 `admin_enqueue_scripts` → `heartbeat_disable_admin()`，
+			 * 而那个方法无条件 `wp_deregister_script( 'heartbeat' )`，于是设置页写的是
+			 * "前台禁用"，实际连 wp-admin 的心跳也被关掉了：与文案不符，且后台多处
+			 * 功能（自动保存、实时校验、编辑器心跳、后台 AJAX 通知）依赖它。
+			 *
+			 * 现在后台一律保留 WordPress 原生 Heartbeat；要控制后台频率请用
+			 * "降低频率"（那条只改 interval，不摘脚本）。
+			 */
 			add_action( 'wp_enqueue_scripts', array( $this, 'heartbeat_disable_front' ), 99 );
-			add_action( 'admin_enqueue_scripts', array( $this, 'heartbeat_disable_admin' ), 99 );
 		}
 	}
 
@@ -192,7 +202,7 @@ final class FrontendCleanup {
 	}
 
 	/**
-	 * 降低 Heartbeat 频率。
+	 * 降低 Heartbeat 频率（前台与后台一致生效，只改间隔不摘脚本）。
 	 *
 	 * @param array $settings 心跳设置。
 	 * @return array
@@ -206,33 +216,53 @@ final class FrontendCleanup {
 	/**
 	 * 前台禁用 Heartbeat。
 	 *
-	 * @return void
-	 */
-	public function heartbeat_disable_front() {
-		if ( ! is_admin() ) {
-			wp_deregister_script( 'heartbeat' );
-		}
-	}
-
-	/**
-	 * 后台禁用 Heartbeat。
+	 * **只影响非 wp-admin 请求**：`is_admin()` 守卫在这里是安全边界，不是冗余判断。
+	 * 后台（wp-admin）依赖 Heartbeat 驱动自动保存与实时通知，摘掉它会破坏核心功能。
 	 *
 	 * @return void
 	 */
-	public function heartbeat_disable_admin() {
+	public function heartbeat_disable_front() {
+		if ( is_admin() ) {
+			return;
+		}
+
 		wp_deregister_script( 'heartbeat' );
 	}
 
 	/**
 	 * 移除后台仪表盘小组件。
 	 *
+	 * **按设置逐项精确删除，绝不"顺手多删几个"**。
+	 *
+	 * 旧实现把四个 meta box 写死在同一个回调里，只要 `remove_site_health` 或
+	 * `remove_events_news` 任一开启就整组执行，于是"移除 WordPress 活动与新闻"
+	 * 这个本该只影响一个小组件的开关，顺手把「站点健康」（Site Health）、
+	 * 浏览器版本提示、PHP 版本提示一起带走了 —— 与设置名称/描述完全不符，
+	 * 也让用户丢掉了排查站点问题的入口。
+	 *
+	 * 现在按开关分派，各删各的，互不牵连。
+	 *
 	 * @return void
 	 */
 	public function remove_dashboard_widgets() {
-		remove_meta_box( 'dashboard_site_health', 'dashboard', 'normal' );
-		remove_meta_box( 'dashboard_primary', 'dashboard', 'side' );
-		remove_meta_box( 'dashboard_browser_nag', 'dashboard', 'normal' );
-		remove_meta_box( 'dashboard_php_nag', 'dashboard', 'normal' );
+		if ( $this->settings->is_on( 'remove_site_health' ) ) {
+			remove_meta_box( 'dashboard_site_health', 'dashboard', 'normal' );
+		}
+
+		if ( $this->settings->is_on( 'remove_events_news' ) ) {
+			/*
+			 * 「WordPress 活动与新闻」= dashboard_primary，只删它一个。
+			 *
+			 * 上下文两个都试：`remove_meta_box()` 是按 id + screen + context
+			 * 三者匹配的，传错 context 等于没删。WordPress Core 在
+			 * `wp-admin/includes/dashboard.php` 里把它注册在 `normal`，
+			 * 而旧代码写的是 `side` —— 于是这个开关一直是"打开也没反应"
+			 * 的死开关（顺带说明：文档给的示例也是 `normal`）。
+			 * 两个都调用成本为零，且能覆盖被第三方插件挪过位置的场景。
+			 */
+			remove_meta_box( 'dashboard_primary', 'dashboard', 'normal' );
+			remove_meta_box( 'dashboard_primary', 'dashboard', 'side' );
+		}
 	}
 
 	/**

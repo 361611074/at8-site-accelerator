@@ -172,10 +172,13 @@ wp-content/cache/at8-site-accelerator/
 
 ```
 salt = site_token() . '|v' . cache_version()
-site_token() = COOKIEHASH（未定义时回退 md5(home_url())）
+site_token() = 'at8sa_blog' . get_current_blog_id() . '_' . substr( md5( home_url() ), 0, 12 )
 ```
 
 - `site_token` 解决**同服务器多站点隔离**；
+- **为什么不用 `COOKIEHASH`**：它是 WordPress 拼认证 Cookie 名的常量，属于认证材料。
+  拿它当缓存命名空间，等于把认证相关值复制进缓存目录名、Redis 键与落盘的运行时配置。
+  3.0.4 起改用插件自有前缀 + 子站 ID + home_url 派生值——隔离强度不变，且与认证无关。
 - `cache_version` 解决**"删不干净"**：整站失效时先 flush 当前盐、**再**递增版本号，
   旧键立即不可达，即使 flush 半途失败也不会被读到。这比单纯 flush 更硬。
 

@@ -92,7 +92,19 @@ final class Notices {
 		$dropin = $this->dep( 'advanced_cache' );
 
 		if ( $settings->is_on( 'page_cache' ) && $settings->is_on( 'advanced_cache' ) ) {
-			if ( ! $dropin->is_wp_cache_enabled() ) {
+			/*
+			 * 归属冲突优先于"未安装"。
+			 *
+			 * 槽位被别的缓存系统占用时，插件**主动让路**（不覆盖别人的文件），
+			 * 结果就是 drop-in 始终装不上。如果只报"尚未安装"，管理员会反复点
+			 * "安装"却永远失败，而真正的原因（另一个插件占着这个位置）没被说出来。
+			 * 这里把冲突原因直接讲清楚，并给出下一步。
+			 */
+			$blocked = $dropin->blocked_reason();
+
+			if ( '' !== $blocked ) {
+				$this->notice( 'warning', $blocked . ' ' . $this->link( __( '查看详情', 'at8-site-accelerator' ) ) );
+			} elseif ( ! $dropin->is_wp_cache_enabled() ) {
 				$this->notice(
 					'warning',
 					sprintf(

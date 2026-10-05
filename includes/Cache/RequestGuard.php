@@ -110,7 +110,7 @@ final class RequestGuard {
 	 *
 	 * **缺陷 1（内容泄漏）**：`wp-postpass_`、`comment_author_`、
 	 * `wp_woocommerce_session_` 曾经写成不带 `*` 的裸前缀，于是退化成
-	 * "精确等于 `wp-postpass_`"。而真实 Cookie 名是 `wp-postpass_<COOKIEHASH>`，
+	 * "精确等于 `wp-postpass_`"。而真实 Cookie 名带站点哈希后缀，
 	 * 永远匹配不上 → 密码保护页面会被缓存并端给**没输密码**的访客。
 	 *
 	 * **缺陷 2（开关失效）**：`wordpress_logged_in_*` / `wordpress_sec_*`
@@ -128,7 +128,7 @@ final class RequestGuard {
 	 */
 	public static function default_bypass_cookies() {
 		return array(
-			// 前缀类：名字后面还会拼 <COOKIEHASH>，必须带 `*`，否则等于没写。
+			// 前缀类：名字后面还会拼站点哈希后缀，必须带 `*`，否则等于没写。
 			'wp-postpass_*',
 			'comment_author_*',
 			'wp_woocommerce_session_*',
@@ -308,18 +308,29 @@ final class RequestGuard {
 	/**
 	 * 是否存在登录态 Cookie。
 	 *
+	 * 只按**前缀**判定，不引用 `COOKIEHASH` / `AUTH_COOKIE` / `LOGGED_IN_COOKIE`
+	 * 等任何认证常量，也不把它们写进落盘的运行时配置。
+	 *
+	 * 原因：WordPress 的登录态 Cookie 名本身就是
+	 * `wordpress_logged_in_<COOKIEHASH>` 与 `wordpress_sec_<COOKIEHASH>`——
+	 * 哈希值恒为后缀，前缀匹配天然覆盖任意哈希，因此"拼接哈希的前缀"是多余的。
+	 * 去掉它之后，判定强度不变，却彻底切断了插件与认证常量之间的联系
+	 * （旧实现会把 `COOKIEHASH` 落进 `config/<host>.php`，属于持久化认证材料）。
+	 *
+	 * 前缀表刻意写死为字面量：这些是 WordPress Core 固定的 Cookie 名前缀
+	 * （见 `wp-includes/pluggable.php` 的 `wp_set_auth_cookie()`），
+	 * 不随站点配置变化，因此无需、也不应从常量读取。
+	 *
 	 * @param array $config 运行时配置。
 	 * @return bool
 	 */
 	private static function has_auth_cookie( array $config ) {
-		$hash = isset( $config['cookie_hash'] ) ? (string) $config['cookie_hash'] : '';
+		unset( $config ); // 判定完全基于 Cookie 名，无需配置参与。
 
-		$prefixes = array( 'wordpress_logged_in_', 'wordpress_sec_' );
-
-		if ( '' !== $hash ) {
-			$prefixes[] = 'wordpress_logged_in_' . $hash;
-			$prefixes[] = 'wordpress_sec_' . $hash;
-		}
+		$prefixes = array(
+			'wordpress_logged_in_',
+			'wordpress_sec_',
+		);
 
 		foreach ( array_keys( self::cookies() ) as $name ) {
 			foreach ( $prefixes as $prefix ) {

@@ -52,6 +52,9 @@
 - 新增 `blocked_reason()`：给管理员看的中文原因（用 `wp_kses()` 输出）。
 - `install()` 第一步就是归属判断，冲突时记 warning 并返回 false。
 - 模板文件头补 `Plugin Name` / `Drop-in` / `Owner: at8-site-accelerator` 标记。
+  （后续修正：`Plugin Name` 已移除——它在插件目录内部会被 WP 扫成独立插件条目，
+  反而导致激活报错"没有有效的标题"。归属保护实际依赖 `Owner:` 与版本戳，详见下文
+  「drop-in 模板被 WP 扫成独立插件」一节。）
 - `Activator::activate()` 把冲突结果写进激活结果 option（`dropin_blocked`）。
 - `Ajax::dispatch_install_dropin()` 返回**具体原因**而不是笼统的"写入失败"。
 - `Notices` 把归属冲突排在"未安装"之前提示——否则管理员会反复点安装却永远失败。
@@ -121,6 +124,39 @@ CDN / 反向代理据此缓存会把桌面版发给移动端——正是这个�
   用于区分"真的 require 了 Core 文件"与"拿那段文本当字符串锚点用"）；
   新增 `at8sa_source_by_suffix()`（Windows 下 `$php_files` 键会残留 `includes/`
   前缀，硬编码键名会变成静默假绿）；新增第 20b 节共 48 条整改专项断言。
+
+### P1：drop-in 模板被 WP 扫成独立插件、点激活报"没有有效的标题"（本次修复）
+
+**问题**：上传 3.0.4 后，在插件列表页点激活，WordPress 报
+**「该插件没有有效的标题」**（Fatal error: Cannot activate because the plugin is
+missing a valid title）。URL 里的目标是
+`plugin=at8-site-accelerator%2Ftemplates%2Fadvanced-cache.php`。
+
+**根因**：`templates/advanced-cache.php` 的文件头带了 `* Plugin Name: AT8 Site Accelerator`。
+WordPress 的插件扫描器（`get_plugins()`）会**递归**读取插件目录下所有 `.php`，
+只要文件头有 `Plugin Name:` 就把它当成一个**独立插件条目**登记进插件列表。
+而这个 drop-in 模板只写了 `Plugin Name`，没有 `Version` / `Plugin URI` /
+`Description` 这些必需字段，WP 认为它不是一个完整插件，标题字段为空，
+于是页面上冒出一个点得动却激活不了的空条目。
+
+这个 header 是当初为了"让人一眼看出这是谁的 drop-in"加的，但它在插件目录**内部**，
+语义完全错误：drop-in 是被复制到 `wp-content/advanced-cache.php` 执行的模板，
+它自己永远不会被当作插件激活。
+
+**改法**：删掉 `templates/advanced-cache.php` 的 `Plugin Name:` 行，
+`Drop-in:` 与 `Owner: at8-site-accelerator` 保留。
+
+**为什么安全**（归属保护没被削弱）：`AdvancedCache::dropin_head()` 与
+`uninstall.php` 判定归属用的是 `strpos( $head, 'AT8 Site Accelerator' )`，
+该字符串在文件头另有三处出现（首行标题、归属说明段），实测首次出现于
+**字节偏移 13**，远在 `dropin_head()` 读 4096 字节与 `uninstall.php` 读 2048 字节
+两个窗口之内，判定不受影响。真正的主标记 `Owner: at8-site-accelerator`
+（字节偏移 461）与版本戳 `@at8sa-dropin-version`（字节偏移 522）都原样保留，
+`AdvancedCache::VERSION_TAG` 正常比对版本自愈。
+
+**防回归**：新增 1 条断言，锁死模板内不得再出现 `Plugin Name` 字样，
+并把上面这段 WordPress 扫描机制写成注释，避免以后有人"好心"补回去。
+冒烟测试 296 → 297 项。
 
 ### P1：3.0.4 推送后 CI 未通过（本次修复）
 

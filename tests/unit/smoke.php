@@ -1985,6 +1985,21 @@ check(
 	''
 );
 
+// 防回归：模板里绝不能再出现 `Plugin Name:`。
+//
+// WordPress 的插件扫描器会递归读取插件目录下的所有 .php，只要文件头里有
+// `Plugin Name:` 就把它当成一个**独立插件条目**列进插件页。但本模板既没有
+// `Version` / `Plugin URI` / `Description` 这些必需字段，WP 就认为它"没有有效的标题"，
+// 于是页面上冒出一个可点击却点不动的空条目（激活时报"该插件没有有效的标题"）。
+//
+// 归属判定用的是 `Owner: at8-site-accelerator` 与 `@at8sa-dropin-version`，
+// 跟 `Plugin Name:` 无关，所以删掉它是安全的。
+check(
+	'drop-in 模板不含 Plugin Name 头（否则 WP 会误扫成独立插件条目）',
+	false === strpos( $at8sa_dropin_tpl, 'Plugin Name' ),
+	''
+);
+
 // 卸载路径同样必须有归属校验（只能删自己的）。
 $at8sa_uninstall_src = (string) file_get_contents( AT8SA_PATH . 'uninstall.php' );
 

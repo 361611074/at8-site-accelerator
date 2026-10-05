@@ -28,7 +28,6 @@
  * 3. 必须**自己发现自己是旧版**并主动让出（见下面的"版本自检"）——因为一旦命中缓存
  *    这里就 `exit` 了，第 2 条那套事后修复根本没机会跑。
  *
- * Plugin Name: AT8 Site Accelerator
  * Drop-in: advanced-cache.php
  * Owner: at8-site-accelerator
  *

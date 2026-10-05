@@ -6,6 +6,91 @@
 
 ---
 
+## 3.0.5 — Plugin Check 过检修复（1 ERROR + 1 WARNING）
+
+> 起因：3.0.5 推送后跑官方 Plugin Check，报 1 error + 1 warning。
+> 两者都不是"扫描器吹毛求疵"：一个会被审核直接打回，一个会让 readme 结构非法。
+
+### 修复 1：`unlink_unlink` ERROR（会阻断审核）
+
+`includes/Cache/AdvancedCache.php` 的 `discard_wp_config_backup()` 直接用
+`@unlink()` 删wp-config.php 的临时备份，被判`WordPress.WP.AlternativeFunctions.unlink_unlink`。
+
+**没有选择"加个 `phpcs:ignore` 了事"**，而是改成两段式删除：
+
+1. 先走 `wp_delete_file()` —— 这是 WordPress 规定的文件删除入口，除了删除本身
+   还会触发 `wp_delete_file` 动作，站点的审计钩子能观测到"含凭据的文件已删除"；
+2. 失败则**兜底再 `unlink()` 一次**。
+
+第2 段为什么必须保留：`wp_delete_file()` 内部先 `is_file()` 再 `unlink()`，
+只要 stat 因任何原因失败（权限、符号链接、`open_basedir`）就直接返回 false。
+对一个"绝不能留在磁盘上"的明文凭据文件，静默跳过删除是不能接受的。
+兜底那次会跳过 stat 直接尝试删除。该行保留精确豁免
+（`phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink`）并写明理由。
+
+原实现里"用 `unlink()` 而不是 `wp_delete_file()`"的注释已随之重写 —— 
+它当初的理由（怕 WP 的 stat 探测导致静默跳过）现在只适用于兜底那一段。
+
+### 修复 2：`upgrade_notice_limit` WARNING
+
+`readme.txt` 的 `= 3.0.5 =` Upgrade Notice 约 508 字符，超过 Plugin Check 的
+300 字符上限。已压缩到 **287 字符**，保留三个最关键信息：
+wp-config 明文副本已移除、通知不再全后台显示、"缓存登录用户"选项已移除。
+
+### 配套：把检查前移到 CI
+
+`upgrade_notice_limit` 是 WARNING 级，不会让 CI 变红，只在 wp.org 后台报一行字。
+新增 `tools/check-upgrade-notice.php` 并接入 CI 的 `test` 作业 ——
+超限条目同样会被审核打回，而 readme.txt 里写长句子的习惯很容易形成，
+所以自己先卡一道，比等审核打回再改划算。
+
+写这个脚本时踩了两个坑，都已写进注释：
+
+- **`preg_split` + `PREG_SPLIT_DELIM_CAPTURE` 会在遇到连续两个分隔符时吞掉条目。**
+  实测插入一个同名重复标题后，条目数从 5 条变 4 条、某版本整条凭空消失，
+  而退出码仍是 0 —— 那种"漏报还报绿"比报错危险得多。改用`preg_match_all`
+  逐个定位偏移量，两个相邻标题就是两条独立记录。
+- **"探针零输出时先怀疑探针"**：验证脚本时注入超限内容却仍报"289✅"，
+  排查后发现是注入脚本把两行粘成了一行，脚本本身是对的。
+  最终用 `git checkout` 还原到真实原始文件，才拿到可信基线
+  （原始485 字符、超限、退出码 1）。
+
+### 配套：修正 `wp_delete_file()` 测试桩的返回类型
+
+`tests/unit/wp-stubs.php` 的桩此前返回 `void`，而真实 WP 的 `wp_delete_file()`
+返回 `bool`。这个偏差让"主路径成功"永远判为失败，测试实际只覆盖到兜底分支
+—— 与真实站点上的执行路径恰好相反。已改为返回 `bool`，并加两个测试开关：
+记录主路径调用次数、强制主路径失败。
+
+### 集成验收新增 2 项（67 项）
+
+光断言"文件最终没了"不够 —— 两段式和裸 `unlink()` 都能让它通过。
+所以补了两条针对**走哪条路**的断言：
+
+- 临时备份确实经 `wp_delete_file()` 删除（桩记录调用）；
+- 主路径被强制失败时，兜底删除仍能清掉凭据文件。
+
+这两条已做**变异测试**验证：把主路径分支删掉、退回裸 `unlink()`，
+第一条断言立刻变红 —— 证明它真的在检测执行路径，不是恒真。
+
+### 顺手修掉：README 引用了一个从未提交的文件
+
+`README.md` 的文档表引用了 `docs/FREE_PRO_ROADMAP.md`，但该文件从未进过版本库
+（只在本地未跟踪状态）。更糟的是它的内容是 `FREE_PRO_MATRIX.md` 重写**之前**
+的旧规划稿，含 Critical CSS / AVIF / 白标等代码里不存在的功能。
+现已提交，并在文件头与表格上方各加一处警示，指明真实边界以 `FREE_PRO_MATRIX.md` 为准。
+
+### 自测矩阵
+
+冒烟测试 318 项、第二轮集成验收 67 项、PHPUnit 212 项（541 断言）全部通过；
+PHPCS 42/42 文件零告警；`tools/check-upgrade-notice.php` 5 个条目全部合规。
+
+> 本机 PHPStan 报1000+ `class.notFound`，经与改动前基线对比确认为**既有环境问题**
+> （本机 vendor 状态导致插件自身类未被索引），非本次改动引入；
+> CI 上干净环境 + `composer update` 的运行结果才是判据。
+
+---
+
 ## 3.0.5 — 第二轮 WordPress.org 审核整改 + Free / Pro 架构定稿
 
 > 起因：3.0.4 通过 Plugin Review 后，按第二轮规范继续自查。

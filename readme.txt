@@ -167,7 +167,7 @@ The full technical change list (including the reason behind every fix) is in `CH
 == Upgrade Notice ==
 
 = 3.0.5 =
-Recommended for every 3.0.4 user. This release removes a leftover copy of `wp-config.php` that could expose your database password and secret keys, stops plugin notices from appearing across the whole admin, and removes the option that allowed logged-in visitors to share cached pages. If you were using "cache logged-in users", the cached pages built with it are discarded automatically - after this update, logged-in visitors always bypass the cache. No action is required.
+Recommended for every 3.0.4 user. Removes a leftover wp-config.php copy that could expose your database password, limits plugin notices to this plugin's own settings page, and ends "cache logged-in users" - logged-in visitors now always bypass the cache. No action is required.
 
 = 3.0.3 =
 Recommended for all users, especially sites running WooCommerce. Fixes a case where the shopping-cart cookie stopped being honoured by the cache, so a page that should never have been cached could be stored. No settings changes are needed.

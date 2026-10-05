@@ -485,6 +485,48 @@ at8sa_ok( '无 wp-config.php.* 形式的备份/临时文件', empty( $at8sa_left
 @unlink( $at8sa_config_path );
 
 /* ============================================================
+ * 四、d) 删除临时备份必须走 wp_delete_file() 主路径
+ * ============================================================
+ *
+ * 为什么单独钉这一条：`discard_wp_config_backup()` 是「先 wp_delete_file()、
+ * 失败再兜底 unlink()」的两段式。前面那些断言只看「文件最终没了」，两段式和
+ * 单纯 unlink() 都能让它通过 —— 也就是说，把两段式调换成裸 unlink()（也就是
+ * Plugin Check 会判ERROR 的那种写法）测试依然全绿。
+ *
+ * 这里通过给桩打标记来区分：主路径被走过 => 标记为true。
+ * 断言的是**走哪条路**，不是「删掉了没」—— 后者前面已经证过了。
+ */
+
+$at8sa_adv_ref = new ReflectionClass( 'AT8SA\\Cache\\AdvancedCache' );
+$at8sa_discard = $at8sa_adv_ref->getMethod( 'discard_wp_config_backup' );
+$at8sa_discard->setAccessible( true );
+
+$at8sa_probe = $at8sa_root . 'wp-config.php.at8sa.tmp';
+file_put_contents( $at8sa_probe, "<?php\n// probe\n" );
+$GLOBALS['at8sa_test_wp_delete_file_calls'] = array();
+$at8sa_discard->invoke( $at8sa_adv, $at8sa_probe );
+
+at8sa_ok(
+	'临时备份经 wp_delete_file() 删除（而非裸 unlink 兜底）',
+	! file_exists( $at8sa_probe ) && in_array( $at8sa_probe, (array) ( $GLOBALS['at8sa_test_wp_delete_file_calls'] ?? array() ), true ),
+	'桩记录：' . implode( ',', (array) ( $GLOBALS['at8sa_test_wp_delete_file_calls'] ?? array() ) )
+);
+unset( $GLOBALS['at8sa_test_wp_delete_file_calls'] );
+
+// 兜底分支也必须真能删：让主路径失效（桩里让 is_file 失败），确认兜底 unlink() 接手。
+$at8sa_probe2 = $at8sa_root . 'wp-config.php.at8sa.tmp';
+file_put_contents( $at8sa_probe2, "<?php\n// probe2\n" );
+$GLOBALS['at8sa_test_wp_delete_file_force_fail'] = true;
+$at8sa_discard->invoke( $at8sa_adv, $at8sa_probe2 );
+unset( $GLOBALS['at8sa_test_wp_delete_file_force_fail'] );
+
+at8sa_ok(
+	'主路径失效时兜底删除仍能清掉凭据文件',
+	! file_exists( $at8sa_probe2 ),
+	'仍存在：' . ( file_exists( $at8sa_probe2 ) ? $at8sa_probe2 : '已删除' )
+);
+
+/* ============================================================
  * 五、Host 归一化防穿越（realpath 落地验证）
  * ============================================================ */
 

@@ -936,22 +936,37 @@ function wp_delete_comment( $id, $force = false ) {
 /**
  * `wp_delete_file()` 桩。
  *
- * 插件在「精准删除缓存文件」「递归清空缓存目录」「卸载 drop-in」三条路径上都调用它。
- * 桩**必须真的删文件**——否则磁盘后端的删除断言会假通过（文件明明还在，测试却以为
- * 删掉了），而这种假绿灯正是"缓存清了但页面没变"这类线上问题最爱的藏身处。
+ * 插件在「精准删除缓存文件」「递归清空缓存目录」「卸载 drop-in」「删除 wp-config
+ * 临时备份」四条路径上都调用它。桩**必须真的删文件**——否则磁盘后端的删除断言会
+ * 假通过（文件明明还在，测试却以为删掉了），而这种假绿灯正是"缓存清了但页面没变"
+ * 这类线上问题最爱的藏身处。
  *
- * 与 WP 保持一致：无返回值，删除失败不抛异常。
+ * 签名与 WP 核心严格一致（**返回 bool**，不是 void）：真实实现先 `is_file()` 再
+ * `unlink()`，成功返回 true、文件不存在或删除失败返回 false。插件里
+ * `AdvancedCache::discard_wp_config_backup()` 正是靠这个返回值决定"主路径成功"
+ * 还是"需要兜底再删一次"。桩若返回 void，主路径永远判为失败，兜底分支就成了
+ * 唯一被测到的路径 —— 而真实站点上恰好相反。
  *
  * @param string $file 待删文件路径。
- * @return void
+ * @return bool 是否删除成功。
  */
 function wp_delete_file( $file ) {
-	if ( ! $file ) {
-		return;
+	// 测试可观测点：记录主路径被调用过，并允许测试强制让主路径失败，
+	// 以便验证插件侧的兜底分支（两段式删除里的第二段）确实能接手。
+	// 生产环境不存在这两个全局变量。
+	if ( isset( $GLOBALS['at8sa_test_wp_delete_file_calls'] ) && is_array( $GLOBALS['at8sa_test_wp_delete_file_calls'] ) ) {
+		$GLOBALS['at8sa_test_wp_delete_file_calls'][] = $file;
+	}
+	if ( ! empty( $GLOBALS['at8sa_test_wp_delete_file_force_fail'] ) ) {
+		return false;
 	}
 
-	// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- 与 WP 核心一致：删除失败静默。
-	@unlink( $file );
+	if ( ! $file || ! is_file( $file ) ) {
+		return false;
+	}
+
+	// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- 与 WP 核心一致：删除失败静默返回 false。
+	return (bool) @unlink( $file );
 }
 
 function get_comment( $id ) {

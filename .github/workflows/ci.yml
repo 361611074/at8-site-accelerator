@@ -65,6 +65,12 @@ jobs:
       - name: 第二轮集成验收
         run: php tests/unit/round2-integration.php
 
+      # Plugin Check 的 upgrade_notice_limit 是 WARNING 级：它不会让 CI 变红，
+      # 只在 wp.org 后台报一行字。但超限的条目同样会被审核打回，
+      # 而 readme.txt 里塞长句子的习惯很容易形成——所以自己先卡一道。
+      - name: readme.txt Upgrade Notice 不超 300 字符
+        run: php tools/check-upgrade-notice.php
+
       - name: 翻译模板是否与源码同步
         run: |
           set -e

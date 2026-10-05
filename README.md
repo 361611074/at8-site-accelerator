@@ -122,11 +122,18 @@ Free 版对 Pro 的介绍是**完全静态**的：设置页里一个说明区域
 ```bash
 php tests/unit/smoke.php
 php tests/unit/round2-integration.php
+php tools/check-upgrade-notice.php
 ```
 
 冒烟测试 318 项（静态断言，含 drop-in 命中路径的子进程测试），
-第二轮集成验收 70 项（行为断言：逐个后台页面验证通知作用域、
-真实写/回滚 `wp-config.php` 后确认无临时备份残留、`realpath()` 实测 Host 归一化）。
+第二轮集成验收 67 项（行为断言：逐个后台页面验证通知作用域、
+真实写/回滚 `wp-config.php` 后确认无临时备份残留、
+验证删除临时备份确实走 `wp_delete_file()` 主路径且兜底分支也能接手、
+`realpath()` 实测 Host 归一化）。
+
+`check-upgrade-notice.php` 校验 `readme.txt` 的 Upgrade Notice 每个版本条目
+不超过 Plugin Check 的 300 字符上限 —— 该项在后台只报 WARNING，不会让 CI 变红，
+但超限会被审核打回，所以自己先卡一道。
 
 ### 生成翻译模板
 

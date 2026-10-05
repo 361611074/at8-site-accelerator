@@ -33,3 +33,6 @@
 dist/**            linguist-generated
 tests/unit/fake-wp/** linguist-generated
 languages/*.pot    linguist-generated
+
+# WordPress.org 目录展示素材：与 SVN 顶层 assets/ 一一对应，永不进入发行 ZIP
+.wordpress-org/**  export-ignore

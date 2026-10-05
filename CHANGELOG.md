@@ -122,6 +122,38 @@ CDN / 反向代理据此缓存会把桌面版发给移动端——正是这个�
   新增 `at8sa_source_by_suffix()`（Windows 下 `$php_files` 键会残留 `includes/`
   前缀，硬编码键名会变成静默假绿）；新增第 20b 节共 48 条整改专项断言。
 
+### P1：3.0.4 推送后 CI 未通过（本次修复）
+
+整改内容本身在 CI 上跑出 6 个 PHPStan 错误 + 2 个 PHPCS 警告，均已修复。
+用 PHP 8.3.14 + phpstan 2.2.17 + wpcs 3.4.1 在本地完整复现后修复：
+
+- **`Webp::convert()` 的 `isset()` 被判恒真**：$extension 已经过格式白名单，
+  `REQUIRED_FUNCTIONS` 的键必然存在。把取值收进新私有方法
+  `required_functions()`——在那里 $extension 是任意字符串，存在性判断是必要的；
+  `convert()` 内则不再重复判断，判据统一由 `can_convert_format()` 负责。
+  顺带消除了原先"判定的键"与"日志打印的键"可能不一致的隐患。
+- **`smoke.php` 中 3 处 `method_exists()` 恒真**（PHPStan 已静态加载这些类，
+  断言失去意义）：
+  - `AdvancedCache` 的 2 条改为反射断言**方法可见性为 public**。这两个方法必须
+    对外可见才能被 `Activator` / `Notices` / `Ajax` 调用，写成 private 会让
+    归属保护静默失效——这才是真实风险，"存在性"不是。
+  - `Webp::can_convert_format()` 的 1 条直接删除：紧随其后的真实调用就是更强的
+    断言，方法不存在时那里会 Fatal。
+- **`wp_scripts_maybe_registering()` 报 `function.notFound`**：它定义在
+  `tests/unit/wp-stubs.php`，而该文件在 `excludePaths` 中。在
+  `tests/phpstan/bootstrap.php` 补一份函数声明（只给签名不给实现），
+  与该文件里已为 `COOKIEHASH` 做的常量补偿是同一机制。
+- **`Activator.php` 等号未对齐**（`Generic.Formatting.MultipleStatementAlignment`），
+  由 `phpcbf` 修正。
+
+> 一个值得记下的坑：PHPStan 在中文路径下会报 UTF-8 错误，且清空result cache
+> 之前会吐出上千个假的 `class.notFound`（符号表建立失败）。CI 是 Linux 环境
+> 不受影响，但本地复现时必须先 `clear-result-cache` 才能看到真实错误数。
+
+**修复后验证**：PHPStan level 5 No errors；PHPCS 0 错误 0 警告；
+`php -l` 65 个文件通过；冒烟测试 296/0（有 GD 与无 GD 各跑一遍）；
+PHPUnit 212 tests / 542 assertions 通过，6 skipped（Redis 相关，本机无 Redis）。
+
 ---
 
 ## 3.0.3 — Cookie 绕过判定一致性修复

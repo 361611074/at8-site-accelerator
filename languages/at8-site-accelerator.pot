@@ -856,6 +856,10 @@ msgstr ""
 msgid "未启用"
 msgstr ""
 
+#: includes/Core/Activator.php
+msgid "未启用「高级缓存」，跳过写入 wp-config.php。需要时可在设置页「工具」中一键启用。"
+msgstr ""
+
 #: includes/Diagnostics/Diagnostics.php templates/settings-page.php
 msgid "未安装"
 msgstr ""

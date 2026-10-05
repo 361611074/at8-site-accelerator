@@ -117,19 +117,38 @@ final class Webp {
 	 * @return bool
 	 */
 	public function can_convert_format( $extension ) {
-		$key = strtolower( (string) $extension );
+		$required = self::required_functions( $extension );
 
-		if ( ! isset( self::REQUIRED_FUNCTIONS[ $key ] ) ) {
+		if ( array() === $required ) {
 			return false;
 		}
 
-		foreach ( self::REQUIRED_FUNCTIONS[ $key ] as $function ) {
+		foreach ( $required as $function ) {
 			if ( ! function_exists( $function ) ) {
 				return false;
 			}
 		}
 
 		return true;
+	}
+
+	/**
+	 * 取某格式"解码 + 编码"所需的 GD 函数名列表。
+	 *
+	 * 单独抽出来有两个原因：
+	 * 1. `can_convert_format()` 与 `convert()` 的日志都需要这份清单，
+	 *    抽出来保证两边用的是同一份数据，不会出现"判定的键"和"打印的键"不是同一个；
+	 * 2. 本方法的 `$extension` 是未经收窄的任意字符串，"键可能不存在"是真实可能，
+	 *    所以这里的 `isset` 是必要的防御。而 `convert()` 里的 `$extension`
+	 *    已经过格式白名单收窄，在那里再做同样的判断就是重复劳动。
+	 *
+	 * @param string $extension 扩展名（小写，不含点）。
+	 * @return array 所需函数名；格式未知时返回空数组。
+	 */
+	private static function required_functions( $extension ) {
+		$key = strtolower( (string) $extension );
+
+		return self::REQUIRED_FUNCTIONS[ $key ] ?? array();
 	}
 
 	/**
@@ -229,14 +248,15 @@ final class Webp {
 		// 调用前的最后一道闸：能力不足就跳过这个文件，绝不进入 GD 调用。
 		// `boot()` 时的 `supported()` 只是"整体可行性"，这里按**实际源格式**
 		// 再确认一次（PNG 需要 imagecreatefrompng，JPEG 需要 imagecreatefromjpeg）。
+		//
+		// $extension 已过上面的格式白名单，所以 required_functions() 必定返回非空，
+		// 这里不需要再判键是否存在——判据统一由 can_convert_format() 内部负责。
 		if ( ! $this->can_convert_format( $extension ) ) {
 			$this->logger->debug(
 				'WebP 转换跳过：当前 GD 构建缺少该格式所需函数',
 				array(
 					'file'  => $path,
-					'needs' => isset( self::REQUIRED_FUNCTIONS[ $extension ] )
-						? implode( '+', self::REQUIRED_FUNCTIONS[ $extension ] )
-						: '',
+					'needs' => implode( '+', self::required_functions( $extension ) ),
 				)
 			);
 

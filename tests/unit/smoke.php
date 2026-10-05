@@ -1911,17 +1911,19 @@ $at8sa_adv_src = at8sa_source_by_suffix( $php_files, '/Cache/AdvancedCache.php' 
 
 check( '能取到 drop-in 管理器源码（断言自身有效）', '' !== $at8sa_adv_src, '' );
 
-check(
-	'drop-in 管理器提供归属冲突检测方法',
-	method_exists( \AT8SA\Cache\AdvancedCache::class, 'has_foreign_dropin' ),
-	''
-);
+// 这里用反射而不是 method_exists()：后者只回答"方法名存不存在"，
+// 而这两个方法必须**对外可见**才能被 Activator / Notices / Ajax 调用到，
+// 写成 private 的话归属保护会静默失效。所以断言的是可见性，不是存在性。
+$at8sa_adv_reflect = new ReflectionClass( \AT8SA\Cache\AdvancedCache::class );
 
-check(
-	'drop-in 管理器提供冲突原因文案',
-	method_exists( \AT8SA\Cache\AdvancedCache::class, 'blocked_reason' ),
-	''
-);
+foreach ( array( 'has_foreign_dropin', 'blocked_reason' ) as $at8sa_adv_method ) {
+	check(
+		'drop-in 管理器提供 public 的归属冲突方法：' . $at8sa_adv_method,
+		$at8sa_adv_reflect->hasMethod( $at8sa_adv_method )
+			&& $at8sa_adv_reflect->getMethod( $at8sa_adv_method )->isPublic(),
+		''
+	);
+}
 
 check(
 	'install() 先做归属判断再写盘',
@@ -2107,13 +2109,10 @@ check(
 
 $at8sa_webp = new \AT8SA\Optimization\Webp( $at8sa_settings, $at8sa_logger );
 
-check(
-	'PNG 转换能力判定接口存在',
-	method_exists( $at8sa_webp, 'can_convert_format' ),
-	''
-);
+// 不再单独断言 can_convert_format() "存在"——下面三行直接调用它，
+// 方法不存在的话这里就是 Fatal，比任何存在性断言都强。
 
-// 行为验证：把缺失的函数逐个模拟掉，确认判定会真的翻转。
+// 行为验证：判定结果必须与实际函数可用性一致。
 $at8sa_png_capable = $at8sa_webp->can_convert_format( 'png' );
 
 check(

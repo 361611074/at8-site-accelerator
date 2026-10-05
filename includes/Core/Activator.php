@@ -67,8 +67,8 @@ final class Activator {
 		$dropin = $container->get( AdvancedCache::class );
 
 		if ( $dropin->has_foreign_dropin() ) {
-			$result['dropin']            = false;
-			$result['dropin_blocked']    = true;
+			$result['dropin']              = false;
+			$result['dropin_blocked']      = true;
 			$result['dropin_blocked_note'] = $dropin->blocked_reason();
 		} elseif ( $settings->is_on( 'advanced_cache' ) ) {
 			$result['dropin'] = $dropin->install();

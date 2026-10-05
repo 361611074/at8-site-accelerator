@@ -56,3 +56,16 @@ if ( ! defined( 'AT8SA_CACHE_ROOT_URL' ) ) {
 if ( ! defined( 'COOKIEHASH' ) ) {
 	define( 'COOKIEHASH', 'abc123def456' );
 }
+
+/*
+ * 测试专用函数声明。
+ *
+ * 原理同上：`wp_scripts_maybe_registering()` 是 smoke.php 用来模拟
+ * "WP 通过 wp_default_scripts 注册了 heartbeat" 的测试辅助函数，
+ * 定义在 tests/unit/wp-stubs.php——该文件被 excludePaths 排除，
+ * 于是 smoke.php 里调用它会报 function.notFound。
+ *
+ * 这里只声明签名，不给实现：PHPStan 只需要知道它存在且无参数，
+ * 真正的行为由 wp-stubs.php 里的真身在运行时提供。
+ */
+function wp_scripts_maybe_registering() {}

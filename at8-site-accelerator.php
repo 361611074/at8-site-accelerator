@@ -3,7 +3,7 @@
  * Plugin Name:       AT8 Site Accelerator
  * Plugin URI:        https://www.at8.fun/at8-site-accelerator/
  * Description:       轻量级整页缓存 + 精准失效 + 智能预加载 + 浏览器缓存 + HTML 压缩 + 图片懒加载 + WebP 自动转换 + 数据库瘦身，多合一站点加速。优先 Redis（不可用时自动降级磁盘），内置 Elementor / WooCommerce 兼容层与第三方缓存冲突检测。
- * Version:           3.0.2
+ * Version:           3.0.3
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            漫步白月光
@@ -24,7 +24,7 @@ defined( 'ABSPATH' ) || exit;
  * ----------------------------------------------------------------------
  */
 
-define( 'AT8SA_VERSION', '3.0.2' );
+define( 'AT8SA_VERSION', '3.0.3' );
 define( 'AT8SA_FILE', __FILE__ );
 define( 'AT8SA_PATH', plugin_dir_path( __FILE__ ) );
 define( 'AT8SA_URL', plugin_dir_url( __FILE__ ) );
@@ -132,6 +132,18 @@ register_deactivation_hook( AT8SA_FILE, array( 'AT8SA\\Core\\Deactivator', 'deac
 add_action(
 	'plugins_loaded',
 	function () {
+		/*
+		 * 尽早锁定"浏览器原样发来的 Cookie"。
+		 *
+		 * 缓存准入判定（RequestGuard::should_bypass）要读购物车/会话 Cookie，
+		 * 但它会被调用两次：drop-in 在 WordPress 启动前一次，CacheEngine 在
+		 * template_redirect 又一次。而 WooCommerce 的 WC_Cart_Session 在
+		 * init 之后会 unset($_COOKIE['woocommerce_items_in_cart'])——
+		 * 第二道判定因此看不到这个 Cookie，把本该绕过的请求写进了共享缓存。
+		 * 这里在 plugins_loaded（其它插件还没初始化）先建立快照。
+		 */
+		AT8SA\Cache\RequestGuard::warm_cookies();
+
 		AT8SA\Core\Plugin::instance()->boot();
 	},
 	1

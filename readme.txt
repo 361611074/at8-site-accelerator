@@ -4,7 +4,7 @@ Tags: cache, page cache, redis, lazy load, webp
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 3.0.2
+Stable tag: 3.0.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -94,6 +94,10 @@ Yes. Each site gets its own cache directory and its own Redis key prefix.
 
 == Changelog ==
 
+= 3.0.3 =
+* Fixed: **with WooCommerce active, requests carrying the `woocommerce_items_in_cart` cookie were no longer excluded from the cache.** WooCommerce's `WC_Cart_Session` removes that cookie from `$_COOKIE` while the request is being handled, so the second cache-admission check - the one that runs after WordPress has loaded - could no longer see it and stored a response it should have skipped. Both checks now read the same snapshot of the cookies as the browser sent them, taken before any plugin can modify them. This applies to every cart and session cookie in the exclusion list, not just this one.
+* Changed: cache admission now reads an explicitly taken cookie snapshot instead of the live `$_COOKIE`, so the drop-in and the plugin can never disagree about what the visitor actually sent.
+
 = 3.0.2 =
 * Fixed: **upgrading from 3.0.1 could have left the whole site - front end and wp-admin - blank.** `advanced-cache.php` is a drop-in that gets copied into `wp-content/`; a plugin upgrade never touches it, and this release renames the plugin namespace, so an old copy would have called classes that no longer exist. That is a PHP fatal which runs before WordPress can load, so nothing can repair it afterwards. The drop-in now fails safe (falls back to "no page cache") instead of fataling, carries a version stamp, and rewrites itself on the next request. A compatibility alias keeps already-installed old copies working until that rewrite happens.
 * Fixed: saving the same post twice within one request only invalidated the cache once, so the second save could leave a stale page in the cache until the TTL expired.
@@ -126,6 +130,9 @@ Yes. Each site gets its own cache directory and its own Redis key prefix.
 The full technical change list (including the reason behind every fix) is in `CHANGELOG.md` at the root of the repository.
 
 == Upgrade Notice ==
+
+= 3.0.3 =
+Recommended for all users, especially sites running WooCommerce. Fixes a case where the shopping-cart cookie stopped being honoured by the cache, so a page that should never have been cached could be stored. No settings changes are needed.
 
 = 3.0.2 =
 Recommended for all 3.0.1 users. This release renames the plugin namespace; the advanced-cache.php drop-in copied into wp-content/ is not replaced by an upgrade, so it now fails safe and repairs itself. Also fixes cache invalidation when a post is saved twice in one request.

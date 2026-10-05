@@ -21,6 +21,57 @@ defined( 'ABSPATH' ) || exit;
 final class RequestGuard {
 
 	/**
+	 * 请求刚进入 PHP 时的 Cookie 快照（只建立一次）。
+	 *
+	 * **为什么必须快照**：`should_bypass()` 会在同一个请求里被调用两次——
+	 * 一次由 drop-in 在 WordPress 启动前，一次由 `CacheEngine` 在 WordPress
+	 * 完全加载后。中间的插件会改写 `$_COOKIE`：实测 WooCommerce 的
+	 * `WC_Cart_Session::set_cart_cookies()` 在购物车为空时执行
+	 * `unset( $_COOKIE['woocommerce_items_in_cart'] )`，
+	 * 于是第二道判定看不到这个 Cookie，把本该绕过的请求写进了共享缓存
+	 * （列表里的规则形同虚设）。
+	 *
+	 * 快照只在第一次调用时建立，因此拿到的永远是"浏览器原样发来的 Cookie"，
+	 * 与之后任何插件对 `$_COOKIE` 的改动无关。
+	 *
+	 * @var array|null
+	 */
+	private static $cookie_snapshot = null;
+
+	/**
+	 * 浏览器原始 Cookie（首次调用时快照，此后恒定）。
+	 *
+	 * @return array
+	 */
+	private static function cookies() {
+		if ( null !== self::$cookie_snapshot ) {
+			return self::$cookie_snapshot;
+		}
+
+		return (array) $_COOKIE;
+	}
+
+	/**
+	 * 把当前 `$_COOKIE` 锁定为本次请求的判定基准（幂等）。
+	 *
+	 * **必须显式调用，不能"谁先调用谁定"**：本方法会在两个时机被调用——
+	 * drop-in 在 WordPress 启动前（此时是浏览器原样发来的值），
+	 * 插件在 `plugins_loaded`（此时其它插件还没初始化，值仍然干净）。
+	 *
+	 * 之所以不用"首次调用自动快照"：那会让任何先于它跑到的判定把快照定死，
+	 * 单元测试里逐条改写 `$_COOKIE` 再断言的用例会全部失效（实测 6 条 Cookie
+	 * 绕过用例失败）。显式锁定把"锁定时机"变成调用方的决定，测试不调用即
+	 * 保持"每次读实时值"的语义。
+	 *
+	 * @return void
+	 */
+	public static function warm_cookies() {
+		if ( null === self::$cookie_snapshot ) {
+			self::$cookie_snapshot = (array) $_COOKIE;
+		}
+	}
+
+	/**
 	 * 内置必须绕过的路径片段（计划书 §63）。
 	 *
 	 * @return array
@@ -179,7 +230,7 @@ final class RequestGuard {
 			? $config['bypass_cookies']
 			: self::default_bypass_cookies();
 
-		foreach ( array_keys( (array) $_COOKIE ) as $name ) {
+		foreach ( array_keys( self::cookies() ) as $name ) {
 			if ( self::cookie_matches( (string) $name, $cookie_prefixes ) ) {
 				return true;
 			}
@@ -270,7 +321,7 @@ final class RequestGuard {
 			$prefixes[] = 'wordpress_sec_' . $hash;
 		}
 
-		foreach ( array_keys( (array) $_COOKIE ) as $name ) {
+		foreach ( array_keys( self::cookies() ) as $name ) {
 			foreach ( $prefixes as $prefix ) {
 				if ( 0 === strpos( (string) $name, $prefix ) ) {
 					return true;

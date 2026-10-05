@@ -6,6 +6,50 @@
 
 ---
 
+## 3.0.3 — Cookie 绕过判定一致性修复
+
+> 起因：对 3.0.2 做独立真机复验时，发现 `bypass_cookies` 列表里的
+> `woocommerce_items_in_cart` 实际是**死的**——WooCommerce 启用时它不再生效。
+
+### 缺陷：WooCommerce 启用时购物车 Cookie 绕过失效（真机复现）
+
+**现象**：带 `woocommerce_items_in_cart=1` 的 GET 请求返回 `X-AT8-Cache: MISS-SAVED`
+（被写进缓存），而同为精确名的 `woocommerce_cart_hash` 与
+`wp_woocommerce_session_*` 都正确返回 `BYPASS`。
+
+**根因（已闭环证明）**：`WC_Cart_Session::set_cart_cookies()`
+（WooCommerce `includes/class-wc-cart-session.php`）在购物车为空时执行
+`wc_setcookie( ..., 0, time() - HOUR_IN_SECONDS )` **并 `unset( $_COOKIE[...] )`**。
+
+缓存准入判定被调用两次：
+
+| 时机 | 调用方 | 看到的 `$_COOKIE` | 结论 |
+| --- | --- | --- | --- |
+| WordPress 启动前 | `advanced-cache.php` drop-in | 原始值（含该 Cookie） | 正确绕过 |
+| `template_redirect` | `CacheEngine::start_buffer()` | **已被 unset** | 判为"不绕过" → 落盘 |
+
+于是本该绕过的请求被写进共享缓存，列表里的这一条形同虚设。
+
+**证据**：
+- 停用 WooCommerce 后同一请求立刻恢复 `BYPASS`；
+- 临时 mu-plugin 在 `template_redirect@99` 打印 `$_COOKIE`：
+  该请求 `COOKIE_KEYS=` **为空**，而 `cart_hash` 请求保留了键。
+
+**修复**：`RequestGuard` 增加显式的 Cookie 快照。
+
+- `warm_cookies()` 把当前 `$_COOKIE` 锁定为本次请求的判定基准（幂等）；
+- 之后 `should_bypass()` / `has_auth_cookie()` 一律读快照，不再读实时 `$_COOKIE`；
+- 锁定点两处：drop-in（WordPress 启动前，最干净的时机）+ 插件的
+  `plugins_loaded@1`（覆盖"高级缓存关闭 / drop-in 被误删"时由插件层处理缓存的场景）。
+
+**为什么用显式锁定而不是"首次调用自动快照"**：后者会让任何先跑到的判定把快照定死，
+单元测试里逐条改写 `$_COOKIE` 再断言的 6 条 Cookie 绕过用例会全部失败（实测如此）。
+显式锁定把"锁定时机"交给调用方，测试不调用即保持"每次读实时值"的语义。
+
+**验证**：冒烟 249 通过 / 0 失败；真机对照实验（WooCommerce 启用/停用各一轮）。
+
+---
+
 ## 3.0.2 — 命名空间合规 + drop-in 自愈版
 
 > 起因：WordPress 官方 Plugin Check 2.1.0 报出两类问题——① 所有符号必须带它从代码里

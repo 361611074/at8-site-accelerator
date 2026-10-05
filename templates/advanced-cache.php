@@ -104,6 +104,19 @@ if ( ! is_array( $at8sa_config ) || empty( $at8sa_config['enabled'] ) || ! empty
 	return;
 }
 
+/*
+ * 把 Cookie 锁定为"浏览器原样发来的那一份"。
+ *
+ * 这是本文件独有的优势：drop-in 跑在 wp-settings.php 里、任何插件之前，
+ * 此刻 $_COOKIE 还没有被谁动过。而 CacheEngine 的判定挂在 template_redirect，
+ * 那时 WooCommerce 的 WC_Cart_Session 已经 unset 掉
+ * $_COOKIE['woocommerce_items_in_cart']——两道判定会得出相反结论，
+ * 本该绕过的请求被写进共享缓存。
+ *
+ * 锁定之后插件层读到的就是同一份数据，两处判定必然一致。
+ */
+\AT8SA\Cache\RequestGuard::warm_cookies();
+
 if ( \AT8SA\Cache\RequestGuard::should_bypass( $at8sa_config ) ) {
 	return;
 }

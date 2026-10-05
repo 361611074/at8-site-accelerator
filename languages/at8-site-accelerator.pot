@@ -313,7 +313,7 @@ msgid "仅隐藏仪表盘上的站点健康卡片与「工具 → 站点健康�
 msgstr ""
 
 #: templates/settings-page.php
-msgid "以 * 结尾表示前缀匹配（如 wp-postpass_* 命中 wp-postpass_abc123）；不带 * 则要求 Cookie 名完全一致。内置已包含 wp-postpass_*、comment_author_*、wp_woocommerce_session_*、woocommerce_cart_hash、woocommerce_items_in_cart 等。登录态 Cookie 不在此列表内：登录用户一律绕过公共缓存，这是固定行为，既不需要也无法在这里配置。"
+msgid "以 * 结尾表示前缀匹配（如 wp-postpass_* 命中 wp-postpass_abc123）；不带 * 则要求 Cookie 名完全一致。内置已包含 wp-postpass_*、comment_author_*、wp_woocommerce_session_*、woocommerce_cart_hash、woocommerce_items_in_cart 等。登录用户始终绕过公共缓存；此规则固定生效，不受此 Cookie 列表控制。"
 msgstr ""
 
 #: includes/Admin/SettingsPage.php

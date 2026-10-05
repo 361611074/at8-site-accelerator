@@ -42,13 +42,21 @@ wp_clear_scheduled_hook( 'at8sa_db_cleanup_event' );
 $at8sa_cache = WP_CONTENT_DIR . '/cache/at8-site-accelerator';
 
 if ( is_dir( $at8sa_cache ) ) {
+	// 只读文件头 2KB：drop-in 里的归属标记在开头，没必要把整个文件读进来。
+	// 用 is_readable() 先判断，就不用 @ 抑制错误了。
 	$at8sa_items = @scandir( $at8sa_cache ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 
 	if ( is_array( $at8sa_items ) ) {
 		$at8sa_stack = array( $at8sa_cache );
+		$at8sa_rmdir = array();
 
 		while ( ! empty( $at8sa_stack ) ) {
 			$at8sa_dir = array_pop( $at8sa_stack );
+
+			// 先记账、**后**删：这一轮遍历时子目录才刚被 push 进栈，
+			// 目录里还有内容，此刻 rmdir 必然失败。踩过这个坑——
+			// 表现是"文件全清干净了，wp-content/cache/at8-site-accelerator/ 空壳还在"。
+			$at8sa_rmdir[] = $at8sa_dir;
 
 			foreach ( array_diff( (array) @scandir( $at8sa_dir ), array( '.', '..' ) ) as $at8sa_item ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 				$at8sa_path = $at8sa_dir . DIRECTORY_SEPARATOR . $at8sa_item;
@@ -59,9 +67,12 @@ if ( is_dir( $at8sa_cache ) ) {
 					wp_delete_file( $at8sa_path );
 				}
 			}
+		}
 
+		// 后进先出：子目录先删，父目录最后删。
+		foreach ( array_reverse( $at8sa_rmdir ) as $at8sa_dir ) {
 			// rmdir 没有 WordPress 等价 API；这里只删插件自己的缓存目录，
-			// 且目录已经在上面的循环里被清空。
+			// 且上面的循环已经把它清空了。
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir, WordPress.PHP.NoSilencedErrors.Discouraged
 			@rmdir( $at8sa_dir );
 		}

@@ -307,7 +307,7 @@ $at8sa_cache_on = ! empty( $at8sa_settings['page_cache'] );
 				</div>
 
 				<?php $at8sa_textarea( 'exclude_urls', __( '排除 URL 关键词（每行一个，命中即不缓存）', 'at8-site-accelerator' ), __( '内置已排除 wp-admin、wp-login、wp-json、xmlrpc.php、preview、admin-ajax、feed、?s= 等。此处只填你额外需要的。', 'at8-site-accelerator' ) ); ?>
-				<?php $at8sa_textarea( 'bypass_cookies', __( '遇到这些 Cookie 时绕过缓存（每行一个）', 'at8-site-accelerator' ), __( '以 * 结尾表示前缀匹配（如 wp-postpass_* 命中 wp-postpass_abc123）；不带 * 则要求 Cookie 名完全一致。内置已包含 wp-postpass_*、comment_author_*、wp_woocommerce_session_*、woocommerce_cart_hash、woocommerce_items_in_cart 等。登录态 Cookie 不在此列表内：登录用户一律绕过公共缓存，这是固定行为，既不需要也无法在这里配置。', 'at8-site-accelerator' ) ); ?>
+				<?php $at8sa_textarea( 'bypass_cookies', __( '遇到这些 Cookie 时绕过缓存（每行一个）', 'at8-site-accelerator' ), __( '以 * 结尾表示前缀匹配（如 wp-postpass_* 命中 wp-postpass_abc123）；不带 * 则要求 Cookie 名完全一致。内置已包含 wp-postpass_*、comment_author_*、wp_woocommerce_session_*、woocommerce_cart_hash、woocommerce_items_in_cart 等。登录用户始终绕过公共缓存；此规则固定生效，不受此 Cookie 列表控制。', 'at8-site-accelerator' ) ); ?>
 				<?php $at8sa_textarea( 'ignore_query', __( '忽略的 Query 参数（每行一个，支持前缀*）', 'at8-site-accelerator' ), __( '内置已自动忽略 UTM、fbclid、gclid、msclkid 等营销参数，避免同一页面因追踪参数产生大量碎片缓存。填 * 表示忽略全部 query（谨慎）。', 'at8-site-accelerator' ) ); ?>
 			</div>
 		</section>

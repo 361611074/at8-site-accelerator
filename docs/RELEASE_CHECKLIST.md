@@ -221,19 +221,55 @@
 - [x] 推 `main` 并确认 Actions 全绿（见第零节）
 - [x] 打 git tag `v3.0.5`
 - [x] 创建 GitHub Release（附上 ZIP，由 CI 自动挂载）
-- [x] `readme.txt` 的 `Tested up to` = **7.1**，且**有实跑依据**（不能只是"填个当前版本"）：
-      本机 WordPress 测试台 `wp core version` = 7.1（PHP 8.2 + SQLite），
-      在其上实跑了 Plugin Check 与「激活 → 停用 → 重新激活 → 卸载」全流程，
-      结果见第十一节。若将来升级到更高的 WP 而没真跑过，这个字段就必须改回去。
+- [x] `readme.txt` 的 `Tested up to` = **7.1**，且**有实跑依据**（不能只是"填个当前版本"）。
+
+  <!-- 下面两行是给 tests/unit/smoke.php 读的机器可读标记，改这两个值必须同步改依据 -->
+  <!-- AT8SA_TESTED_UP_TO: 7.1 -->
+  <!-- AT8SA_WP_LATEST_SEEN: 7.1.2 -->
+
+  ### 依据一：7.1 是已发布的稳定版线，不是 beta / RC
+
+  wp.org 官方接口实测（2026-10-06 取数）：
+
+  ```text
+  GET https://api.wordpress.org/core/stable-check/1.0/
+      → 7.1.2 的 status = "latest"        ← 官方认定的当前活跃版本
+
+  GET https://api.wordpress.org/core/version-check/1.7/
+      → "current": "7.1.2"
+      → response: "upgrade" / "autoupdate"
+      → download: https://downloads.wordpress.org/release/wordpress-7.1.2.zip
+  ```
+
+  注意下载路径是 `/release/`（正式发布通道），不是 `/beta/` 或 `/nightly/`，
+  且该 URL 实返回 HTTP 200 / 37 MB。所以 7.1 已经是一条**已发布**的版本线，
+  当前 HEAD 是 7.1.2。
+
+  按 wp.org FAQ —— `Tested up to` 不得高于当前 RC，无 RC 时不得高于当前活跃版本。
+  7.1 ≤ 7.1.2，合规。**不是**"为了好看填未来版本"。
+
+  ### 依据二：确实在它上面跑过
+
+  本机 WordPress 测试台已从 7.1 就地升级到 **7.1.2**（用官方 `/release/` 包覆盖
+  `wp-admin` / `wp-includes` + 根目录文件，`wp-config.php` 未动），
+  `wp core version` = **7.1.2**，`wp core update-db` 报告 db 已是最新（61833）。
+  环境：PHP 8.2 + SQLite。
+
+  在其上实跑了 Plugin Check 与「激活 → 停用 → 重新激活 → 卸载」全流程，结果见第十一节。
+
+  ### 维护规则
+
+  若将来 WP 升到 7.2 / 8.0 而没真跑过，这个字段**必须改回去**，不能跟着填。
+  冒烟测试里有断言把 `Tested up to` 与本文件记录的值绑定，防止两边漂移。
 - [x] 记录发布日志到 `docs/PHASE_REPORT.md`
 
 ## 十一、wp.org 上架前必须补的验证
 
 以下**无法**在本仓库内自动完成，上架前必须实跑：
 
-- [x] **wp.org 官方 Plugin Check** —— 已实跑，结果 **ERROR 0 / WARNING 0**
+- [x] **wp.org 官方 Plugin Check** —— 已实跑，结果 **`Checks complete. No errors found.`**
 
-  环境：本机 WordPress 测试台（WP 7.1 + PHP 8.2 + SQLite），`plugin-check 2.1.0`。
+  环境：本机 WordPress 测试台（**WP 7.1.2** + PHP 8.2 + SQLite），`plugin-check 2.1.0`。
   被测对象是 `dist/` 里的发行包（先解包到 `wp-content/plugins/`），不是源码目录：
 
   ```bash

@@ -6,6 +6,130 @@
 
 ---
 
+## 3.0.5 — 提交前二次复核（Tested up to 取证 + 设置页文案 + 卸载目录清理 bug）
+
+> 起因：一次以 WordPress.org 审核员视角的复核，给出 1 个 P1 + 1 个 P2。
+> P1 的判断与官方接口数据不符 —— 取证后**保留 7.1 并补齐依据**；
+> P2 属实，已按建议原文改掉。
+> 此外在 WP 7.1.2 上重跑真机生命周期时，**另外发现一个卸载清理的真 bug**（见下）。
+
+### P1：`Tested up to: 7.1` —— 复核判断有误，实测后保留并补硬依据
+
+复核意见认为"7.1 仍是 beta / 后续版本线，应改成 `7.0`"。查官方接口后**不成立**：
+
+```text
+GET https://api.wordpress.org/core/stable-check/1.0/
+    → 7.1.2  status = "latest"      ← 官方认定的当前活跃版本
+
+GET https://api.wordpress.org/core/version-check/1.7/
+    → "current": "7.1.2" / response: "upgrade" / "autoupdate"
+    → download: https://downloads.wordpress.org/release/wordpress-7.1.2.zip
+
+HEAD https://downloads.wordpress.org/release/wordpress-7.1.2.zip
+    → HTTP 200，Content-Length 37,225,839
+```
+
+关键点在下载路径：正式发布走 `/release/`，beta / RC 走的是另一条通道。
+所以 **7.1 是一条已发布的稳定版线，当前 HEAD 是 7.1.2**，
+复核时引用的版本表停在 `7.0.4 / 2026-08-12`，比取数日（2026-10-06）落后约两个月。
+
+按 wp.org FAQ，`Tested up to` 不得高于当前 RC、无 RC 时不得高于当前活跃版本：
+7.1 ≤ 7.1.2，合规。这不是"为了显示兼容性填未来版本"。
+
+不过光有接口证据还不够，本机测试台已**从 7.1 就地升级到 7.1.2**
+（官方 `/release/` 包覆盖 `wp-admin` / `wp-includes` + 根目录文件，`wp-config.php` 未动），
+`wp core version` = 7.1.2，`wp core update-db` 报告 db 已是最新（61833），
+Plugin Check 与「激活 → 停用 → 重激活 → 卸载」全流程在 7.1.2 上重跑。
+
+### 新增 3 条断言：把"不许抬到没测过的版本"变成机器规则
+
+```text
+<!-- AT8SA_TESTED_UP_TO: 7.1 -->      真正跑过的版本
+<!-- AT8SA_WP_LATEST_SEEN: 7.1.2 -->  取数时官方最新稳定版
+```
+
+写在 `docs/RELEASE_CHECKLIST.md`，由冒烟测试读取并断言：
+
+1. `readme.txt` 的 `Tested up to` **必须等于** `AT8SA_TESTED_UP_TO`（两边漂移即红）
+2. `Tested up to` **不得高于** `AT8SA_WP_LATEST_SEEN`（防止将来悄悄跟着 WP 升版往上填）
+
+变异测试：只抬 readme → 2 条红；只改清单 → 1 条红；
+两边一起抬到 7.2（超过官方最新 7.1.2）→ 第 2 条如期变红。
+
+### P2：设置页 Cookie 列表说明收口
+
+改为复核给出的原文：
+
+```text
+登录用户始终绕过公共缓存；此规则固定生效，不受此 Cookie 列表控制。
+```
+
+同时补一条断言，锁住这句必须存在 —— 光删掉旧句不够，
+读者若看不到"这条规则固定生效"，会以为 Cookie 列表能覆盖登录态。
+
+### 真 bug：卸载时缓存目录删不干净（空壳残留）
+
+在 WP 7.1.2 上跑真机生命周期（激活 → 停用 → 重激活 → 删除）时发现：
+文件全被清掉了，但 `wp-content/cache/at8-site-accelerator/` **空目录还在**。
+
+根因是递归删除的**顺序**写错了：
+
+```php
+while ( ! empty( $at8sa_stack ) ) {
+    $dir = array_pop( $at8sa_stack );
+    foreach ( ... as $item ) {
+        if ( is_dir( $path ) ) {
+            $at8sa_stack[] = $path;   // 子目录刚被发现，还没处理
+        } else {
+            wp_delete_file( $path );
+        }
+    }
+    @rmdir( $dir );                  // ← 此刻目录里还有刚 push 的子目录，必然失败
+}
+```
+
+父目录在**自己那一轮**就被 rmdir，而子目录是那一轮之后才被处理的。
+只有"目录里全是平铺文件"时碰巧能删掉，一旦有嵌套子目录，
+从缓存根往下的**每一层**都会留下空壳。
+
+改成"先遍历、记账，遍历完再后进先出地 rmdir"：
+
+```php
+while ( ! empty( $at8sa_stack ) ) {
+    $dir = array_pop( $at8sa_stack );
+    $at8sa_rmdir[] = $dir;            // 先记账
+    foreach ( ... ) { /* 只删文件 / 入栈子目录 */ }
+}
+foreach ( array_reverse( $at8sa_rmdir ) as $dir ) {
+    @rmdir( $dir );                   // 子目录先删，父目录最后删
+}
+```
+
+#### 为什么静态断言测不出来
+
+代码里确实调用了 `rmdir`，"有没有删目录"这种断言**恒真**。
+只有真跑一遍、并且**目录里必须有嵌套子目录**才能测出差别 ——
+平铺文件的话两种写法结果一样。
+
+新增 `tests/unit/uninstall-probe.php`（子进程夹具，沿用 drop-in 那套
+stdin 喂源码的跑法，绕开 Windows cmd.exe 对中文路径的代码页转换），
+冒烟里加 6 条真跑断言：默认保留设置 / 显式彻底清理两种模式下，
+缓存目录、drop-in、设置各自该留的留、该删的删。
+
+变异测试：把代码改回旧写法 → 2 条如期变红（`cache_dir_exists: true`）；
+干脆不删目录 → 同样 2 条变红。
+
+> 顺带确认两件**不是** bug 的事：
+> 1. `uninstall.php` 存在于插件根目录时，WordPress 会直接 include 它，
+>    **不需要** `register_uninstall_hook()`（读了 `wp-admin/includes/plugin.php`
+>    的 `uninstall_plugin()` 源码确认）。插件没调它是对的。
+> 2. 停用后 `wp-config.php` 里的 `WP_CACHE` 保留，是 `Deactivator` 里
+>    写明的设计决定（没有 drop-in 时 WordPress 什么都不会做），不是遗漏。
+
+冒烟 325 → **334** 项，全部通过。
+
+---
+
 ## 3.0.5 — 复核补修（残留文案 + readme 口径 + 测试依据）
 
 > 起因：第三轮交付后被逐条复核，指出四项。其中**一项是真 bug**，

@@ -2075,6 +2075,15 @@ check(
 	'删掉控件不等于删干净：说明文字里的引用同样是残留'
 );
 
+// 反过来也要锁：光删掉旧句不够，这里必须留一句把"登录用户始终绕过"讲清楚，
+// 否则读者会以为 Cookie 列表能覆盖登录态。
+check(
+	'设置页明确写出登录用户绕过缓存是固定规则、不受 Cookie 列表控制',
+	false !== strpos( $at8sa_settings_page_src, '登录用户始终绕过公共缓存' )
+		&& false !== strpos( $at8sa_settings_page_src, '不受此 Cookie 列表控制' ),
+	''
+);
+
 // ── readme.txt 与插件版本 / 与代码实现的一致性 ──
 //
 // `Stable tag` 决定 wp.org 目录给用户下载哪一版，它一旦和插件头不一致，
@@ -2103,6 +2112,34 @@ check(
 	false === strpos( $at8sa_readme_src, 'removed together with its stored setting' )
 		&& false !== strpos( $at8sa_readme_src, 'any value an older version saved for it is ignored' ),
 	''
+);
+
+// ── Tested up to 必须有依据，不能跟着WordPress版本号往上填 ──
+//
+// wp.org FAQ：Tested up to 不得高于当前 RC，无 RC 时不得高于当前活跃版本。
+// 这条最容易"为了好看"被悄悄抬上去，所以把真跑过的版本记在 RELEASE_CHECKLIST 里，
+// readme 只能照抄那个值；另外再卡一道：不许超过取数时看到的官方最新稳定版。
+$at8sa_checklist_src = (string) file_get_contents( AT8SA_PATH . 'docs/RELEASE_CHECKLIST.md' );
+
+preg_match( '/^Tested up to:\s*(\S+)/m', $at8sa_readme_src, $at8sa_tested_m );
+preg_match( '/AT8SA_TESTED_UP_TO:\s*(\S+)/', $at8sa_checklist_src, $at8sa_documented_m );
+preg_match( '/AT8SA_WP_LATEST_SEEN:\s*(\S+)/', $at8sa_checklist_src, $at8sa_latest_m );
+
+check(
+	'readme.txt 的 Tested up to 等于 RELEASE_CHECKLIST 里记录了实测依据的版本',
+	isset( $at8sa_tested_m[1], $at8sa_documented_m[1] ) && $at8sa_tested_m[1] === $at8sa_documented_m[1],
+	isset( $at8sa_tested_m[1], $at8sa_documented_m[1] )
+		? "readme {$at8sa_tested_m[1]} / 有依据的 {$at8sa_documented_m[1]}"
+		: 'readme.txt 或 RELEASE_CHECKLIST.md 里缺少版本号'
+);
+
+check(
+	'Tested up to 不高于取数时的官方最新稳定版（不得声明没测过的版本）',
+	isset( $at8sa_tested_m[1], $at8sa_latest_m[1] )
+		&& version_compare( $at8sa_tested_m[1], $at8sa_latest_m[1], '<=' ),
+	isset( $at8sa_tested_m[1], $at8sa_latest_m[1] )
+		? "Tested up to {$at8sa_tested_m[1]} / 官方最新 {$at8sa_latest_m[1]}"
+		: '缺少版本号'
 );
 
 // 卸载路径同样必须有归属校验（只能删自己的）。
@@ -2743,6 +2780,115 @@ check(
 );
 
 @unlink( WP_CONTENT_DIR . '/advanced-cache.php' );
+
+/* ---------------------------------------------------------------------------
+ * 22. uninstall.php 真实执行（子进程）
+ *
+ * 为什么必须真跑：卸载清理里最容易"看起来对"的是目录删除。
+ * 文件删干净 ≠ 目录删干净 —— 递归里边走边 rmdir，父目录那一轮必然失败
+ * （里面还有刚发现的子目录），表现是"文件全没了，空壳目录还在"。
+ * 代码里确实调用了 rmdir，静态断言查不出来，只有真跑能测到。
+ * ------------------------------------------------------------------------ */
+
+section( 'uninstall.php 真实执行' );
+
+/**
+ * 在子进程里跑一次 uninstall.php。
+ *
+ * 沿用 run_dropin 的 stdin 管道喂法：命令行上只剩 php.exe 的路径，
+ * 绕开 Windows cmd.exe 对中文路径的代码页转换。
+ *
+ * @param string $mode keep / purge。
+ * @return array{code:int,out:string,err:string,data:array}
+ */
+function run_uninstall( $mode ) {
+	$plugin = rtrim( str_replace( '\\', '/', AT8SA_PATH ), '/' ) . '/';
+
+	$bootstrap = "<?php\n"
+		. '$at8sa_mode = ' . var_export( (string) $mode, true ) . ";\n"
+		. '$at8sa_plugin_dir = ' . var_export( $plugin, true ) . ";\n"
+		. "require \$at8sa_plugin_dir . 'tests/unit/uninstall-probe.php';\n";
+
+	$descriptors = array(
+		0 => array( 'pipe', 'r' ),
+		1 => array( 'pipe', 'w' ),
+		2 => array( 'pipe', 'w' ),
+	);
+
+	$process = @proc_open( escapeshellarg( PHP_BINARY ), $descriptors, $pipes ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+
+	if ( ! is_resource( $process ) ) {
+		return array(
+			'code' => -1,
+			'out'  => '',
+			'err'  => 'proc_open 不可用',
+			'data' => array(),
+		);
+	}
+
+	fwrite( $pipes[0], $bootstrap );
+	fclose( $pipes[0] );
+
+	$out = (string) stream_get_contents( $pipes[1] );
+	$err = (string) stream_get_contents( $pipes[2] );
+
+	fclose( $pipes[1] );
+	fclose( $pipes[2] );
+
+	$data = json_decode( trim( $out ), true );
+
+	return array(
+		'code' => proc_close( $process ),
+		'out'  => $out,
+		'err'  => $err,
+		'data' => is_array( $data ) ? $data : array(),
+	);
+}
+
+// 默认（keep_data_on_uninstall = 1）：清缓存目录，但保留设置。
+$r = run_uninstall( 'keep' );
+
+check(
+	'uninstall 真跑：无致命错误（保留设置模式）',
+	0 === $r['code'] && '' === trim( $r['err'] ),
+	'code=' . $r['code'] . ' err=' . substr( trim( $r['err'] ), 0, 200 )
+);
+
+check(
+	'uninstall 真跑：缓存目录被完整删除（含嵌套子目录）',
+	isset( $r['data']['cache_dir_exists'] ) && false === $r['data']['cache_dir_exists']
+		&& isset( $r['data']['leftover'] ) && array() === $r['data']['leftover'],
+	'out=' . substr( $r['out'], 0, 200 )
+);
+
+check(
+	'uninstall 真跑：drop-in 被删除',
+	isset( $r['data']['dropin_exists'] ) && false === $r['data']['dropin_exists'],
+	'out=' . substr( $r['out'], 0, 200 )
+);
+
+check(
+	'uninstall 真跑：默认保留设置数据',
+	isset( $r['data']['settings']['sample'] ) && 'kept' === $r['data']['settings']['sample'],
+	'out=' . substr( $r['out'], 0, 200 )
+);
+
+// 显式彻底清理：设置也必须一起删掉。
+$r = run_uninstall( 'purge' );
+
+check(
+	'uninstall 真跑：彻底清理模式下设置被删除',
+	// 注意不能用 isset()：它的值就是 null，而 isset( null ) 恒为 false，
+	// 那样写这条断言永远不会通过 —— 是个恒假的假断言。
+	array_key_exists( 'settings', $r['data'] ) && null === $r['data']['settings'],
+	'out=' . substr( $r['out'], 0, 200 )
+);
+
+check(
+	'uninstall 真跑：彻底清理模式下缓存目录同样被完整删除',
+	isset( $r['data']['cache_dir_exists'] ) && false === $r['data']['cache_dir_exists'],
+	'out=' . substr( $r['out'], 0, 200 )
+);
 
 /* ---------------------------------------------------------------------------
  * 汇总

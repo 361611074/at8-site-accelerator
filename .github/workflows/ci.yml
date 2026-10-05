@@ -3,6 +3,10 @@ name: CI
 on:
   push:
     branches: [ main, master, develop ]
+    # 打包作业的 if 判的是 `startsWith( github.ref, 'refs/tags/v' )`，
+    # 但如果 on.push 不列 tags，tag 推送压根不会产生 run，那个 if 永远为假。
+    # 3.0.4 就是因为漏了这里、只能用 workflow_dispatch 手动补救。
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main, master, develop ]
   workflow_dispatch:

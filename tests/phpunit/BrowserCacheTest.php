@@ -224,7 +224,11 @@ final class BrowserCacheTest extends TestCase {
 	}
 
 	/**
-	 * 写入流程：追加规则块 + 生成备份 + 幂等。
+	 * 写入流程：追加规则块 + 幂等 + 不在 Web Root 留备份。
+	 *
+	 * 3.0.6 起 `write_htaccess()` 不再生成 `.htaccess.at8sa.bak`：那是一个位于
+	 * Web Root、名字可预测、且**永不清理**的明文副本。回滚改为用内存里的原文，
+	 * 因此这里断言的是"没有备份文件"，而不是"有备份文件"。
 	 *
 	 * @return void
 	 */
@@ -239,8 +243,7 @@ final class BrowserCacheTest extends TestCase {
 		$result = $browser->write_htaccess();
 
 		$this->assertTrue( $result['ok'] );
-		$this->assertFileExists( $this->htaccess . '.at8sa.bak', '必须先备份' );
-		$this->assertSame( $original, file_get_contents( $this->htaccess . '.at8sa.bak' ), '备份内容必须是原文' );
+		$this->assertFileDoesNotExist( $this->htaccess . '.at8sa.bak', 'Web Root 里不得留下明文备份' );
 		$this->assertTrue( $browser->htaccess_has_rules() );
 
 		$written = file_get_contents( $this->htaccess );

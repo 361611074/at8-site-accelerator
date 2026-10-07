@@ -93,6 +93,28 @@ abstract class TestCase extends BaseTestCase {
 		$GLOBALS['at8sa_test_logged_in']   = false;
 		$GLOBALS['at8sa_test_doing_ajax']  = false;
 
+		// 条件标签开关（3.0.6 公共响应安全 Gate 逐条依赖它们）。
+		// 必须逐用例清掉：桩是进程级的，泄漏一个 `at8sa_test_is_404` 就会让
+		// 后面所有"普通匿名首页应该允许缓存"的用例假失败。
+		$conditional_flags = array(
+			'at8sa_test_is_404',
+			'at8sa_test_is_search',
+			'at8sa_test_is_feed',
+			'at8sa_test_is_preview',
+			'at8sa_test_is_trackback',
+			'at8sa_test_is_singular',
+			'at8sa_test_is_archive',
+			'at8sa_test_password_required',
+			'at8sa_test_is_cart',
+			'at8sa_test_is_checkout',
+			'at8sa_test_is_account_page',
+			'at8sa_test_is_wc_endpoint',
+		);
+
+		foreach ( $conditional_flags as $flag ) {
+			$GLOBALS[ $flag ] = false;
+		}
+
 		// 产品代码用这两个标记防重复处理，必须逐用例清掉。
 		unset( $GLOBALS['at8sa_minify_done'] );
 		unset( $GLOBALS['at8sa_runtime_ttl'] );

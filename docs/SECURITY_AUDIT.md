@@ -159,15 +159,25 @@ hidden 字段（未勾选时提交 0，勾选时 checkbox 覆盖它）。
 
 ### wp-config.php
 
-这是插件唯一会碰的、**不属于自己**的文件。流程严格三段式：
+这是插件唯一会碰的、**不属于自己**的文件。3.0.6 起流程改为**零磁盘副本**：
 
 ```
-1. 备份         → wp-config.php.at8sa.bak（备份失败则中止，不做任何修改）
+1. 读取         → 原文只进入 PHP 内存变量 $original
 2. 写入         → 只增删带 '// Added by AT8 Site Accelerator' 标记的那一行
 3. 完整性校验   → 长度 > 100 字节 && 含 DB_NAME && 含 wp-settings.php && 大括号配平
-                  ↓ 校验失败
-                  立即用备份内容回滚 + 记录 error 日志 + 返回失败
+                  && 可逆（拿掉标记行能还原原文）
+                  ↓ 写入失败或校验失败
+                  用内存里的 $original 写回 + 再读回比对 + 记录 error 日志 + 返回失败
 ```
+
+**为什么不再落盘备份**（WordPress.org 人工审核 P0）：
+3.0.5 会把原文写到 `wp-config.php.at8sa.tmp`（3.0.1 是 `.at8sa.bak`），
+那是位于 Web Root、名字可预测的明文凭据文件（数据库密码 + 4 KEY + 8 SALT）。
+只要删除失败、进程被 kill 或并发撞上，它就永久可被 HTTP 下载。
+内存回滚把这一整类风险消掉，回滚能力本身并没有削弱。
+
+日志只记录事件名（`写入失败` / `校验失败` / `回滚失败`），
+不记录路径、原文或任何配置内容。
 
 **永不重写整个文件**，只在标准锚点（`/* That's all, stop editing!` 或
 `require_once ABSPATH . 'wp-settings.php';`）前插入一行。
@@ -175,8 +185,10 @@ hidden 字段（未勾选时提交 0，勾选时 checkbox 覆盖它）。
 ### .htaccess
 
 **不自动覆盖**。只提供规则片段供用户复制，若用户显式点击"写入"，
-会先备份为 `.htaccess.at8sa.bak`，且只操作
-`# ==== BEGIN/AT8 END AT8 Site Accelerator ====` 之间的内容。
+只操作 `# ==== BEGIN/AT8 END AT8 Site Accelerator ====` 之间的内容，
+并在写入后回读校验（标记块存在 + 原有规则仍在），失败则用内存里的原文回滚。
+3.0.6 起**不再生成** `.htaccess.at8sa.bak`——它同样是 Web Root 下名字可预测的
+明文副本，而且永不清理。
 
 ### drop-in
 

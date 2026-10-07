@@ -239,21 +239,11 @@ final class Config {
 	 * @return array
 	 */
 	private function excluded_paths() {
-		$paths = RequestGuard::default_excluded_paths();
-
-		$custom = (string) $this->settings->get( 'exclude_urls', '' );
-
-		if ( '' !== trim( $custom ) ) {
-			foreach ( preg_split( '/\r?\n|,/', $custom ) as $line ) {
-				$line = trim( $line );
-
-				if ( '' !== $line ) {
-					$paths[] = $line;
-				}
-			}
-		}
-
-		return array_values( array_unique( $paths ) );
+		// 复用 RequestGuard 的解析入口，保证与 HTML 浏览器缓存的 Gate 用同一份规则。
+		return RequestGuard::merge_rules(
+			RequestGuard::default_excluded_paths(),
+			(string) $this->settings->get( 'exclude_urls', '' )
+		);
 	}
 
 	/**
@@ -262,21 +252,10 @@ final class Config {
 	 * @return array
 	 */
 	private function bypass_cookies() {
-		$cookies = RequestGuard::default_bypass_cookies();
-
-		$custom = (string) $this->settings->get( 'bypass_cookies', '' );
-
-		if ( '' !== trim( $custom ) ) {
-			foreach ( preg_split( '/\r?\n|,/', $custom ) as $line ) {
-				$line = trim( $line );
-
-				if ( '' !== $line ) {
-					$cookies[] = $line;
-				}
-			}
-		}
-
-		return array_values( array_unique( $cookies ) );
+		return RequestGuard::merge_rules(
+			RequestGuard::default_bypass_cookies(),
+			(string) $this->settings->get( 'bypass_cookies', '' )
+		);
 	}
 
 	/**
@@ -285,20 +264,7 @@ final class Config {
 	 * @return array
 	 */
 	private function ignore_query_rules() {
-		$rules  = array();
-		$custom = (string) $this->settings->get( 'ignore_query', '' );
-
-		if ( '' !== trim( $custom ) ) {
-			foreach ( preg_split( '/\r?\n|,/', $custom ) as $line ) {
-				$line = trim( $line );
-
-				if ( '' !== $line ) {
-					$rules[] = $line;
-				}
-			}
-		}
-
-		return $rules;
+		return RequestGuard::merge_rules( array(), (string) $this->settings->get( 'ignore_query', '' ) );
 	}
 
 	/**

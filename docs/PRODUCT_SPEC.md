@@ -106,10 +106,18 @@
 | --- | --- | --- |
 | `browser_cache` | 开 | 发送静态资源缓存响应头 |
 | `browser_cache_ttl` | 31536000 | 静态资源缓存时长（秒） |
-| `browser_cache_html` | 关 | HTML 是否也参与浏览器长缓存 |
+| `browser_cache_html` | 关 | 仅对通过公共响应安全检查的 HTML 响应启用浏览器长缓存 |
 | `browser_cache_html_ttl` | 3600 | HTML 缓存时长（秒） |
 
-提供 nginx / Apache 规则片段供复制，**不自动覆盖** `.htaccess`。
+`browser_cache_html` 开启后仍要逐条通过 `BrowserCache::allow_public_html_cache()`：
+请求方法必须是 GET/HEAD，未登录、无密码保护、无会话/购物车/评论者 Cookie，
+URI 不在排除表内且不带 Query String，不是 WooCommerce 动态页，
+状态码为 200、Content-Type 为 `text/html`，响应不带 `Set-Cookie`、不带 `Vary: Cookie`，
+未被声明 `no-cache` / `no-store` / `private` / `max-age=0`，且未定义 `DONOTCACHEPAGE`。
+任一条件不成立即退回 `no-cache`（宁可放过，不可错放）。
+
+提供 nginx / Apache 规则片段供复制，**不自动覆盖** `.htaccess`；
+写入 `.htaccess` 时也不再生成 `.htaccess.at8sa.bak` 明文备份（改为内存回滚）。
 
 危险组合提示：`remove_query_strings` 与长缓存同时开启时会给出警告
 （移除查询串后，旧版资源 URL 与新版指向同一文件）。

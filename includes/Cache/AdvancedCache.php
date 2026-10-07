@@ -4,7 +4,8 @@
  *
  * 计划书 §104 明令"禁止自动修改 WordPress Core"。这里只动 `wp-content/advanced-cache.php`
  * 与 `wp-config.php` 两个**用户配置文件**，且：
- * - 改 wp-config.php 前强制做**临时**备份，校验结束后立即删除（不留在磁盘上）；
+ * - **不创建 wp-config.php 的任何磁盘副本**。原文只存在于本次请求的 PHP 内存里，
+ *   写入失败或校验失败都从内存回滚（3.0.6 起，见 `write_wp_config()` 的说明）；
  * - 改完做完整性校验（文件非空、仍含 DB_NAME、仍含 wp-settings.php 引入），任一不满足立即回滚；
  * - 只增删带专属标记的那一行，绝不重写整文件；
  * - 卸载时只删自己写的那一行，恢复原状。
@@ -310,7 +311,7 @@ final class AdvancedCache {
 			);
 		}
 
-		$original = (string) file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents
+		$original = $this->read_file( $path );
 
 		if ( '' === $original ) {
 			return array(
@@ -394,7 +395,7 @@ final class AdvancedCache {
 			);
 		}
 
-		$original = (string) file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents
+		$original = $this->read_file( $path );
 
 		if ( false === strpos( $original, self::WP_CACHE_MARKER ) ) {
 			return array(
@@ -420,74 +421,75 @@ final class AdvancedCache {
 	}
 
 	/**
-	 * 写 wp-config.php：临时备份 → 写入 → 校验 → 失败回滚 → **立即删除临时备份**。
+	 * 写 wp-config.php：写入 → 回读校验 → 失败从**内存**回滚。
 	 *
-	 * 为什么必须删掉备份（这不是洁癖，是安全问题）：
-	 * `wp-config.php` 里是数据库密码、AUTH_KEY / SECURE_AUTH_KEY / LOGGED_IN_KEY /
-	 * NONCE_KEY 以及 8 个 SALT。备份文件如果**长期**留在 `ABSPATH` 下，
-	 * 它就是一个只要猜到路径就能直接下载的明文凭据文件 ——
-	 * 任何访客、任何扫 `.bak` 后缀的爬虫、任何一次目录列举都能拿到整站密钥。
-	 * 早前版本把备份长期留在原地（文件名形如 `wp-config.php` + 备份后缀），
-	 * 属于 WordPress.org 会直接判 P0 的问题。
+	 * ## 3.0.6 的架构级变更：不再创建任何磁盘副本
 	 *
-	 * 现在的流程严格遵循「临时文件」语义：
-	 * 1. 备份到 `wp-config.php` **同目录**的临时文件（同目录才能保证 `rename()`
-	 *    是原子操作，不会因为跨文件系统而失败）；
-	 * 2. 写入 → 校验；
-	 * 3. 成功或失败，**都在 `finally` 语义下删掉临时文件**。
+	 * 3.0.5 及更早的做法是"先把原文复制到 `wp-config.php.at8sa.tmp`，写完再删掉"。
+	 * WordPress.org 人工审核（Review ID: `at8-site-accelerator/x361611074/5Oct26/T2
+	 * 7Oct26/4.3`）判定这是 P0：
 	 *
-	 * 真正需要"留底"的场景是写入失败且回滚也失败 —— 那种情况下内容还在内存里，
-	 * 已通过日志记录路径告知管理员手工恢复，不再依赖磁盘上的明文副本。
+	 * > wp-config.php contents, including authentication keys and salts, are
+	 * > temporarily written to the predictable web-root file
+	 * > wp-config.php.at8sa.tmp, which may remain exposed if deletion fails.
+	 *
+	 * 问题不在"删得够不够快"，而在**这个模型本身**：只要有一瞬间磁盘上存在
+	 * `ABSPATH` 下、名字可预测的明文副本，`https://站点/wp-config.php.at8sa.tmp`
+	 * 就是一份可被直接下载的整站凭据（数据库密码 + 4 个 KEY + 8 个 SALT）。
+	 * 删除失败、进程被 kill、只读异常、并发请求撞上——任何一条都会让它留下来。
+	 *
+	 * 换成内存回滚之后，这个风险面被**整体消除**：
+	 *
+	 * ```text
+	 * read original
+	 *      ↓
+	 * validate original        （原文只在 $original 变量里，不落盘）
+	 *      ↓
+	 * build updated in memory
+	 *      ↓
+	 * write target directly
+	 *      ↓
+	 * read back + verify
+	 *      ↓
+	 * 失败 → 用内存里的 $original 写回 → 再读回比对
+	 * ```
+	 *
+	 * 回滚能力没有削弱：唯一的变化是"回滚源"从磁盘临时文件变成 PHP 变量，
+	 * 而 PHP 变量在整个请求生命周期内都在，比"删之前还在的临时文件"更可靠。
+	 *
+	 * 日志同样收紧：只记录"写入失败 / 校验失败 / 回滚失败"这三类事件名，
+	 * 绝不记录 `$original`、`$updated` 或任何配置内容。
 	 *
 	 * @param string $path     路径。
-	 * @param string $original 原始内容。
+	 * @param string $original 原始内容（唯一的回滚源）。
 	 * @param string $updated  新内容。
 	 * @return array{ok:bool,message:string}
 	 */
 	private function write_wp_config( $path, $original, $updated ) {
-		$backup = $path . '.at8sa.tmp';
+		if ( ! $this->write_file( $path, $updated ) ) {
+			$this->logger->error( 'wp-config.php 写入失败' );
 
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-		if ( false === @file_put_contents( $backup, $original ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			// `file_put_contents()` 是"先截断再写"，失败时文件可能只剩半截。
+			// 因此即便写入失败，也要试着用内存里的原文把文件恢复回去。
+			$this->restore_wp_config( $path, $original );
+
 			return array(
 				'ok'      => false,
-				'message' => __( '无法创建 wp-config.php 临时备份，操作已中止（安全优先）。', 'at8-site-accelerator' ),
-			);
-		}
-
-		$result = $this->apply_wp_config( $path, $original, $updated );
-
-		// 无论成败都立刻删除临时副本，不给明文凭据留任何在 Web Root 里的时间。
-		$this->discard_wp_config_backup( $backup );
-
-		return $result;
-	}
-
-	/**
-	 * 实际执行「写入 → 校验 → 失败回滚」，并返回面向用户的结果。
-	 *
-	 * 与 {@see write_wp_config()} 分开，是为了让临时备份的清理只有一个出口，
-	 * 不会因为将来有人在中间加 early return 而漏删。
-	 *
-	 * @param string $path     路径。
-	 * @param string $original 原始内容。
-	 * @param string $updated  新内容。
-	 * @return array{ok:bool,message:string}
-	 */
-	private function apply_wp_config( $path, $original, $updated ) {
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-		if ( false === @file_put_contents( $path, $updated ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-			return array(
-				'ok'      => false,
-				'message' => __( '写入 wp-config.php 失败。', 'at8-site-accelerator' ),
+				'message' => __( '写入 wp-config.php 失败，已尝试恢复原始内容。', 'at8-site-accelerator' ),
 			);
 		}
 
 		if ( ! $this->verify_wp_config( $path, $original ) ) {
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-			@file_put_contents( $path, $original ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			$this->logger->error( 'wp-config.php 校验失败' );
 
-			$this->logger->error( 'wp-config.php 校验失败，已自动回滚' );
+			if ( ! $this->restore_wp_config( $path, $original ) ) {
+				$this->logger->error( 'wp-config.php 回滚失败' );
+
+				return array(
+					'ok'      => false,
+					'message' => __( 'wp-config.php 校验未通过且自动回滚失败，请手动检查该文件。', 'at8-site-accelerator' ),
+				);
+			}
 
 			return array(
 				'ok'      => false,
@@ -495,7 +497,7 @@ final class AdvancedCache {
 			);
 		}
 
-		$this->logger->info( 'wp-config.php 已更新（临时备份已删除）' );
+		$this->logger->info( 'wp-config.php 已更新' );
 
 		return array(
 			'ok'      => true,
@@ -504,52 +506,90 @@ final class AdvancedCache {
 	}
 
 	/**
-	 * 删除 wp-config.php 的临时备份。
+	 * 用内存里的原文恢复 wp-config.php，并回读确认恢复成功。
 	 *
-	 * 只用 `wp_delete_file()`，不再保留 `@unlink` 兜底。
+	 * 判定标准刻意用"回读内容 === 原文"而不是 `verify_wp_config()`：
+	 * 后者含**可逆性**检查（新文去掉我们那一行要能还原成原文），
+	 * 而"原文 vs 原文"在停用路径上天然不满足可逆性（见 `is_reversible()` 的注释），
+	 * 用它判断恢复结果会把一次成功的恢复误报成回滚失败。
 	 *
-	 * 这里经历过一次方向反转，理由必须写清楚，免得日后有人"善意地"把兜底加回来：
-	 *
-	 * 上一版是"先 `wp_delete_file()`、失败再 `@unlink`"的两段式，动机是
-	 * `wp_delete_file()` 内部先 `is_file()` 再 `unlink`，一旦 stat 失败
-	 * （权限、符号链接、open_basedir）就返回 false，对"绝不能留在磁盘上的明文
-	 * 凭据文件"来说，静默跳过删除不能接受。
-	 *
-	 * 但实测下来这个兜底**保不住**：Plugin Check 的
-	 * `WordPress.WP.AlternativeFunctions.unlink_unlink` 是 ERROR 级硬门槛，
-	 * 只要源码里出现 `unlink` 调用就报，`phpcs:ignore` 注解挡不住
-	 * （本地 phpcs 认豁免、Plugin Check 照样报 —— 两者行为不一致）。
-	 *
-	 * 而兜底的实际收益近乎为零：本方法开头已经用 `file_exists()` 确认过文件
-	 * 可 stat，能走到这一步说明 stat 通路是好的，此时 `wp_delete_file()` 里的
-	 * `is_file()` 同样会通过；反过来说，若真是权限问题导致 `is_file()` 失败，
-	 * `unlink` 也会因为同一个权限而失败。用一个"几乎用不上的兜底"去换
-	 * 一条阻断上架的 ERROR，不划算。
-	 *
-	 * 现在的降级方式改为**大声告警**：删除失败时在日志里点名残留文件路径，
-	 * 让站长能手动清掉 —— 不是静默跳过，仍然有可观测、可处理的出口。
-	 * 另有一层兜底在更上游：临时文件只在一次请求内存活，绝大多数情况下
-	 * 它还没被扫到就已经不存在了。
-	 *
-	 * @param string $backup 临时备份路径。
-	 * @return void
+	 * @param string $path     路径。
+	 * @param string $original 原始内容。
+	 * @return bool 是否确认已恢复。
 	 */
-	private function discard_wp_config_backup( $backup ) {
-		if ( ! file_exists( $backup ) ) {
-			return;
+	private function restore_wp_config( $path, $original ) {
+		if ( ! $this->write_file( $path, $original ) ) {
+			return false;
 		}
 
-		// `wp_delete_file()` 是 WordPress 规定的文件删除入口：除删除本身外还会触发
-		// `wp_delete_file` 动作，站点的审计钩子能观测到"含凭据的文件已被删除"。
-		// 插件最低支持 WP 5.8，该函数（4.2 引入）必然存在，无需 function_exists 探测。
-		if ( wp_delete_file( $backup ) ) {
-			return;
+		// 必须清 stat 缓存：上面的写入会改变文件大小，不清会读到旧的长度。
+		clearstatcache( true, $path );
+
+		return $this->read_file( $path ) === $original;
+	}
+
+	/**
+	 * 读文件内容（优先走 WordPress Filesystem API）。
+	 *
+	 * 为什么"优先"而不是"只用它"：初始化 `WP_Filesystem()` 需要
+	 * `wp-admin/includes/file.php`，在非 direct 传输模式的主机上还会弹出
+	 * FTP 凭证表单——把那套东西引进"前台一键开关 WP_CACHE"的路径里，
+	 * 等于用一个更大的可用性风险去换一个小收益。
+	 * 所以这里只在 WordPress 已经初始化好 `$wp_filesystem` 时复用它，
+	 * 否则退回原生读取。两者对同一个文件读到的内容完全一致。
+	 *
+	 * @param string $path 绝对路径。
+	 * @return string 读不到时返回空串。
+	 */
+	private function read_file( $path ) {
+		$fs = $this->wp_filesystem();
+
+		if ( $fs ) {
+			$contents = $fs->get_contents( $path );
+
+			return is_string( $contents ) ? $contents : '';
 		}
 
-		$this->logger->error(
-			'wp-config.php 临时备份删除失败，磁盘上可能残留明文凭据文件，请手动删除',
-			array( 'backup' => $backup )
-		);
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents, WordPress.PHP.NoSilencedErrors.Discouraged
+		$contents = @file_get_contents( $path );
+
+		return is_string( $contents ) ? $contents : '';
+	}
+
+	/**
+	 * 写文件（优先走 WordPress Filesystem API，见 `read_file()` 的说明）。
+	 *
+	 * @param string $path     绝对路径。
+	 * @param string $contents 内容。
+	 * @return bool
+	 */
+	private function write_file( $path, $contents ) {
+		$fs = $this->wp_filesystem();
+
+		if ( $fs ) {
+			return (bool) $fs->put_contents( $path, $contents );
+		}
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents, WordPress.PHP.NoSilencedErrors.Discouraged
+		return false !== @file_put_contents( $path, $contents );
+	}
+
+	/**
+	 * 当前请求里可用的 WordPress Filesystem 实例。
+	 *
+	 * 只取**已经初始化好的**那一个，绝不在这里主动 `WP_Filesystem()`——
+	 * 主动初始化会在部分主机上触发凭证表单输出，把一次后台按钮点击变成白屏。
+	 *
+	 * @return \WP_Filesystem_Base|null
+	 */
+	private function wp_filesystem() {
+		global $wp_filesystem;
+
+		if ( isset( $wp_filesystem ) && $wp_filesystem instanceof \WP_Filesystem_Base ) {
+			return $wp_filesystem;
+		}
+
+		return null;
 	}
 
 	/**
@@ -568,7 +608,7 @@ final class AdvancedCache {
 	 * @return bool
 	 */
 	private function verify_wp_config( $path, $original = '' ) {
-		$content = (string) @file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents, WordPress.PHP.NoSilencedErrors.Discouraged
+		$content = $this->read_file( $path );
 
 		if ( strlen( $content ) < 100 ) {
 			return false;

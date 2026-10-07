@@ -6,6 +6,153 @@
 
 ---
 
+## 3.0.6 — WordPress.org 人工审核整改（1 个 P0 + 1 个 P1）
+
+> 审核来源：WordPress.org Plugin Review Team
+>
+> Review ID：`at8-site-accelerator/x361611074/5Oct26/T2 7Oct26/4.3`
+>
+> 本轮官方明确指出 2 个问题，均已从**架构层面**改掉，而不是换文件名 / 加开关绕过。
+
+### P0-01：wp-config.php 敏感信息被临时写入 Web Root
+
+官方原文：
+
+```text
+wp-config.php contents, including authentication keys and salts, are temporarily
+written to the predictable web-root file wp-config.php.at8sa.tmp, which may remain
+exposed if deletion fails.
+```
+
+**修改前（3.0.5）**：
+
+```text
+读取 wp-config.php
+        ↓
+复制到 ABSPATH/wp-config.php.at8sa.tmp   ← 数据库密码 + 4 KEY + 8 SALT 明文落盘
+        ↓
+写入更新后的内容
+        ↓
+完整性校验
+        ↓
+无论成败都删除临时文件   ← 只要删除失败 / 进程被 kill / 并发撞上就永久残留
+        ↓
+失败时从临时文件回滚
+```
+
+**修改后（3.0.6）**：
+
+```text
+读取 wp-config.php
+        ↓
+原始内容只保存在 PHP 内存变量 $original
+        ↓
+生成 updated（内存）
+        ↓
+直接写入 wp-config.php
+        ↓
+重新读取 + 完整性校验
+        ↓
+失败 → 用内存里的 $original 写回 → 再读回比对确认
+```
+
+改动落地位置：
+
+- `includes/Cache/AdvancedCache.php`
+  - 删除 `discard_wp_config_backup()`，以及 `write_wp_config()` 里创建 `.at8sa.tmp` 的那一段；
+  - 新增 `restore_wp_config()`：回滚源是内存变量，判定标准是"回读内容 === 原文"
+    （刻意不用 `verify_wp_config()`——它的可逆性检查在停用路径上对"原文 vs 原文"天然不成立，
+    会把一次成功的恢复误报成回滚失败）；
+  - 新增 `read_file()` / `write_file()` / `wp_filesystem()`：**优先**走 WordPress Filesystem API
+    （`$GLOBALS['wp_filesystem']` 已初始化时），否则退回原生读写。
+    这里刻意**不主动**调用 `WP_Filesystem()`：初始化它在非 direct 传输模式的主机上会弹 FTP 凭证表单，
+    把"后台一键开启 WP_CACHE"变成白屏，也会引出一个 `require_once ABSPATH . 'wp-admin/includes/file.php'`
+    ——那正是冒烟测试里"不得直接加载 WordPress Core 文件"那条断言要拦的东西。
+  - 日志收紧为三个事件名：`wp-config.php 写入失败` / `校验失败` / `回滚失败`，
+    不再附带任何路径或内容。
+
+- 同类风险一并清除：`includes/Optimization/BrowserCache.php` 的 `write_htaccess()`
+  不再生成 `.htaccess.at8sa.bak`。它同样位于 Web Root、名字可预测，而且**永不清理**——
+  比 wp-config 那个用完即删的临时文件留得更久。现在同样改为内存回滚，
+  并新增写入后校验（标记块存在 + 原有规则仍在）。
+
+### P1-02：HTML 浏览器缓存存在公共/个性化响应混淆风险
+
+官方原文：
+
+```text
+Public HTML browser-cache headers are applied based only on login status, so
+anonymous cart, password-protected, or other personalized responses can be marked
+cacheable by shared intermediaries.
+```
+
+**修改前（3.0.5）**：
+
+```php
+if ( is_user_logged_in() ) {
+    return;                       // 只有这一条
+}
+
+header( 'Cache-Control: public, max-age=' . $ttl );
+```
+
+`Cache-Control: public` 的含义不是"这个访客可以缓存"，而是"**任何**中间层都可以缓存并分发给别人"。
+
+**修改后（3.0.6）**：新增 `BrowserCache::allow_public_html_cache()`，全部条件成立才发公共头：
+
+```text
+GET / HEAD
+  ↓  不是 wp-admin / AJAX / REST / XML-RPC / feed / search / 404 / preview / trackback
+  ↓  未登录
+  ↓  没有密码保护
+  ↓  URI 未命中排除表（含 /cart /checkout /my-account /add-to-cart 等）
+  ↓  没有 Query String
+  ↓  不是 WooCommerce 购物车 / 结算 / 账户 / 端点页
+  ↓  没有会话 / 购物车 / 评论者 / 密码保护 Cookie
+  ↓  状态码 200
+  ↓  Content-Type 是 text/html
+  ↓  响应没有 Set-Cookie
+  ↓  响应没有 Vary: Cookie
+  ↓  响应未被声明 no-cache / no-store / private / max-age=0 / Pragma: no-cache
+  ↓  未定义 DONOTCACHEPAGE
+YES → 才发送 public 浏览器缓存头；否则一律退回 no-cache
+```
+
+配套改动：
+
+- `includes/Cache/RequestGuard.php`
+  - `cookie_matches()` 由 private 改为 public；
+  - 新增 `has_bypass_cookie()` 与 `merge_rules()`，供整页缓存与浏览器缓存 Gate 共用同一套规则
+    （两边各写一份必然漂移，而"整页缓存绕过了、浏览器缓存头照发"正是本轮点名的问题形态）。
+- `includes/Cache/Config.php`：`excluded_paths()` / `bypass_cookies()` / `ignore_query_rules()`
+  改为复用 `RequestGuard::merge_rules()`，行为不变、消除重复实现。
+- `includes/Optimization/BrowserCache.php`：`send_html_headers()` 走 Gate；
+  另外当已有更严格的 `no-store` / `private` 时**不再**把它们改写成 `no-cache, max-age=0`
+  （那是放宽，不是收紧）。
+- `templates/settings-page.php`：开关文案由「让 HTML 也参与浏览器长缓存」
+  改为「仅对明确可公开缓存的 HTML 响应启用浏览器长缓存」，说明里列出全部会跳过的场景。
+
+### 测试
+
+- 新增 `tests/phpunit/WpConfigSafetyTest.php`（6 个用例）：
+  无临时副本、运行目录无残留、写入失败从内存恢复、校验失败回滚、日志无敏感内容、全项目源码无 Web Root 备份代码。
+- 新增 `tests/phpunit/HtmlBrowserCacheGateTest.php`（47 个用例，含审核要求的完整矩阵）。
+- `tests/unit/smoke.php` 新增「WordPress.org 3.0.6 审核整改专项」段：
+  源码扫描（防改回来）+ 真实调用（证明修复有效）+ `DONOTCACHEPAGE`（常量只能定义一次，放在脚本最后）。
+- `tests/unit/wp-stubs.php`：`is_feed()` / `is_search()` / `is_404()` / `is_preview()` /
+  `is_trackback()` / `post_password_required()` 改为可注入（写死 false 会让对应分支永远走不到，
+  断言等于没测）；补充 `is_cart()` / `is_checkout()` / `is_account_page()` / `is_wc_endpoint_url()`
+  与 `WP_Filesystem_Base` 桩。
+- `tests/phpunit/BrowserCacheTest.php`：断言由"必须有 `.htaccess.at8sa.bak`"改为"不得有"。
+
+### 验证结果
+
+- `php tests/unit/smoke.php`：358 项通过，0 失败（3.0.5 为 318 项）。
+- PHPUnit：265 个用例、829 条断言全部通过（新增 53 个用例）。
+- `tools/check-upgrade-notice.php`：6 个版本条目全部在 300 字符以内。
+
+---
+
 ## 3.0.5 — 提交前二次复核（Tested up to 取证 + 设置页文案 + 卸载目录清理 bug）
 
 > 起因：一次以 WordPress.org 审核员视角的复核，给出 1 个 P1 + 1 个 P2。

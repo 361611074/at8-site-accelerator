@@ -2891,6 +2891,185 @@ check(
 );
 
 /* ---------------------------------------------------------------------------
+ * 21. WordPress.org 3.0.6 审核整改专项
+ *
+ * 这一轮官方给出 1 个 P0 + 1 个 P1：
+ * - P0-01：wp-config.php 被临时写入可预测的 Web Root 文件 `wp-config.php.at8sa.tmp`；
+ * - P1-02：公共 HTML 浏览器缓存头只凭"是否登录"判定，匿名购物车 / 密码保护 /
+ *          个性化响应可能被中间层缓存并分发给别人。
+ *
+ * 下面分三 legs：源码扫描（防止被改回来）、真实调用（证明修复有效）、
+ * 以及 DONOTCACHEPAGE 这类只能靠常量的场景（放在最后，常量无法取消定义）。
+ * ------------------------------------------------------------------------ */
+
+section( 'WordPress.org 3.0.6 审核整改专项' );
+
+// ── 21-1（P0-01）源码：不得再创建任何 Web Root 明文备份 ──
+
+$at8sa_backup_hits = array();
+
+foreach ( $php_files as $at8sa_name => $at8sa_source ) {
+	$at8sa_code = strip_php_comments( $at8sa_source );
+
+	// 官方点名的文件名，以及"换个后缀名糊弄审核"的所有变体。
+	foreach ( array( '.at8sa.tmp', '.at8sa.bak', '.at8sa.backup', '.at8sa.old' ) as $at8sa_needle ) {
+		if ( false !== strpos( $at8sa_code, $at8sa_needle ) ) {
+			$at8sa_backup_hits[] = $at8sa_name . ' -> ' . $at8sa_needle;
+		}
+	}
+}
+
+check(
+	'源码不再创建 wp-config / .htaccess 的 Web Root 副本',
+	empty( $at8sa_backup_hits ),
+	implode( ',', $at8sa_backup_hits )
+);
+
+$at8sa_adv_src_306 = at8sa_source_by_suffix( $php_files, '/Cache/AdvancedCache.php' );
+
+check( '能取到 AdvancedCache 源码（断言自身有效）', '' !== $at8sa_adv_src_306, '' );
+check(
+	'write_wp_config 不再依赖磁盘临时备份（临时备份清理方法已删除）',
+	false === strpos( strip_php_comments( $at8sa_adv_src_306 ), 'discard_wp_config_backup' ),
+	''
+);
+check(
+	'回滚源是 PHP 内存里的 $original',
+	false !== strpos( strip_php_comments( $at8sa_adv_src_306 ), 'restore_wp_config' ),
+	''
+);
+check(
+	'wp-config 写入优先走 WordPress Filesystem API',
+	false !== strpos( strip_php_comments( $at8sa_adv_src_306 ), 'WP_Filesystem_Base' ),
+	''
+);
+
+// ── 21-2（P0-01）行为：跑一遍真实的启用 / 停用，目录里不许留下任何副本 ──
+
+file_put_contents( $wp_config_path, $fake_config );
+
+$at8sa_306 = new AdvancedCache( $logger );
+$at8sa_306->enable_wp_cache();
+$at8sa_306->disable_wp_cache();
+
+$at8sa_leftovers = glob( $wp_config_path . '.*' );
+
+check(
+	'启用 + 停用后 wp-config.php 没有任何带后缀的副本',
+	is_array( $at8sa_leftovers ) && array() === $at8sa_leftovers,
+	is_array( $at8sa_leftovers ) ? implode( ',', $at8sa_leftovers ) : 'glob 失败'
+);
+
+@unlink( $wp_config_path );
+
+// ── 21-3（P1-02）源码：HTML 浏览器缓存必须走公共响应 Gate ──
+
+$at8sa_bc_src = at8sa_source_by_suffix( $php_files, '/Optimization/BrowserCache.php' );
+
+check( '能取到 BrowserCache 源码（断言自身有效）', '' !== $at8sa_bc_src, '' );
+check(
+	'BrowserCache 提供公共响应安全 Gate',
+	false !== strpos( strip_php_comments( $at8sa_bc_src ), 'allow_public_html_cache' ),
+	''
+);
+
+$at8sa_bc_reflect = new ReflectionClass( BrowserCache::class );
+
+check(
+	'Gate 对外可见（可被设置页 / 诊断 / 测试直接调用）',
+	$at8sa_bc_reflect->hasMethod( 'allow_public_html_cache' )
+		&& $at8sa_bc_reflect->getMethod( 'allow_public_html_cache' )->isPublic(),
+	''
+);
+
+// ── 21-4（P1-02）行为：逐条跑审核要求的判定 ──
+
+$at8sa_gate_settings = new Settings();
+$at8sa_gate_settings->persist(
+	$at8sa_gate_settings->sanitize(
+		array(
+			'browser_cache'          => 1,
+			'browser_cache_html'     => 1,
+			'browser_cache_html_ttl' => 3600,
+		)
+	)
+);
+
+$at8sa_gate  = new BrowserCache( $at8sa_gate_settings );
+$at8sa_html  = array( 'Content-Type: text/html; charset=UTF-8' );
+$at8sa_plain = array( 'REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/blog/hello/' );
+
+$at8sa_gate_check = static function ( $label, $expected, $server = array(), $cookies = array(), $headers = null, $status = 200 ) use ( $at8sa_gate, $at8sa_html, $at8sa_plain ) {
+	$at8sa_used_headers = null === $headers ? $at8sa_html : $headers;
+
+	return check(
+		'HTML 浏览器缓存 Gate：' . $label,
+		with_request(
+			array_merge( $at8sa_plain, $server ),
+			$cookies,
+			static function () use ( $at8sa_gate, $at8sa_used_headers, $status ) {
+				return $at8sa_gate->allow_public_html_cache( $at8sa_used_headers, $status );
+			}
+		) === $expected,
+		''
+	);
+};
+
+$at8sa_gate_check( '普通匿名 200 text/html 页面 → 允许', true );
+$at8sa_gate_check( '带 Query String → 拒绝', false, array( 'REQUEST_URI' => '/blog/hello/?utm_source=x' ) );
+$at8sa_gate_check( 'POST → 拒绝', false, array( 'REQUEST_METHOD' => 'POST' ) );
+$at8sa_gate_check( '购物车 Cookie → 拒绝', false, array(), array( 'woocommerce_cart_hash' => 'x' ) );
+$at8sa_gate_check( '密码保护 Cookie → 拒绝', false, array(), array( 'wp-postpass_' . COOKIEHASH => 'x' ) );
+$at8sa_gate_check( '/cart 路径 → 拒绝', false, array( 'REQUEST_URI' => '/cart/' ) );
+$at8sa_gate_check( 'Set-Cookie → 拒绝', false, array(), array(), array_merge( $at8sa_html, array( 'Set-Cookie: a=1' ) ) );
+$at8sa_gate_check( '已有 private → 拒绝', false, array(), array(), array_merge( $at8sa_html, array( 'Cache-Control: private' ) ) );
+$at8sa_gate_check( '非 200 → 拒绝', false, array(), array(), $at8sa_html, 404 );
+$at8sa_gate_check( '非 text/html → 拒绝', false, array(), array(), array( 'Content-Type: application/json' ) );
+
+$GLOBALS['at8sa_test_logged_in'] = true;
+$at8sa_gate_check( '登录用户 → 拒绝', false );
+$GLOBALS['at8sa_test_logged_in'] = false;
+
+$GLOBALS['at8sa_test_password_required'] = true;
+$at8sa_gate_check( '密码保护页面 → 拒绝', false );
+$GLOBALS['at8sa_test_password_required'] = false;
+
+// 默认设置（browser_cache_html 默认关）下必须永远拒绝——这是"升级即安全"的兜底。
+//
+// 注意必须把选项表还原成默认值再取 Settings：上面 21-4 刚把
+// `browser_cache_html => 1` 持久化进了桩的选项表，而 `sanitize()` 对"缺键"是
+// 保留当前值，靠 persist( sanitize( array() ) ) 是**关不掉**的。
+$at8sa_defaults = ( new Settings() )->defaults();
+
+check( 'browser_cache_html 默认为关', 0 === (int) $at8sa_defaults['browser_cache_html'] );
+
+$GLOBALS['at8sa_test_options'][ Settings::OPTION ] = $at8sa_defaults;
+
+$at8sa_default_gate = new BrowserCache( new Settings() );
+
+check(
+	'默认设置不发送公共 HTML 浏览器缓存头',
+	false === with_request(
+		$at8sa_plain,
+		array(),
+		static function () use ( $at8sa_default_gate, $at8sa_html ) {
+			return $at8sa_default_gate->allow_public_html_cache( $at8sa_html, 200 );
+		}
+	),
+	''
+);
+
+// ── 21-5 DONOTCACHEPAGE：必须尊重其它插件声明的"不许缓存" ──
+//
+// 常量定义之后无法取消，所以放在整份脚本的最后一条。
+if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+	// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- 跨插件互通的标准常量。
+	define( 'DONOTCACHEPAGE', true );
+}
+
+$at8sa_gate_check( 'DONOTCACHEPAGE → 拒绝', false );
+
+/* ---------------------------------------------------------------------------
  * 汇总
  * ------------------------------------------------------------------------ */
 

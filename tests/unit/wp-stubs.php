@@ -617,37 +617,76 @@ function is_home() {
 	return true;
 }
 
+/**
+ * 条件标签必须**可注入**。
+ *
+ * 3.0.6 的公共响应安全 Gate 逐条判断 `is_feed() / is_search() / is_404() /
+ * is_preview() / post_password_required()`。这些桩若一律写死 false，
+ * "feed 场景不得发公共缓存头"这类断言就恒真（因为分支根本没被走到），
+ * 与"没测"完全等价。所以这里统一读全局开关，未设置时保持 false。
+ *
+ * @param string $key 全局开关名。
+ * @return bool
+ */
+function at8sa_test_flag( $key ) {
+	return ! empty( $GLOBALS[ $key ] );
+}
+
 function is_404() {
-	return false;
+	return at8sa_test_flag( 'at8sa_test_is_404' );
 }
 
 function is_search() {
-	return false;
+	return at8sa_test_flag( 'at8sa_test_is_search' );
 }
 
 function is_feed() {
-	return false;
+	return at8sa_test_flag( 'at8sa_test_is_feed' );
 }
 
 function is_preview() {
-	return false;
+	return at8sa_test_flag( 'at8sa_test_is_preview' );
 }
 
 function is_trackback() {
-	return false;
+	return at8sa_test_flag( 'at8sa_test_is_trackback' );
 }
 
 function is_singular() {
-	return false;
+	return at8sa_test_flag( 'at8sa_test_is_singular' );
 }
 
 function is_archive() {
-	return false;
+	return at8sa_test_flag( 'at8sa_test_is_archive' );
 }
 
 function post_password_required( $post = null ) {
 	unset( $post );
-	return false;
+	return at8sa_test_flag( 'at8sa_test_password_required' );
+}
+
+/**
+ * WooCommerce 条件标签桩。
+ *
+ * 真实站点上这些函数由 WooCommerce 定义；桩环境里必须**存在同名函数**，
+ * 否则 `function_exists( 'is_cart' )` 恒为 false，Gate 里那段分支永远走不到，
+ * 测试就测了个空。默认返回 false（= 不在购物车页），由全局开关打开。
+ */
+function is_cart() {
+	return at8sa_test_flag( 'at8sa_test_is_cart' );
+}
+
+function is_checkout() {
+	return at8sa_test_flag( 'at8sa_test_is_checkout' );
+}
+
+function is_account_page() {
+	return at8sa_test_flag( 'at8sa_test_is_account_page' );
+}
+
+function is_wc_endpoint_url( $endpoint = '' ) {
+	unset( $endpoint );
+	return at8sa_test_flag( 'at8sa_test_is_wc_endpoint' );
 }
 
 function is_admin_bar_showing() {
@@ -1011,6 +1050,46 @@ function _n( $single, $plural, $number, $domain = 'default' ) {
 
 function load_plugin_textdomain() {
 	return true;
+}
+
+/* ---------------------------------------------------------------------------
+ * WP_Filesystem 桩
+ * ------------------------------------------------------------------------ */
+
+/**
+ * `WP_Filesystem_Base` 最小桩。
+ *
+ * `AdvancedCache` 在 `$GLOBALS['wp_filesystem']` 已初始化时会优先走 WordPress
+ * Filesystem API 读写 wp-config.php。测试需要注入一个"可控失败"的实现来验证
+ * 写入失败分支，所以这里提供一个最小基类让 `instanceof` 判定成立；
+ * 真实核心里的那个类是 abstract 且方法众多，桩只需保证类型判定与两个
+ * 读写方法的签名一致即可。
+ */
+class WP_Filesystem_Base {
+
+	/**
+	 * 读文件。
+	 *
+	 * @param string $file 路径。
+	 * @return string|false
+	 */
+	public function get_contents( $file ) {
+		unset( $file );
+		return false;
+	}
+
+	/**
+	 * 写文件。
+	 *
+	 * @param string $file     路径。
+	 * @param string $contents 内容。
+	 * @param int    $mode     权限。
+	 * @return bool
+	 */
+	public function put_contents( $file, $contents, $mode = false ) {
+		unset( $file, $contents, $mode );
+		return false;
+	}
 }
 
 /* ---------------------------------------------------------------------------

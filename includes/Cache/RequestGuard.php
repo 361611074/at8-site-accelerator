@@ -183,6 +183,59 @@ final class RequestGuard {
 	}
 
 	/**
+	 * 把"多行 / 逗号分隔"的用户规则并入内置规则表。
+	 *
+	 * 抽成公共方法是为了让**页面缓存**（`Config`）与**HTML 浏览器缓存**
+	 * （`BrowserCache`）共用同一套解析：两边若各自实现一份，迟早会出现
+	 * "整页缓存绕过了、浏览器缓存头却照样发"这种只对一半的缺陷。
+	 *
+	 * @param array        $defaults 内置规则表。
+	 * @param string|array $custom   用户自定义规则（textarea 原文或已拆好的数组）。
+	 * @return array
+	 */
+	public static function merge_rules( array $defaults, $custom ) {
+		if ( is_array( $custom ) ) {
+			$lines = $custom;
+		} else {
+			$lines = preg_split( '/\r?\n|,/', (string) $custom );
+		}
+
+		$rules = $defaults;
+
+		if ( is_array( $lines ) ) {
+			foreach ( $lines as $line ) {
+				$line = trim( (string) $line );
+
+				if ( '' !== $line ) {
+					$rules[] = $line;
+				}
+			}
+		}
+
+		return array_values( array_unique( $rules ) );
+	}
+
+	/**
+	 * 给定 Cookie 集合里是否存在命中绕过规则的 Cookie。
+	 *
+	 * 公开给 `BrowserCache` 的公共响应判定复用：那里同样要问
+	 * "这份响应会不会因人而异"，判定规则必须与整页缓存完全一致。
+	 *
+	 * @param array $rules   规则表（支持 `prefix*` 与精确匹配）。
+	 * @param array $cookies Cookie 名 => 值。
+	 * @return bool
+	 */
+	public static function has_bypass_cookie( array $rules, array $cookies ) {
+		foreach ( array_keys( $cookies ) as $name ) {
+			if ( self::cookie_matches( (string) $name, $rules ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * 当前请求是否必须绕过缓存。
 	 *
 	 * @param array $config 运行时配置（由 Config::runtime() 生成）。
@@ -351,11 +404,15 @@ final class RequestGuard {
 	/**
 	 * Cookie 名是否命中绕过规则（支持 `prefix*` 与精确匹配）。
 	 *
+	 * 公开是为了让 `BrowserCache` 的公共响应判定复用同一套匹配语义——
+	 * 两份实现一旦漂移，"整页缓存绕过了、浏览器缓存头照发"就只对了一半，
+	 * 而那正是 WordPress.org 本轮点名的问题形态。
+	 *
 	 * @param string $name    Cookie 名。
 	 * @param array  $prefixes 规则表。
 	 * @return bool
 	 */
-	private static function cookie_matches( $name, array $prefixes ) {
+	public static function cookie_matches( $name, array $prefixes ) {
 		foreach ( $prefixes as $rule ) {
 			$rule = trim( (string) $rule );
 

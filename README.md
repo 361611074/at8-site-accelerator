@@ -50,15 +50,15 @@
 1. 将 `at8-site-accelerator` 目录放入 `wp-content/plugins/`
 2. 在 WordPress 后台「插件」页面启用
 3. 启用后自动写入 `advanced-cache.php` drop-in 并改写 `wp-config.php`
-   中的 `WP_CACHE` 常量（改写前只做临时备份，写入校验不通过即回滚，
-   无论成败都会立即删除该临时文件，不在磁盘上留明文副本）
+   中的 `WP_CACHE` 常量（原文只保留在内存里，写入或校验失败即用它回滚，
+   全程不在磁盘上创建任何副本）
 4. 进入「设置 → AT8 Site Accelerator」调整参数
 
 也可直接使用打包好的发行版：
 
 ```
 php tools/build-zip.php
-# 产出 dist/at8-site-accelerator-3.0.5.zip
+# 产出 dist/at8-site-accelerator-3.0.6.zip
 ```
 
 ---
@@ -125,10 +125,10 @@ php tests/unit/round2-integration.php
 php tools/check-upgrade-notice.php
 ```
 
-冒烟测试 334 项（静态断言，含 drop-in 命中路径的子进程测试），
-第二轮集成验收 73 项（行为断言：逐个后台页面验证通知作用域、
-真实写/回滚 `wp-config.php` 后确认无临时备份残留、
-验证删除临时备份确实走 `wp_delete_file()` 且失败时记 error 日志而非静默、
+冒烟测试 358 项（静态断言，含 drop-in 命中路径的子进程测试），
+第二轮集成验收 71 项（行为断言：逐个后台页面验证通知作用域、
+真实写/回滚 `wp-config.php` 后确认磁盘上不新增任何文件（目录快照差分）、
+校验失败时记 error 日志且日志不含 `wp-config.php` 任何敏感内容、
 `realpath()` 实测 Host 归一化）。
 
 `check-upgrade-notice.php` 校验 `readme.txt` 的 Upgrade Notice 每个版本条目

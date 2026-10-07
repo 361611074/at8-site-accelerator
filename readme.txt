@@ -4,7 +4,7 @@ Tags: cache, page cache, redis, lazy load, webp
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 3.0.5
+Stable tag: 3.0.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -38,7 +38,7 @@ Once "advanced cache" is enabled, the plugin writes `wp-content/advanced-cache.p
 
 **3. Smart preloading** - prefetches the target page when a visitor hovers or touches a link, turning "click" into "instant". Respects `Save-Data` and slow connections, and stops automatically while the page is hidden.
 
-**4. Browser caching** - long-lived cache headers for static assets, plus ready-to-paste nginx / Apache rule snippets (the plugin never edits your `.htaccess` on its own).
+**4. Browser caching** - long-lived cache headers for static assets, plus ready-to-paste nginx / Apache rule snippets (the plugin never edits your \`.htaccess\` on its own). HTML browser caching is applied only to responses that pass the plugin's public-response safety checks; signed-in, session, cart, password-protected, personalised responses and responses that WordPress or another plugin has already marked as non-cacheable are automatically skipped.
 
 **5. HTML minification** - removes comments and redundant whitespace. The contents of `pre` / `textarea` / `script` / `style` / `svg` are preserved verbatim, and IE conditional comments are kept. Includes a safety valve: if the minified size drops below 40% of the original, the result is treated as broken and discarded.
 
@@ -64,7 +64,7 @@ Once "advanced cache" is enabled, the plugin writes `wp-content/advanced-cache.p
 
 * It will not modify WordPress core files.
 * It will not overwrite your `.htaccess` (it only gives you rule snippets; you decide whether to apply them).
-* It will not leave a copy of `wp-config.php` on disk. When the plugin enables `WP_CACHE`, the original is written to a temporary file that is deleted as soon as the change has been verified - whether it succeeded or was rolled back.
+* It will not write a copy of `wp-config.php` anywhere. When the plugin enables `WP_CACHE`, the original is kept in memory only and is used to restore the file if the write or the integrity check fails - nothing is ever created next to your configuration file, not even for a moment.
 * It will not cache pages for logged-in users.
 * It will not delete your settings or cache on deactivation.
 * It will not delete your data on uninstall unless you explicitly turn off "keep data on uninstall".
@@ -104,11 +104,22 @@ No. Every key carries a per-site salt prefix - the plugin's own namespace plus t
 
 Because a cache entry is not tied to a specific person. Caching a page for a signed-in visitor would mean one visitor could be served a page that was generated for another. Since 3.0.5 signed-in visitors always bypass the cache. The old "also cache logged-in users" switch is gone from the settings screen, and any value an older version saved for it is ignored rather than acted upon.
 
+= Does the plugin ever make my pages publicly cacheable? =
+
+Only when you switch on "browser cache for HTML", and only for responses that pass every safety check: a plain GET or HEAD request, a 200 `text/html` response, no signed-in visitor, no session or cart cookie, no password protection, no query string, no `Set-Cookie`, no `Vary: Cookie`, no existing `no-cache` / `private` / `no-store` header, and no `DONOTCACHEPAGE`. Anything else falls back to `no-cache`. The option is off by default.
+
 = Is Multisite supported? =
 
 Yes. Each site gets its own cache directory and its own Redis key prefix.
 
 == Changelog ==
+
+= 3.0.6 =
+* Fixed: **enabling "WP_CACHE" no longer writes a copy of your `wp-config.php` to disk at all.** Previously the plugin wrote the original to `wp-config.php.at8sa.tmp` next to the real file and deleted it afterwards; if anything interrupted that step, the file - containing your database password, four secret keys and eight salts - stayed downloadable from the web root. The original is now kept in memory and used to restore the file if the write or the integrity check fails, so no copy is ever created. Reported by the WordPress.org plugin review team.
+* Fixed: **the "browser cache for HTML" option no longer decides whether a page is public by looking at login status alone.** Anonymous cart pages, password-protected pages and other personalised responses could previously be marked `public` and then be stored and re-served by a shared proxy or CDN. Responses are now checked one by one and anything personalised, non-200, non-HTML, carrying a `Set-Cookie`, already marked `no-cache` / `private` / `no-store`, or carrying a query string falls back to `no-cache`. The option remains off by default.
+* Fixed: writing the Apache rules to `.htaccess` no longer leaves a `.htaccess.at8sa.bak` copy in the web root. The original is restored from memory if verification fails, and the rules can still be removed with one click.
+* Added: a public-response safety check shared with the page cache, so both features use exactly the same cookie and URL bypass rules.
+* Added: 53 new automated tests covering the two review findings, including write-failure and verification-failure rollback, log redaction, and the full HTML browser-cache decision matrix.
 
 = 3.0.5 =
 * Fixed: **enabling "WP_CACHE" used to leave a readable copy of your `wp-config.php` on the web server.** That file contains your database password, your four secret keys and all eight salts, and the copy sat next to the original where any visitor - or any bot - could have asked for it. The original is now only ever written to a temporary file that is deleted the moment the change has been checked, whether it was applied or rolled back.
@@ -165,6 +176,9 @@ Yes. Each site gets its own cache directory and its own Redis key prefix.
 The full technical change list (including the reason behind every fix) is in `CHANGELOG.md` at the root of the repository.
 
 == Upgrade Notice ==
+
+= 3.0.6 =
+Recommended for every 3.0.5 user. Fixes two issues found by the WordPress.org review team: enabling WP_CACHE no longer writes a readable copy of wp-config.php to the web root, and public HTML browser caching is no longer applied just because the visitor is anonymous. No action needed.
 
 = 3.0.5 =
 Recommended for every 3.0.4 user. Removes a leftover wp-config.php copy that could expose your database password, limits plugin notices to this plugin's own settings page, and ends "cache logged-in users" - logged-in visitors now always bypass the cache. No action is required.

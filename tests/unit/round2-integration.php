@@ -485,48 +485,71 @@ at8sa_ok( '无 wp-config.php.* 形式的备份/临时文件', empty( $at8sa_left
 @unlink( $at8sa_config_path );
 
 /* ============================================================
- * 四、d) 删除临时备份必须走 wp_delete_file() 主路径
+ * 四、d) 3.0.6：回滚源是 PHP 内存，磁盘上不再产生任何文件
  * ============================================================
  *
- * 为什么单独钉这一条：`discard_wp_config_backup()` 用的是 `wp_delete_file()`。
- * 前面那些断言只看「文件最终没了」，而裸 `unlink()` 也能让它通过 ——
- * 也就是说，把它换成 Plugin Check 会判 ERROR 的那种写法，测试依然全绿。
+ * 3.0.5 及更早的模型是「备份到 wp-config.php.at8sa.tmp → 写完再删」。
+ * WordPress.org 人工审核判它 P0：只要有一瞬间磁盘上存在名字可预测的明文副本，
+ * 它就是一份可被 HTTP 直接下载的整站凭据。
  *
- * 这里通过给桩打标记来区分：主路径被走过 => 记录到桩里。
- * 断言的是**走哪条路**，不是「删掉了没」—— 后者前面已经证过了。
+ * 3.0.6 把这条路径**整体取消**，所以这里断言的东西变了：
+ * - 不再断言「删除临时备份走 wp_delete_file()」—— 那条路已经不存在了；
+ * - 改为断言「整个写入 / 回滚过程磁盘上不新增任何文件」，
+ *   这比"删掉了没"更强：它连"曾经存在过"一起否掉了。
  *
- * 现状说明（2026-10-05 改）：本方法曾有过一段 `@unlink()` 兜底，
- * 已因 Plugin Check 的 ERROR 级硬门槛移除 —— 现在只有 `wp_delete_file()`
- * 一条路径，删除失败靠**记 error 日志**暴露，不再靠换函数重试。
- * 下面第二条断言钉的就是这个新的降级出口。
+ * 手段是目录快照差分：先把 wp-config.php 摆好再拍快照，跑完启用 + 校验失败回滚 +
+ * 停用，再拍一次。任何新增条目（包括换后缀名的变体）都会让断言失败。
  */
 
-$at8sa_adv_ref = new ReflectionClass( 'AT8SA\\Cache\\AdvancedCache' );
-$at8sa_discard = $at8sa_adv_ref->getMethod( 'discard_wp_config_backup' );
-$at8sa_discard->setAccessible( true );
-
-$at8sa_probe = $at8sa_root . 'wp-config.php.at8sa.tmp';
-file_put_contents( $at8sa_probe, "<?php\n// probe\n" );
-$GLOBALS['at8sa_test_wp_delete_file_calls'] = array();
-$at8sa_discard->invoke( $at8sa_adv, $at8sa_probe );
+$at8sa_adv_ref2 = new ReflectionClass( 'AT8SA\\Cache\\AdvancedCache' );
 
 at8sa_ok(
-	'临时备份经 wp_delete_file() 删除（而非裸 unlink）',
-	! file_exists( $at8sa_probe ) && in_array( $at8sa_probe, (array) ( $GLOBALS['at8sa_test_wp_delete_file_calls'] ?? array() ), true ),
-	'桩记录：' . implode( ',', (array) ( $GLOBALS['at8sa_test_wp_delete_file_calls'] ?? array() ) )
+	'AdvancedCache 不再提供"删除临时备份"的方法（该路径已整体取消）',
+	false === $at8sa_adv_ref2->hasMethod( 'discard_wp_config_backup' ),
+	''
 );
-unset( $GLOBALS['at8sa_test_wp_delete_file_calls'] );
 
-// 删除失败时不能静默：必须记 error 日志点名残留文件，让站长能手动清掉。
+at8sa_ok(
+	'回滚改由 restore_wp_config() 从内存写回',
+	$at8sa_adv_ref2->hasMethod( 'restore_wp_config' ),
+	''
+);
+
+$at8sa_write2 = $at8sa_adv_ref2->getMethod( 'write_wp_config' );
+$at8sa_write2->setAccessible( true );
+
+$at8sa_original3 = $at8sa_original;
+file_put_contents( $at8sa_config_path, $at8sa_original3 );
+
+// 快照必须在 wp-config.php 摆好**之后**拍，否则它自己会被算成"新增文件"。
+$at8sa_snapshot_before = (array) glob( $at8sa_root . '*' );
+
+$at8sa_adv2 = $at8sa_adv_ref2->newInstanceArgs( array( $at8sa_logger ) );
+
+// 成功路径。
+$at8sa_adv2->enable_wp_cache();
+
+// 失败路径：丢掉 wp-settings.php 触发结构校验失败 → 内存回滚。
+$at8sa_broken3 = str_replace( "require_once ABSPATH . 'wp-settings.php';\n", '', $at8sa_original3 );
+$at8sa_write2->invoke( $at8sa_adv2, $at8sa_config_path, $at8sa_original3, $at8sa_broken3 );
+
+// 停用路径。
+$at8sa_adv2->disable_wp_cache();
+
+$at8sa_new_files = array_values( array_diff( (array) glob( $at8sa_root . '*' ), $at8sa_snapshot_before ) );
+
+at8sa_ok(
+	'整个写入 / 回滚过程磁盘上不新增任何文件',
+	empty( $at8sa_new_files ),
+	implode( ',', array_map( 'basename', $at8sa_new_files ) )
+);
+
+// 失败不能静默：必须留下可观测的 error 日志。
 //
 // `Logger` 是 final 类且 `AdvancedCache::__construct( Logger $logger )` 有类型
-// 提示，既不能继承也无法用鸭子类型替身 —— 所以这里干脆走**真实日志路径**：
-// 打开日志开关，强制主路径失败，然后读日志文件验证内容。
+// 提示，既不能继承也无法用鸭子类型替身 —— 所以这里走**真实日志路径**：
+// 打开日志开关，触发一次校验失败，然后读日志文件验证内容。
 // 比替身更可信：它连 `log()` 里的级别阈值判断一起测了。
-$at8sa_probe2 = $at8sa_root . 'wp-config.php.at8sa.tmp';
-file_put_contents( $at8sa_probe2, "<?php\n// probe2\n" );
-
-// 与前面模拟老站点同款手法：桩的 get_option() 读这个全局数组。
 $GLOBALS['at8sa_test_options']['at8sa_settings'] = array(
 	'log_enabled' => 1,
 	'log_level'   => 'error',
@@ -536,13 +559,11 @@ $at8sa_logger_fail = new AT8SA\Support\Logger( new Settings() );
 $at8sa_log_file = $at8sa_logger_fail->file();
 at8sa_ok( '测试日志开关已生效', $at8sa_logger_fail->enabled(), '未启用则后面读不到日志' );
 
-// 记下基线长度，只看本次调用新增的那一段。
 $at8sa_log_before = file_exists( $at8sa_log_file ) ? (string) file_get_contents( $at8sa_log_file ) : '';
 
 $at8sa_adv_fail = new AT8SA\Cache\AdvancedCache( $at8sa_logger_fail );
-$GLOBALS['at8sa_test_wp_delete_file_force_fail'] = true;
-$at8sa_discard->invoke( $at8sa_adv_fail, $at8sa_probe2 );
-unset( $GLOBALS['at8sa_test_wp_delete_file_force_fail'] );
+file_put_contents( $at8sa_config_path, $at8sa_original3 );
+$at8sa_write2->invoke( $at8sa_adv_fail, $at8sa_config_path, $at8sa_original3, $at8sa_broken3 );
 
 $at8sa_log_added = '';
 if ( file_exists( $at8sa_log_file ) ) {
@@ -553,13 +574,20 @@ if ( file_exists( $at8sa_log_file ) ) {
 }
 
 at8sa_ok(
-	'删除失败时记 error 日志点名残留文件（不静默跳过）',
-	false !== strpos( $at8sa_log_added, '临时备份删除失败' ) && file_exists( $at8sa_probe2 ),
-	'新增日志长度：' . strlen( $at8sa_log_added )
+	'校验失败时记 error 日志（不静默）',
+	false !== strpos( $at8sa_log_added, 'wp-config.php 校验失败' ),
+	'新增日志：' . $at8sa_log_added
 );
 
-// 失败样本留在磁盘上会污染后面的"无残留"断言，这里显式清掉。
-wp_delete_file( $at8sa_probe2 );
+at8sa_ok(
+	'日志不含 wp-config 的任何敏感内容',
+	false === strpos( $at8sa_log_added, 'super-secret-plaintext' )
+		&& false === strpos( $at8sa_log_added, 'DB_PASSWORD' )
+		&& false === strpos( $at8sa_log_added, 'AUTH_KEY' ),
+	'新增日志：' . $at8sa_log_added
+);
+
+@unlink( $at8sa_config_path );
 
 /* ============================================================
  * 五、Host 归一化防穿越（realpath 落地验证）

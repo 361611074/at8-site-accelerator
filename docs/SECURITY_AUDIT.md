@@ -262,11 +262,18 @@ hidden 字段（未勾选时提交 0，勾选时 checkbox 覆盖它）。
 
 ```php
 if ( version_compare( PHP_VERSION, AT8SA_MIN_PHP, '<' ) ) { 提示 + return; }
-global $wp_version;
-if ( isset( $wp_version ) && version_compare( $wp_version, AT8SA_MIN_WP, '<' ) ) { 提示 + return; }
+$at8sa_wp_version = isset( $GLOBALS['wp_version'] ) ? (string) $GLOBALS['wp_version'] : '';
+if ( '' !== $at8sa_wp_version && version_compare( $at8sa_wp_version, AT8SA_MIN_WP, '<' ) ) { 提示 + return; }
 ```
 
 不满足时**不注册任何钩子、不注册自动加载器**，只挂一条 `admin_notices` 提示后 `return`。
+
+⚠ 版本校验**只读 `$GLOBALS['wp_version']`**。入口文件在 wp-settings.php 顶层
+作用域被 include，3.0.6 及之前的历史代码 `global $wp_version;` +
+`unset( $wp_version, ... )` 会把核心全局变量真的删掉，导致后续加载的插件
+（如 WPForms）拿到 null 直接 Fatal，整站 500（2026-10-09 silkuasilk.com 事故）。
+3.0.6.1 起改为只读 `$GLOBALS`，并有静态扫描测试锁死三条红线：
+不 `global $wp_version`、不 `unset` 它、不给它赋值。
 
 ---
 

@@ -4,7 +4,7 @@ Tags: cache, page cache, redis, lazy load, webp
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 3.0.6
+Stable tag: 3.0.6.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -114,6 +114,9 @@ Yes. Each site gets its own cache directory and its own Redis key prefix.
 
 == Changelog ==
 
+= 3.0.6.1 =
+* Fixed: **the plugin no longer deletes WordPress's `$wp_version` variable at load time.** The plugin entry file runs in the top-level scope of `wp-settings.php`, and its environment check used to clean up after itself with `unset( $wp_version, ... )` - which really removed the core global. Any plugin loaded after it that reads `$wp_version` while booting (WPForms, for example) then received `null` and crashed with a fatal error that took the whole site down. The version check now reads `$GLOBALS['wp_version']` without touching it, and automated tests forbid the plugin from ever modifying that variable again.
+
 = 3.0.6 =
 * Fixed: **enabling "WP_CACHE" no longer writes a copy of your `wp-config.php` to disk at all.** Previously the plugin wrote the original to `wp-config.php.at8sa.tmp` next to the real file and deleted it afterwards; if anything interrupted that step, the file - containing your database password, four secret keys and eight salts - stayed downloadable from the web root. The original is now kept in memory and used to restore the file if the write or the integrity check fails, so no copy is ever created. Reported by the WordPress.org plugin review team.
 * Fixed: **the "browser cache for HTML" option no longer decides whether a page is public by looking at login status alone.** Anonymous cart pages, password-protected pages and other personalised responses could previously be marked `public` and then be stored and re-served by a shared proxy or CDN. Responses are now checked one by one and anything personalised, non-200, non-HTML, carrying a `Set-Cookie`, already marked `no-cache` / `private` / `no-store`, or carrying a query string falls back to `no-cache`. The option remains off by default.
@@ -176,6 +179,9 @@ Yes. Each site gets its own cache directory and its own Redis key prefix.
 The full technical change list (including the reason behind every fix) is in `CHANGELOG.md` at the root of the repository.
 
 == Upgrade Notice ==
+
+= 3.0.6.1 =
+Critical fix for every 3.0.6 and earlier user. The plugin could delete WordPress's wp_version variable while loading, crashing any plugin that reads it during boot (WPForms) and taking the whole site down. Update now; no action needed besides upgrading.
 
 = 3.0.6 =
 Recommended for every 3.0.5 user. Fixes two issues found by the WordPress.org review team: enabling WP_CACHE no longer writes a readable copy of wp-config.php to the web root, and public HTML browser caching is no longer applied just because the visitor is anonymous. No action needed.

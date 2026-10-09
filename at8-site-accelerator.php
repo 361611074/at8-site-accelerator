@@ -3,7 +3,7 @@
  * Plugin Name:       AT8 Site Accelerator
  * Plugin URI:        https://www.at8.fun/at8-site-accelerator/
  * Description:       轻量级整页缓存 + 精准失效 + 智能预加载 + 浏览器缓存 + HTML 压缩 + 图片懒加载 + WebP 自动转换 + 数据库瘦身，多合一站点加速。优先 Redis（不可用时自动降级磁盘），内置 Elementor / WooCommerce 兼容层与第三方缓存冲突检测。
- * Version:           3.0.6
+ * Version:           3.0.6.1
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            漫步白月光
@@ -24,7 +24,7 @@ defined( 'ABSPATH' ) || exit;
  * ----------------------------------------------------------------------
  */
 
-define( 'AT8SA_VERSION', '3.0.6' );
+define( 'AT8SA_VERSION', '3.0.6.1' );
 define( 'AT8SA_FILE', __FILE__ );
 define( 'AT8SA_PATH', plugin_dir_path( __FILE__ ) );
 define( 'AT8SA_URL', plugin_dir_url( __FILE__ ) );
@@ -93,22 +93,32 @@ if ( version_compare( PHP_VERSION, AT8SA_MIN_PHP, '<' ) ) {
 	return;
 }
 
-global $wp_version;
+/*
+ * WordPress 版本二次校验：只读 `$GLOBALS['wp_version']`。
+ *
+ * ⚠ 绝不能 `global $wp_version;`，更不能对它 `unset()` —— 本文件是在
+ * wp-settings.php 的顶层作用域被 include 的，这里的变量就是全局变量本身。
+ * 曾经的 `unset( $wp_version, ... )` 会把核心全局变量真的删掉，导致后续
+ * 加载的插件（如 WPForms）拿到 null 直接 Fatal，整站 500。
+ */
+$at8sa_wp_version = isset( $GLOBALS['wp_version'] ) ? (string) $GLOBALS['wp_version'] : '';
 
-if ( isset( $wp_version ) && version_compare( $wp_version, AT8SA_MIN_WP, '<' ) ) {
+if ( '' !== $at8sa_wp_version && version_compare( $at8sa_wp_version, AT8SA_MIN_WP, '<' ) ) {
 	$at8sa_environment_notice(
 		sprintf(
 			/* translators: 1: required WordPress version, 2: current WordPress version */
 			__( 'AT8 Site Accelerator 需要 WordPress %1$s 或更高版本，当前为 %2$s。插件未加载。', 'at8-site-accelerator' ),
 			AT8SA_MIN_WP,
-			$wp_version
+			$at8sa_wp_version
 		)
 	);
+
+	unset( $at8sa_wp_version, $at8sa_environment_notice );
 
 	return;
 }
 
-unset( $wp_version, $at8sa_environment_notice );
+unset( $at8sa_wp_version, $at8sa_environment_notice );
 
 /*
 -------------------------------------------------------------------------

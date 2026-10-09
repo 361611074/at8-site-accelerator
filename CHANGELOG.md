@@ -6,6 +6,42 @@
 
 ---
 
+## 3.0.6.1 — 热修复：入口文件不再删除核心 `$wp_version` 全局变量
+
+**事故**：2026-10-09，silkuasilk.com 上传 3.0.6 并启用后整站 500（前台与 wp-admin），
+报错为 WPForms 的 `Requirements::version_compare(): Argument #1 ($version) must be
+of type string, null given`。
+
+**根因**（由现场诊断脚本 + 源码扫描定位）：主入口文件 `at8-site-accelerator.php`
+是在 `wp-settings.php` 的**顶层作用域**被 include 的——这里定义的变量就是全局变量。
+3.0.0 起的环境校验代码写作：
+
+```php
+global $wp_version;
+if ( isset( $wp_version ) && version_compare( $wp_version, AT8SA_MIN_WP, '<' ) ) { ... }
+unset( $wp_version, $at8sa_environment_notice );   // ← 真的删掉了核心全局变量
+```
+
+插件按字母序排在 WPForms 之前加载；`unset` 之后 WPForms 启动时读到的
+`$wp_version` 是 `null`，PHP 8.2 的严格类型检查直接 Fatal，整站崩溃。
+本地验收站没装 WPForms，因此 3.0.6 发布前的真机测试没有暴露此问题。
+
+**修复**：环境校验改为只读 `$GLOBALS['wp_version']`，插件自有的临时变量改用
+`$at8sa_wp_version` 命名并在清理时只 unset 自己的变量。核心全局变量从此
+**绝不被 `global`、`unset` 或赋值**——三条红线由新增的静态扫描测试锁死：
+
+- `tests/phpunit/WpConfigSafetyTest.php` 新增 `test_sources_never_touch_core_wp_version_global()`；
+- `tests/unit/smoke.php` 20b-12 节对入口源码（剥注释后）做同款扫描。
+
+**文件变更**：`at8-site-accelerator.php`（校验重写）、`tests/phpunit/WpConfigSafetyTest.php`、
+`tests/unit/smoke.php`、`docs/SECURITY_AUDIT.md`（§七 同步）、版本号与 readme/CHANGELOG 同步。
+
+**教训**：在 `wp-settings.php` 顶层作用域运行的入口文件里，任何对
+WordPress 核心全局变量的"临时借用 + 清理"都是对核心状态的破坏；扫描排查
+时不能只 grep `includes/`，必须包含入口文件本身。
+
+---
+
 ## 3.0.6 — WordPress.org 人工审核整改（1 个 P0 + 1 个 P1）
 
 > 审核来源：WordPress.org Plugin Review Team

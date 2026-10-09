@@ -446,6 +446,74 @@ PHPEOF;
 	}
 
 	/**
+	 * Test 7：插件源码不得触碰核心 `$wp_version` 全局变量。
+	 *
+	 * 背景：主入口文件在 wp-settings.php 顶层作用域被 include，3.0.6 及之前
+	 * 的 `unset( $wp_version, ... )` 会把核心全局变量真的删掉，导致后续加载
+	 * 的插件（如 WPForms）读到 null 直接 Fatal（silkuasilk.com 2026-10-09 事故）。
+	 * 本测试锁死三条红线：不许 `global $wp_version`、不许 unset 它、不许给它赋值。
+	 *
+	 * @return void
+	 */
+	public function test_sources_never_touch_core_wp_version_global() {
+		$root    = \AT8SA_PATH;
+		$targets = array( 'includes', 'templates' );
+		$files   = array( 'at8-site-accelerator.php', 'uninstall.php' );
+		$paths   = array();
+
+		foreach ( $files as $file ) {
+			if ( is_file( $root . $file ) ) {
+				$paths[] = array( $file, (string) file_get_contents( $root . $file ) );
+			}
+		}
+
+		foreach ( $targets as $dir ) {
+			if ( ! is_dir( $root . $dir ) ) {
+				continue;
+			}
+
+			$iterator = new \RecursiveIteratorIterator(
+				new \RecursiveDirectoryIterator( $root . $dir, \FilesystemIterator::SKIP_DOTS )
+			);
+
+			foreach ( $iterator as $file ) {
+				if ( 'php' === strtolower( $file->getExtension() ) ) {
+					$paths[] = array(
+						str_replace( '\\', '/', substr( $file->getPathname(), strlen( $root ) ) ),
+						(string) file_get_contents( $file->getPathname() ),
+					);
+				}
+			}
+		}
+
+		$this->assertNotEmpty( $paths, '应至少扫描到入口文件' );
+
+		foreach ( $paths as list( $name, $source ) ) {
+			$code = self::strip_comments( $source );
+
+			$this->assertDoesNotMatchRegularExpression(
+				'/\bglobal\s+\$wp_version\b/',
+				$code,
+				$name . ' 不得 `global $wp_version`（入口文件运行在顶层作用域，这就是全局变量本身）'
+			);
+			$this->assertDoesNotMatchRegularExpression(
+				'/unset\s*\([^)]*\$wp_version/',
+				$code,
+				$name . ' 不得 unset $wp_version'
+			);
+			$this->assertDoesNotMatchRegularExpression(
+				'/(^|[^:>a-zA-Z_])\$wp_version\s*=/',
+				$code,
+				$name . ' 不得给 $wp_version 赋值'
+			);
+		}
+
+		// 正向验证：入口文件必须通过 $GLOBALS 只读校验版本（修复后的写法）。
+		$entry = self::strip_comments( (string) file_get_contents( $root . 'at8-site-accelerator.php' ) );
+		$this->assertStringContainsString( "\$GLOBALS['wp_version']", $entry, '入口文件应以只读方式访问 $GLOBALS[\'wp_version\']' );
+	}
+
+	/**
 	 * 剥掉 PHP 注释，只保留可执行代码。
 	 *
 	 * @param string $source 源码。

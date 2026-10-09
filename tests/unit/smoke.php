@@ -2665,6 +2665,23 @@ check(
 	''
 );
 
+// ── 20b-12. 入口文件绝不能触碰核心 $wp_version 全局变量 ──
+//
+// 事故背景：silkuasilk.com 2026-10-09。入口文件在 wp-settings.php 顶层作用域
+// 被 include，历史代码 `unset( $wp_version, ... )` 把核心全局变量真的删掉了，
+// 后续加载的 WPForms 读到 null 直接 Fatal，整站 500。
+// 用剥注释后的代码扫描，避免把"为什么不能这么做"的解释当成违规。
+$at8sa_entry_code = strip_php_comments( $at8sa_entry_src );
+
+check(
+	'入口文件不 global / unset / 赋值核心 $wp_version（只读 $GLOBALS）',
+	0 === preg_match( '/\bglobal\s+\$wp_version\b/', $at8sa_entry_code )
+		&& 0 === preg_match( '/unset\s*\([^)]*\$wp_version/', $at8sa_entry_code )
+		&& 0 === preg_match( '/(^|[^:>a-zA-Z_])\$wp_version\s*=/', $at8sa_entry_code )
+		&& false !== strpos( $at8sa_entry_code, "\$GLOBALS['wp_version']" ),
+	''
+);
+
 /* ---------------------------------------------------------------------------
  * 21. drop-in 命中路径（子进程真实执行）
  *

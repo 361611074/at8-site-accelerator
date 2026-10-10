@@ -6,8 +6,8 @@
 版本：`3.0.6.4`
 类型：WordPress.org 提交前终审整改（整页缓存写入安全 + drop-in 归属判定收紧，任务书驱动）
 
-> 3.0.5 及更早版本的检查记录为**历史存档**，见文末"历史记录"；
-> 本版本（3.0.6.3）的验收结果以"3.0.6.3 实测记录"一节为准。
+> 3.0.6.3 及更早版本的检查记录为**历史存档**，见文末与"3.0.6.3 实测记录"；
+> 本版本（3.0.6.4）的验收结果以"3.0.6.4 实测记录"一节为准。
 
 ---
 
@@ -47,7 +47,7 @@
 - [x] 全部 PHP 文件通过 `php -l`
 - [x] 全部 JS 文件通过 `node --check`
 - [x] `php tests/unit/smoke.php` → **359 通过 / 0 失败**（3.0.6.4，2026-10-10 实测）
-- [x] `php tests/unit/round2-integration.php` → **76 通过 / 0 失败**（3.0.6.3，2026-10-10 实测）
+- [x] `php tests/unit/round2-integration.php` → **76 通过 / 0 失败**（3.0.6.4，2026-10-10 实测）
 - [x] `vendor/bin/phpunit` → **239 用例 / 1104 断言，全通过**（3.0.6.4，6 个 Redis 用例在本机显式跳过，CI 的 Redis 任务断言跳过数为 0）
 - [x] `vendor/bin/phpstan analyse` → **0 错误**（level 5，phpstan 2.3.1 + phpstan-wordpress v2.0.4，豁免仅 1 条且附理由）
 - [x] `vendor/bin/phpcs --standard=phpcs.xml.dist --report=summary` → **0 错误 / 0 警告**（42 个文件）
@@ -240,6 +240,35 @@ HTML 缓存开关；旧 DB 值运行时忽略（数据保留以便回滚）。
 | PHPStan level 5 | phpstan 2.3.1 + phpstan-wordpress v2.0.4（与 CI 同版本） | ✅ 0 错误 |
 | PHPCS | `--standard=phpcs.xml.dist`，42 文件 | ✅ 0/0 |
 | 真机 HTTP 取证（本地验收站，库中残留 `browser_cache_html=1`） | MISS 无缓存头 → HIT 稳定 `no-cache, must-revalidate, max-age=0` | ✅ |
+
+### 3.0.6.4 实测记录（2026-10-10）
+
+本轮整改内容：①整页缓存写入安全——`CacheEngine::store()` 新增响应头防线，
+`Set-Cookie` / `Vary: Cookie|*` / `Cache-Control: private|no-store|no-cache`
+任一命中即放弃写入；②drop-in 归属判定收紧为 `Owner: at8-site-accelerator`
+主标记 + 旧版双标记兼容，只提插件名的第三方文件不再被覆盖/误删；
+③文案与实现对齐（v6/v7 审查）——设置页与后台通知不再声称"临时备份"，
+统一为"内存保存原文 → 校验 → 失败尝试恢复"，`.htaccess` 按钮改为
+"写入 .htaccess（失败时尝试恢复原内容）"。
+
+新增/替换测试：
+
+| 用例 | 内容 | 结果 |
+| --- | --- | --- |
+| `CacheEngineHeaderGuardTest`（PHPUnit，7 用例 / 37 断言） | 响应头指令矩阵、跨访客隔离（A 的个性化响应被跳过后 B 读不到）、登录/密码保护/非 2xx 回归 | ✅ 全过 |
+| `DropinOwnershipTest`（PHPUnit，3 用例） | 归属判定正/负例矩阵、uninstall 内联判定与 `head_is_ours()` 同步性 | ✅ 全过 |
+| `smoke.php` 卸载真跑 + 第三方 drop-in 幸存负例 | 旧版 drop-in 被删、只提插件名的文件幸存 | ✅ 359/0 |
+| `round2-integration.php` | 76 项行为断言 | ✅ 76/0 |
+| PHPUnit 全量 | 239 用例 / 1104 断言（6 Redis 跳过属预期） | ✅ 0 失败 |
+| PHPStan level 5 | phpstan 2.3.1 + phpstan-wordpress v2.0.4（与 CI 同版本） | ✅ 0 错误 |
+| PHPCS | `--standard=phpcs.xml.dist` | ✅ 0/0 |
+| Plugin Check | 标准 + `--include-experimental`，被测对象为 `tools/build-zip.php` 重建的 `dist/at8-site-accelerator-3.0.6.4.zip` | ✅ 0 ERROR / 0 WARNING |
+| 真机 HTTP 取证（本地验收站） | MISS-SAVED → HIT 稳定 `no-cache, must-revalidate, max-age=0`；安装→激活→停用→卸载→重装全流程 | ✅ |
+
+版本一致性核验（v7 审查）：GitHub main HEAD 的插件头 `Version` / `AT8SA_VERSION`
+/ `readme.txt` Stable tag / `README.md` 当前版本与打包示例 / tag `v3.0.6.4`
+指向 / Release ZIP 均为 **3.0.6.4**；`3.0.6.2.zip` / `3.0.5` 等旧号仅存在于
+CHANGELOG 历史条目与标注为历史存档的章节中。
 
 Plugin Check 与最终 ZIP 核验结果见下文十一节与八节。
 

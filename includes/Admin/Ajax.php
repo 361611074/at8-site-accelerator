@@ -203,16 +203,16 @@ final class Ajax {
 			wp_send_json_error( array( 'message' => __( '数据库模块不可用。', 'at8-site-accelerator' ) ) );
 		}
 
-	@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, Squiz.PHP.DiscouragedFunctions.Discouraged
+		@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, Squiz.PHP.DiscouragedFunctions.Discouraged
 
-	// 设置页的勾选框属于页面底部的「保存设置」表单，但用户习惯是勾选后直接点
-	// 「执行清理」。数据库面板当前的勾选状态随本请求一并带来，先持久化再执行——
-	// 否则 run() 读到的仍是上次保存的值，用户必然看到"没有任何清理项被勾选"。
+		// 设置页的勾选框属于页面底部的「保存设置」表单，但用户习惯是勾选后直接点
+		// 「执行清理」。数据库面板当前的勾选状态随本请求一并带来，先持久化再执行——
+		// 否则 run() 读到的仍是上次保存的值，用户必然看到"没有任何清理项被勾选"。
 	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- guard() 已完成 nonce 与能力校验。
-	$at8sa_db_items = isset( $_POST['items'] ) ? sanitize_text_field( wp_unslash( $_POST['items'] ) ) : '';
-	$this->persist_db_panel_items( $at8sa_db_items );
+		$at8sa_db_items = isset( $_POST['items'] ) ? sanitize_text_field( wp_unslash( $_POST['items'] ) ) : '';
+		$this->persist_db_panel_items( $at8sa_db_items );
 
-	$result = $cleanup->run();
+		$result  = $cleanup->run();
 		$preview = $cleanup->preview();
 		$lines   = array();
 

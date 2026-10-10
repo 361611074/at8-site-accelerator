@@ -37,7 +37,7 @@ msgid "AT8 Site Accelerator：<code>advanced-cache.php</code> 尚未安装，缓
 msgstr ""
 
 #: includes/Admin/Notices.php
-msgid "AT8 Site Accelerator：<code>wp-config.php</code> 中的 <code>WP_CACHE</code> 未启用，高级缓存 drop-in 不会生效。可到 %s 一键启用（写入前临时备份，校验通过后立即删除）。"
+msgid "AT8 Site Accelerator：<code>wp-config.php</code> 中的 <code>WP_CACHE</code> 未启用，高级缓存 drop-in 不会生效。可到 %s 一键启用（原始内容先存内存，失败时尝试恢复，不创建磁盘备份）。"
 msgstr ""
 
 #: includes/Admin/Notices.php
@@ -145,7 +145,7 @@ msgid "drop-in 已移除。"
 msgstr ""
 
 #: templates/settings-page.php
-msgid "drop-in 把缓存命中提前到 WordPress 启动之前。启用 WP_CACHE 会修改 wp-config.php：写入前先做一份临时备份用于回滚，写入后立即做完整性校验，校验失败立即还原。无论成功还是失败，这份临时文件都会在同一次操作里被删除，不会在磁盘上留下可下载的副本。"
+msgid "drop-in 把缓存命中提前到 WordPress 启动之前。启用 WP_CACHE 会修改 wp-config.php：写入前把文件的原始内容保存在当前请求的内存中（不创建任何磁盘备份副本），写入后立即做完整性校验；写入失败或校验失败时，会尝试用内存中的原始内容恢复。如果自动恢复也失败，会明确提示你手动检查该文件。"
 msgstr ""
 
 #: includes/Admin/Ajax.php
@@ -417,7 +417,7 @@ msgid "写入 .htaccess 失败。"
 msgstr ""
 
 #: templates/settings-page.php
-msgid "写入 .htaccess（会先备份）"
+msgid "写入 .htaccess（失败时尝试恢复原内容）"
 msgstr ""
 
 #: includes/Cache/AdvancedCache.php

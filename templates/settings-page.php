@@ -545,7 +545,7 @@ $at8sa_cache_on = ! empty( $at8sa_settings['page_cache'] );
 		<section class="at8sa-panel" data-panel="tools" role="tabpanel" hidden>
 			<div class="at8sa-card">
 				<h2><?php esc_html_e( '高级缓存 drop-in', 'at8-site-accelerator' ); ?></h2>
-				<p class="at8sa-card-note"><?php esc_html_e( 'drop-in 把缓存命中提前到 WordPress 启动之前。启用 WP_CACHE 会修改 wp-config.php：写入前先做一份临时备份用于回滚，写入后立即做完整性校验，校验失败立即还原。无论成功还是失败，这份临时文件都会在同一次操作里被删除，不会在磁盘上留下可下载的副本。', 'at8-site-accelerator' ); ?></p>
+				<p class="at8sa-card-note"><?php esc_html_e( 'drop-in 把缓存命中提前到 WordPress 启动之前。启用 WP_CACHE 会修改 wp-config.php：写入前把文件的原始内容保存在当前请求的内存中（不创建任何磁盘备份副本），写入后立即做完整性校验；写入失败或校验失败时，会尝试用内存中的原始内容恢复。如果自动恢复也失败，会明确提示你手动检查该文件。', 'at8-site-accelerator' ); ?></p>
 
 				<table class="at8sa-diag-table">
 					<tbody>
@@ -598,7 +598,7 @@ $at8sa_cache_on = ! empty( $at8sa_settings['page_cache'] );
 					<pre id="at8sa-apache-rules"><?php echo esc_html( $at8sa_browser->apache_rules() ); ?></pre>
 					<div class="at8sa-code-actions">
 						<button type="button" class="button" data-at8sa-copy="#at8sa-apache-rules"><?php esc_html_e( '复制 Apache 规则', 'at8-site-accelerator' ); ?></button>
-						<button type="button" class="button" id="at8sa-write-htaccess"><?php esc_html_e( '写入 .htaccess（会先备份）', 'at8-site-accelerator' ); ?></button>
+						<button type="button" class="button" id="at8sa-write-htaccess"><?php esc_html_e( '写入 .htaccess（失败时尝试恢复原内容）', 'at8-site-accelerator' ); ?></button>
 						<button type="button" class="button" id="at8sa-remove-htaccess"><?php esc_html_e( '移除 .htaccess 规则块', 'at8-site-accelerator' ); ?></button>
 					</div>
 					<span class="at8sa-inline-msg" id="at8sa-htaccess-msg"></span>

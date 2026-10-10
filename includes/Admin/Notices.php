@@ -150,7 +150,7 @@ final class Notices {
 					'warning',
 					sprintf(
 						/* translators: %s: settings page URL */
-						__( 'AT8 Site Accelerator：<code>wp-config.php</code> 中的 <code>WP_CACHE</code> 未启用，高级缓存 drop-in 不会生效。可到 %s 一键启用（写入前临时备份，校验通过后立即删除）。', 'at8-site-accelerator' ),
+						__( 'AT8 Site Accelerator：<code>wp-config.php</code> 中的 <code>WP_CACHE</code> 未启用，高级缓存 drop-in 不会生效。可到 %s 一键启用（原始内容先存内存，失败时尝试恢复，不创建磁盘备份）。', 'at8-site-accelerator' ),
 						$this->link()
 					)
 				);

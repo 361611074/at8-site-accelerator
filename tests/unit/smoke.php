@@ -33,9 +33,17 @@ require __DIR__ . '/wp-stubs.php';
  * 迷你断言框架
  * ------------------------------------------------------------------------ */
 
-$GLOBALS['at8sa_pass'] = 0;
-$GLOBALS['at8sa_fail'] = 0;
-$GLOBALS['at8sa_failures'] = array();
+// 计数器经类型标注变量中转：字面量直写 $GLOBALS 会被 PHPStan 推成
+// int(0)/array{}，导致汇总段的 "> 0" 与 foreach 被判为恒假/空数组。
+/** @var int $at8sa_init_pass */
+$at8sa_init_pass = 0;
+$GLOBALS['at8sa_pass'] = $at8sa_init_pass;
+/** @var int $at8sa_init_fail */
+$at8sa_init_fail = 0;
+$GLOBALS['at8sa_fail'] = $at8sa_init_fail;
+/** @var string[] $at8sa_init_failures */
+$at8sa_init_failures = array();
+$GLOBALS['at8sa_failures'] = $at8sa_init_failures;
 
 function check( $label, $condition, $detail = '' ) {
 	if ( $condition ) {
@@ -2205,8 +2213,11 @@ $GLOBALS['at8sa_test_is_admin'] = false;
 
 // ── 20b-5. Dashboard 小组件精确移除 ──
 
+// 经类型标注变量中转写入 $GLOBALS：字面量 array() 直写会被 PHPStan
+// 推成 array{}，后续按 'dashboard_primary' 等键取值被判为不存在的偏移。
+/** @var array<string, array{id: string, removed: bool}> $at8sa_removed_boxes */
 $at8sa_removed_boxes = array();
-$GLOBALS['at8sa_removed_meta_boxes'] = array();
+$GLOBALS['at8sa_removed_meta_boxes'] = $at8sa_removed_boxes;
 
 $at8sa_cleanup2 = new \AT8SA\Optimization\FrontendCleanup( $at8sa_settings );
 
@@ -2233,7 +2244,9 @@ check(
 );
 
 // 只开"移除站点健康"，新闻必须保留。
-$GLOBALS['at8sa_removed_meta_boxes'] = array();
+/** @var array<string, array{id: string, removed: bool}> $at8sa_removed_boxes */
+$at8sa_removed_boxes = array();
+$GLOBALS['at8sa_removed_meta_boxes'] = $at8sa_removed_boxes;
 $at8sa_settings->persist(
 	array_merge(
 		$at8sa_settings->all(),
@@ -3118,9 +3131,13 @@ check(
 	''
 );
 
+// 用 get_class_methods 断言"方法已被删除"：method_exists 配已知不存在的
+// 字面量方法名会被 PHPStan 判为"恒 false"（它不知道断言缺席正是目的），
+// get_class_methods 返回运行时方法表，语义等价且不触发该误报。
+$at8sa_forbidden_method = 'send_html_headers';
 check(
 	'HTML 发送方法在类上不存在（双重保险）',
-	! method_exists( $at8sa_legacy_browser, 'send_html_headers' ),
+	! in_array( $at8sa_forbidden_method, get_class_methods( $at8sa_legacy_browser ), true ),
 	''
 );
 
@@ -3146,7 +3163,7 @@ check(
 check(
 	'整页缓存的绕过规则未被本次移除动作误伤（Cookie 表含密码保护 / WooCommerce）',
 	RequestGuard::has_bypass_cookie(
-		RequestGuard::merge_rules( RequestGuard::default_bypass_cookies(), null ),
+		RequestGuard::merge_rules( RequestGuard::default_bypass_cookies(), '' ),
 		array( 'wp-postpass_' . COOKIEHASH => 'x', 'wp_woocommerce_session_' . COOKIEHASH => 'x', 'woocommerce_cart_hash' => '1' )
 	),
 	''

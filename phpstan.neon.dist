@@ -103,3 +103,12 @@ parameters:
 			message: '#never returns GdImage so it can be removed from the return type#'
 			identifier: return.unusedType
 			path: includes/Optimization/Webp.php
+		# Logger::clear() 里 `wp_delete_file()` 之后的 `! is_file( $file )` 被判
+		# "恒 false"。这是分析器的局限：wp_delete_file() 没有副作用建模，
+		# PHPStan 认为"上面已确认文件存在"的事实不会失效。而运行时事实是
+		# 删除可能失败（权限/占用），这个回查恰恰是为了**不无条件返回 true**、
+		# 不把删除失败静默吞掉——删掉它才是真 bug。
+		-
+			message: '#Negated boolean expression is always false#'
+			identifier: booleanNot.alwaysFalse
+			path: includes/Support/Logger.php

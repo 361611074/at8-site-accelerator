@@ -247,9 +247,10 @@ Plugin Check 与最终 ZIP 核验结果见下文十一节与八节。
 
 ### 3.0.6.3 发布记录（2026-10-10）
 
-- [ ] 推 `main` 并确认 Actions 全绿（见第零节）
-- [ ] 打 git tag `v3.0.6.3`（**在 main 全绿之后**才打，遵守第零节顺序）
-- [ ] GitHub Release 自动挂载 ZIP（`at8-site-accelerator-3.0.6.3.zip`）
+- [x] 推 `main` 并确认 Actions 全绿（commit `09a23fa`，22 项检查全绿）
+- [x] 打 git tag `v3.0.6.3`（**在 main 全绿之后**才打，遵守第零节顺序）
+- [x] GitHub Release 自动挂载 ZIP（`at8-site-accelerator-3.0.6.3.zip`，
+      已下载与本地 `dist/` 构建逐文件 CRC 比对——49 个文件内容完全一致）
 - [x] `readme.txt` 的 `Tested up to` = **7.1**，实跑依据见下（7.1.2 实测，沿用 3.0.5 时的验证结论，WP 版本未变）
 
   <!-- 下面两行是给 tests/unit/smoke.php 读的机器可读标记，改这两个值必须同步改依据 -->

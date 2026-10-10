@@ -73,7 +73,16 @@ foreach ( $at8sa_tree as $at8sa_rel ) {
 
 // 放一个 drop-in 进去：验证它会被删（且只删属于自己的那一个）。
 $at8sa_dropin = WP_CONTENT_DIR . '/advanced-cache.php';
-file_put_contents( $at8sa_dropin, "<?php\n// AT8 Site Accelerator —— advanced-cache.php drop-in\n" );
+
+if ( 'foreign' === $at8sa_mode ) {
+	// 归属判定的**负例**：第三方 drop-in 只在注释里提到本插件名——
+	// 3.0.6.4 收紧后它必须**幸存**，绝不能被误删。
+	file_put_contents( $at8sa_dropin, "<?php\n/**\n * Compatibility shim for AT8 Site Accelerator.\n * WP Super Cache drop-in.\n */\nreturn true;\n" );
+} else {
+	// 正例：旧版（≤3.0.6.3）安装的本插件 drop-in——
+	// 没有 Owner 行，但插件名全称标记与版本戳同时存在，必须能被识别并删除。
+	file_put_contents( $at8sa_dropin, "<?php\n/**\n * AT8 Site Accelerator —— advanced-cache.php drop-in\n *\n * @at8sa-dropin-version 3.0.6.3\n */\n" );
+}
 
 /* ---------------------------------------------------------------------------
  * 2. 跑真正的 uninstall.php

@@ -2971,6 +2971,18 @@ check(
 	'out=' . substr( $r['out'], 0, 200 )
 );
 
+// 归属判定负例（3.0.6.4 收紧）：第三方 drop-in 只在注释里提到本插件名，
+// 卸载时**必须幸存**——宽松匹配会误删别人的文件。
+$r = run_uninstall( 'foreign' );
+
+check(
+	'uninstall 真跑：只提到插件名的第三方 drop-in 不被误删',
+	isset( $r['data']['dropin_exists'] ) && true === $r['data']['dropin_exists'],
+	'out=' . substr( $r['out'], 0, 200 )
+);
+
+@unlink( WP_CONTENT_DIR . '/advanced-cache.php' );
+
 /* ---------------------------------------------------------------------------
  * 21. WordPress.org 3.0.6 审核整改专项
  *

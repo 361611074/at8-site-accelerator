@@ -1,17 +1,59 @@
 # 测试报告
 
-**当前版本：`3.0.6.3`**（实测日期 2026-10-10，闸门与 CI 同版本工具链）
+**当前版本：`3.0.6.4`**（实测日期 2026-10-10，闸门与 CI 同版本工具链）
 
 > 本报告分两部分：
-> **第〇节**是 3.0.6.3 的实测结果；第一～九节是测试策略与覆盖范围的长期说明，
-> 其中带"3.0.1 期间"等字样的**真机记录为历史存档**（当时的版本行为，
-> 例如第七节提到的 `Cache-Control: public` 已在 3.0.6.3 移除，不应据此判断当前行为）。
+> **第〇节**是最新版本的实测结果；第一～九节是测试策略与覆盖范围的长期说明，
+> 其中带"3.0.1 / 3.0.6.3 期间"等字样的**真机记录为历史存档**
+>（例如历史节提到的 `Cache-Control: public` 与 3.0.6.4 之前的写入侧行为，
+> 不应据此判断当前行为）。
 
-## 〇、3.0.6.3 实测结果（2026-10-10）
+## 〇、3.0.6.4 实测结果（2026-10-10）
+
+整改内容（详见 `docs/AUDIT_REPORT.md`）：
+**P0** 整页缓存写入新增响应头防线（Set-Cookie / Vary: Cookie / private / no-store / no-cache 一律不落盘）；
+**P1** drop-in 归属判定收紧（`Owner:` 主标记 + 旧版双标记兼容，防误删第三方文件）。
+
+| 闸门 | 命令 | 结果 |
+| --- | --- | --- |
+| 代码规范 | `vendor/bin/phpcs --standard=phpcs.xml.dist --report=summary` | **0 错误 / 0 警告**（42 个文件） |
+| 静态分析 | `vendor/bin/phpstan analyse --memory-limit=2G` | **0 错误**（level 5，phpstan 2.3.1 + phpstan-wordpress v2.0.4，与 CI 同版本） |
+| 冒烟测试 | `php tests/unit/smoke.php` | **359 通过 / 0 失败**（新增卸载归属负例：只提插件名的第三方 drop-in 必须幸存） |
+| 二轮集成验收 | `php tests/unit/round2-integration.php` | **76 通过 / 0 失败**（含 ZIP 级 5 项检查） |
+| 单元测试 | `vendor/bin/phpunit --bootstrap tests/phpunit/bootstrap.php` | **239 用例 / 1104 断言，0 失败**（6 个 Redis 用例本机显式跳过；CI Redis 任务断言跳过数为 0） |
+| 打包自检 | `php tools/build-zip.php` | 49 文件 / 220.3 KB，版本五处一致，白名单回读自检通过 |
+
+### 3.0.6.4 专项验证
+
+| 验证项 | 手段 | 结果 |
+| --- | --- | --- |
+| 带 `Set-Cookie` 的响应不落盘 | `CacheEngineHeaderGuardTest`（断言真实磁盘后端 `get()` 为 false） | ✅ |
+| `Vary: Cookie` / `Vary: *` / 混合列表不落盘；普通 Vary 放行 | 同上（大小写与多值矩阵） | ✅ |
+| `Cache-Control: private` / `no-store` / `no-cache`（含大小写、多指令、多同名头、带引号形式）不落盘；良性指令放行 | 同上 | ✅ |
+| 跨访客隔离：A 的个性化响应被跳过后，B 读不到 A 的 HTML（两个写入顺序都验） | 同上 | ✅ |
+| 既有防线不被削弱：登录用户 / 密码保护页 / 非 2xx 仍不落盘 | 同上 | ✅ |
+| 第三方 drop-in（仅注释提到本插件名）卸载时不被误删；旧版本插件 drop-in（名+版本戳）仍可正常清理 | `DropinOwnershipTest` + smoke 卸载真跑正例/负例 | ✅ |
+| `wp-config.php` 无可执行临时副本逻辑；回滚失败显式报错 | round2 集成验收（真实写/回滚 + 目录快照差分） | ✅ |
+| 验收站 ZIP 安装/启停/卸载 + HTTP 取证（MISS-SAVED 无缓存头 → HIT `no-cache, must-revalidate, max-age=0`） | 本地 WP 7.1.2 + PHP 8.2 + SQLite 验收站 | ✅ |
+| Plugin Check（标准 + experimental） | 同上验收站，被测对象为最终 ZIP 解包 | ✅ 均 No errors |
+
+### 3.0.6.4 期间由测试抓到的问题（已修）
+
+| # | 问题 | 发现方式 | 修复 |
+| --- | --- | --- | --- |
+| 1 | smoke 卸载真跑失败：夹具模拟的"本插件 drop-in"只有插件名标记、没有版本戳，落在新判定之外 | smoke 真跑 | 夹具改为旧版真实形态（名+版本戳），并**新增负例**：只提插件名的第三方文件必须幸存 |
+
+---
+
+## 一、历史版本结论（3.0.6.3 · 2026-10-10 存档）
+
+> 以下为 3.0.6.3 时的实测快照，仅作历史依据；当前版本以第〇节为准。
 
 测试环境：Windows 本机开发环境 + php83（`C:/wbtools/php83`）、
 PHPStan 2.3.1 + phpstan-wordpress v2.0.4（与 CI `composer update` 结果同版本）、
 PHPUnit 9.6.38；另在本地 WordPress 验收站做真机 HTTP 取证。
+
+### 3.0.6.3 闸门数字（存档）
 
 | 闸门 | 命令 | 结果 |
 | --- | --- | --- |

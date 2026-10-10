@@ -6,6 +6,73 @@
 
 ---
 
+## 3.0.6.4 — WordPress.org 提交前终审整改：整页缓存写入安全 + drop-in 归属判定收紧
+
+依据《WordPress.org 提交前安全整改任务书》（基线 v3.0.6.3）完成审计与修复。
+原则：先读代码与测试，再做最小必要修改。
+
+### P0：整页缓存写入安全（`includes/Cache/CacheEngine.php`）
+
+**发现**：`store()` 此前的防线是请求准入（POST / 登录态 / 绕过 Cookie）+ WP
+条件函数 + 状态码 ≥ 300，但**没有检查响应自身声明的头**。一个匿名访客请求的
+页面若由某插件回发了 `Set-Cookie`（个性化 / A-B 分组 / 同意记忆）、声明
+`Vary: Cookie`，或带 `Cache-Control: private|no-store|no-cache`，仍会被写进
+共享缓存——第二位访客可能读到第一位访客的个性化 HTML。
+
+**修复**：`store()` 在状态码防线之后新增响应头防线
+（`response_headers_block_sharing()`）——ob 回调在响应体生成完毕后执行，
+此刻请求生命周期内所有 `setcookie()` / `header()` 调用已可见，这是判断
+最终响应头的唯一可靠时机。三类信号任一命中即放弃本次写入：
+
+1. 任意 `Set-Cookie`；
+2. `Vary` 含 `Cookie` 或通配 `*`；
+3. `Cache-Control` 含 `private` / `no-store` / `no-cache`（含带引号的
+   `private="..."` 形式；本插件无条件请求再校验能力，`no-cache` 同样按
+   不可共享处理）。
+
+解析按"逐条头、头名与指令转小写、逗号拆分去空白"实现，同名头多条各算一条，
+不做整串匹配。**限制如实声明**：仅凭请求方 Cookie 输出个性化内容、且从不回发
+`Set-Cookie` 也不声明 `Vary` 的插件，写入侧在原理上无法识别——由请求准入的
+绕过 Cookie 表与 `is_user_logged_in()` 兜底，属于整页缓存模型的固有限制。
+
+**测试**：新增 `CacheEngineHeaderGuardTest`（7 用例 / 37 断言），断言落在
+真实磁盘后端文件上：匿名公共页正常落盘；Set-Cookie / Vary / Cache-Control
+指令矩阵（含大小写、多指令、多同名头）全部拒写；跨访客隔离（A 的个性化响应
+被跳过后 B 读不到 A 的 HTML，两个写入顺序都验）；登录用户 / 密码保护页 /
+非 2xx 既有防线不被削弱。可测性经由构造参数注入响应头与状态码读取器
+（生产路径零变化）。
+
+### P1：drop-in 归属判定收紧（`includes/Cache/AdvancedCache.php` + `uninstall.php`）
+
+**发现**：归属识别此前只查文件头 4KB 是否包含插件名字符串
+`AT8 Site Accelerator`。第三方 drop-in 只要在注释里**提到**本插件名
+（兼容层说明、对比评测等）就会被当成自己的——安装时被覆盖、卸载时被删除。
+模板里本来就有机器可读的 `Owner: at8-site-accelerator` 主标记，但判定没用它。
+
+**修复**：归属判定收紧为两级——`Owner: at8-site-accelerator` 主标记命中
+即认定；旧版（≤ 3.0.6.3）安装的 drop-in 没有 Owner 行，用"插件名全称标记
+**与** 版本戳 `@at8sa-dropin-version` 同时存在"的组合兼容。判定收敛到
+公开静态方法 `AdvancedCache::head_is_ours()`，卸载脚本（插件代码不可用
+的上下文）保留同条件的内联副本并用源码断言钉住同步。
+
+**测试**：新增 `DropinOwnershipTest`（3 用例）：我们的模板 / Owner 标记 /
+旧版双标记组合必须识别；第三方文件、只提插件名的文件、只有版本戳或只有
+插件名标记的构造文件一律拒绝；uninstall.php 与 head_is_ours() 的同步性
+由源码断言钉住。
+
+### P1 / P2 复核结论（无代码变更）
+
+- **wp-config.php 安全**：3.0.6 起的内存回滚模型复核通过——源码、测试、
+  构建脚本与最终 ZIP 中均无可执行的 `wp-config.php.at8sa.tmp` /
+  `.htaccess.at8sa.bak` 创建逻辑（仅历史注释）；写入 → 回读校验 → 失败从
+  内存回滚 → 回滚失败显式报错；日志只记事件名，不含配置内容。
+- **HTML 公共缓存零回归**：`BrowserCache` 无任何 HTML 公共头路径；ZIP
+  非注释代码对 `Cache-Control: public` 零命中；旧 DB 值
+  `browser_cache_html` 为不存在 / `0` / `1` 均无法重新启用旧行为
+  （键已从 Settings 删除，无读取方）；静态资源规则与请求绕过机制原样保留。
+
+---
+
 ## 3.0.6.3 — WordPress.org 二轮审核整改：HTML 公共浏览器缓存整体移除
 
 **官方终裁**（P1-02）：3.0.6 的"发送时刻资格 Gate"方案被否决。`send_headers`

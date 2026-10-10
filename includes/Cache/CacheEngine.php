@@ -64,18 +64,46 @@ final class CacheEngine {
 	private $hit_checked = false;
 
 	/**
+	 * 响应头读取器（可选，仅测试注入用）。
+	 *
+	 * 生产环境恒为 null：`current_headers()` 直接读 `headers_list()`。
+	 * PHP 内建函数无法桩掉，测试通过注入一个返回头数组的可调用对象
+	 * 来模拟任意响应头矩阵。
+	 *
+	 * @var callable|null
+	 */
+	private $header_provider;
+
+	/**
+	 * 状态码读取器（可选，仅测试注入用，原理同 header_provider）。
+	 *
+	 * @var callable|null
+	 */
+	private $status_provider;
+
+	/**
 	 * 构造。
 	 *
 	 * @param Settings       $settings 设置。
 	 * @param BackendFactory $factory  后端工厂。
 	 * @param Logger         $logger   日志。
 	 * @param HtmlMinifier   $minifier HTML 压缩器。
+	 * @param callable|null  $header_provider 响应头读取器（仅测试注入）。
+	 * @param callable|null  $status_provider 状态码读取器（仅测试注入）。
 	 */
-	public function __construct( Settings $settings, BackendFactory $factory, Logger $logger, HtmlMinifier $minifier ) {
+	public function __construct( Settings $settings, BackendFactory $factory, Logger $logger, HtmlMinifier $minifier, $header_provider = null, $status_provider = null ) {
 		$this->settings = $settings;
 		$this->factory  = $factory;
 		$this->logger   = $logger;
 		$this->minifier = $minifier;
+
+		$this->header_provider = ( null !== $header_provider && is_callable( $header_provider ) )
+			? $header_provider
+			: null;
+
+		$this->status_provider = ( null !== $status_provider && is_callable( $status_provider ) )
+			? $status_provider
+			: null;
 	}
 
 	/**
@@ -213,9 +241,20 @@ final class CacheEngine {
 		// 带正文的 3xx 跳转 / 错误页如果在这里落盘，下一个访客会拿到
 		// 200 状态的旧跳转体（重定向就此丢失）。canonical 跳转的响应体
 		// 通常为空、被上面的空体早退挡住，这道防线兜住"带正文"的例外。
-		$at8sa_status = http_response_code();
+		$at8sa_status = $this->current_status_code();
 
 		if ( is_int( $at8sa_status ) && $at8sa_status >= 300 ) {
+			return $buffer;
+		}
+
+		// 响应头防线（3.0.6.4 / WordPress.org 终审 P0）：凡是声明了
+		// "这段内容不要进共享缓存"的响应（Set-Cookie / Vary: Cookie /
+		// Cache-Control: private|no-store|no-cache），一律不落盘。
+		// ob 回调在响应体生成完毕后才执行，此时请求生命周期内的
+		// setcookie() / header() 调用已全部可见——这是判断最终响应头的
+		// 唯一可靠时机；仍然判断不了的（见方法注释里的限制说明），
+		// 按保守原则宁可少缓存。
+		if ( $this->response_headers_block_sharing() ) {
 			return $buffer;
 		}
 
@@ -267,6 +306,134 @@ final class CacheEngine {
 		}
 
 		return $payload;
+	}
+
+	/**
+	 * 当前响应状态码（注入缝原理同 current_headers）。
+	 *
+	 * @return int|false
+	 */
+	private function current_status_code() {
+		if ( null !== $this->status_provider ) {
+			return call_user_func( $this->status_provider );
+		}
+
+		return http_response_code();
+	}
+
+	/**
+	 * 当前请求已发送的响应头列表。
+	 *
+	 * 默认读 `headers_list()`；测试经由构造参数注入替代读取器
+	 * （PHP 内建函数不可重定义，这是唯一的缝）。
+	 *
+	 * @return string[]
+	 */
+	private function current_headers() {
+		if ( null !== $this->header_provider ) {
+			return array_map( 'strval', (array) call_user_func( $this->header_provider ) );
+		}
+
+		return headers_list();
+	}
+
+	/**
+	 * 响应头是否携带"禁止进入共享缓存"的信号。
+	 *
+	 * 检查三类信号（3.0.6.4 / WordPress.org 终审 P0）：
+	 * 1. **Set-Cookie**——响应在给这位访客发 Cookie，内容极可能随之个性化
+	 *   （登录态、购物车、A/B 分组、同意弹窗记忆……）；
+	 * 2. **Vary 含 Cookie（或 `*`）**——响应明示"内容随 Cookie 变化"；
+	 * 3. **Cache-Control 含 private / no-store / no-cache**——响应明示
+	 *   禁止共享或要求逐请求校验；本插件的整页缓存没有条件请求（ETag /
+	 *   Last-Modified）再校验能力，收到 no-cache 也按"不可共享"处理。
+	 *
+	 * ## 限制说明（保守取舍）
+	 *
+	 * 本方法只能看到"服务端在这条响应里声明的头"。如果某个插件仅凭
+	 * **请求方发来的**自定义 Cookie 输出个性化内容、且从不回发 Set-Cookie、
+	 * 也不声明 Vary，那么写入侧在原理上无法区分它与普通匿名访客——
+	 * 这类场景由两层既有机制兜底：请求准入的绕过 Cookie 表（可配置）与
+	 * `is_user_logged_in()`；仍覆盖不到的，属于整页缓存模型的固有限制，
+	 * 如实记录而不假装已解决。
+	 *
+	 * 解析健壮性：逐条处理 `headers_list()` 的每一行（同名头多条各算一条），
+	 * 头名与指令一律转小写比较、按逗号拆分并去空白——不做脆弱的整串匹配。
+	 *
+	 * @return bool true 表示必须跳过本次缓存写入。
+	 */
+	private function response_headers_block_sharing() {
+		foreach ( $this->current_headers() as $at8sa_line ) {
+			$at8sa_line = trim( (string) $at8sa_line );
+
+			if ( '' === $at8sa_line ) {
+				continue;
+			}
+
+			$at8sa_sep = strpos( $at8sa_line, ':' );
+
+			if ( false === $at8sa_sep ) {
+				continue;
+			}
+
+			$at8sa_name  = strtolower( trim( substr( $at8sa_line, 0, $at8sa_sep ) ) );
+			$at8sa_value = trim( substr( $at8sa_line, $at8sa_sep + 1 ) );
+
+			if ( 'set-cookie' === $at8sa_name ) {
+				return true;
+			}
+
+			if ( 'vary' === $at8sa_name && $this->vary_blocks_sharing( $at8sa_value ) ) {
+				return true;
+			}
+
+			if ( 'cache-control' === $at8sa_name && $this->cache_control_blocks_sharing( $at8sa_value ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Vary 值是否含 Cookie（或通配 `*`）。
+	 *
+	 * @param string $value Vary 头的值（已去首尾空白）。
+	 * @return bool
+	 */
+	private function vary_blocks_sharing( $value ) {
+		foreach ( explode( ',', $value ) as $at8sa_token ) {
+			$at8sa_token = trim( $at8sa_token );
+
+			if ( 0 === strcasecmp( $at8sa_token, 'cookie' ) || '*' === $at8sa_token ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Cache-Control 值是否含禁止共享缓存的指令。
+	 *
+	 * @param string $value Cache-Control 头的值（已去首尾空白）。
+	 * @return bool
+	 */
+	private function cache_control_blocks_sharing( $value ) {
+		foreach ( explode( ',', $value ) as $at8sa_token ) {
+			$at8sa_token = strtolower( trim( $at8sa_token ) );
+
+			// `no-store` / `private` / `no-cache` 直接命中；带引号的
+			// `private="..."` 形式按 RFC 9111 只对列出的字段私有，
+			// 但本插件的缓存键没有字段粒度，同样按"不可共享"处理。
+			if ( in_array( $at8sa_token, array( 'no-store', 'no-cache', 'private' ), true )
+				|| 0 === strpos( $at8sa_token, 'private=' )
+				|| 0 === strpos( $at8sa_token, 'no-cache=' ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**

@@ -35,6 +35,17 @@ final class AdvancedCache {
 	const DROPIN_MARKER = 'AT8 Site Accelerator —— advanced-cache.php drop-in';
 
 	/**
+	 * drop-in 的机器可读归属主标记（3.0.6.4 起作为首选判定依据）。
+	 *
+	 * 对应模板 docblock 里的 `Owner: at8-site-accelerator` 行：语义唯一、
+	 * 与插件名解耦（改产品名不影响判定）、且不会出现在谈论本插件的
+	 * 第三方文件里。宽判插件名字符串有误删风险——其它插件的
+	 * advanced-cache.php 注释里只要提到本插件名就会被当成自己的，
+	 * WordPress.org 终审（P1）明确要求收紧这一点。
+	 */
+	const OWNER_TAG = 'Owner: at8-site-accelerator';
+
+	/**
 	 * drop-in 模板 / 已安装文件中的版本戳字段。
 	 *
 	 * 写成 docblock 里的自定义标签，而不是 define 或变量：drop-in 是纯执行文件，
@@ -139,11 +150,37 @@ final class AdvancedCache {
 
 		$head = (string) @file_get_contents( $path, false, null, 0, 4096 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents, WordPress.PHP.NoSilencedErrors.Discouraged
 
-		if ( false === strpos( $head, 'AT8 Site Accelerator' ) ) {
+		if ( ! self::head_is_ours( $head ) ) {
 			return '';
 		}
 
 		return $head;
+	}
+
+	/**
+	 * 判定一段 drop-in 文件头是否属于本插件（公开静态，供卸载脚本与测试复用）。
+	 *
+	 * 判定顺序（3.0.6.4 收紧）：
+	 * 1. 含 `Owner: at8-site-accelerator` 主标记 → 是我们的；
+	 * 2. 否则，同时含插件名全称标记**与**版本戳标签 → 旧版（≤3.0.6.3）
+	 *    安装的 drop-in，没有 Owner 行，用双标记组合兼容识别；
+	 * 3. 其余一律**不是**我们的——包括只在注释里提到本插件名的第三方
+	 *   文件。识别不出来时宁可不删不盖，这是保守方向。
+	 *
+	 * @param string $head 文件头内容。
+	 * @return bool
+	 */
+	public static function head_is_ours( $head ) {
+		if ( ! is_string( $head ) || '' === $head ) {
+			return false;
+		}
+
+		if ( false !== strpos( $head, self::OWNER_TAG ) ) {
+			return true;
+		}
+
+		return false !== strpos( $head, self::DROPIN_MARKER )
+			&& false !== strpos( $head, self::VERSION_TAG );
 	}
 
 	/**

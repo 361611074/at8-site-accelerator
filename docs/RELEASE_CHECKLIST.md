@@ -3,8 +3,8 @@
 > 对应开发计划书 §87（发布产物）、§133（Phase 交付物）。
 > 每次发布新版本前逐项勾选，**不允许跳过**。
 
-版本：`3.0.6.3`
-类型：WordPress.org 审核二轮整改版（彻底移除 HTML 公共浏览器缓存）
+版本：`3.0.6.4`
+类型：WordPress.org 提交前终审整改（整页缓存写入安全 + drop-in 归属判定收紧，任务书驱动）
 
 > 3.0.5 及更早版本的检查记录为**历史存档**，见文末"历史记录"；
 > 本版本（3.0.6.3）的验收结果以"3.0.6.3 实测记录"一节为准。
@@ -46,9 +46,9 @@
 
 - [x] 全部 PHP 文件通过 `php -l`
 - [x] 全部 JS 文件通过 `node --check`
-- [x] `php tests/unit/smoke.php` → **358 通过 / 0 失败**（3.0.6.3，2026-10-10 实测）
+- [x] `php tests/unit/smoke.php` → **359 通过 / 0 失败**（3.0.6.4，2026-10-10 实测）
 - [x] `php tests/unit/round2-integration.php` → **76 通过 / 0 失败**（3.0.6.3，2026-10-10 实测）
-- [x] `vendor/bin/phpunit` → **229 用例 / 1054 断言，全通过**（6 个 Redis 用例在本机显式跳过，CI 的 Redis 任务断言跳过数为 0）
+- [x] `vendor/bin/phpunit` → **239 用例 / 1104 断言，全通过**（3.0.6.4，6 个 Redis 用例在本机显式跳过，CI 的 Redis 任务断言跳过数为 0）
 - [x] `vendor/bin/phpstan analyse` → **0 错误**（level 5，phpstan 2.3.1 + phpstan-wordpress v2.0.4，豁免仅 1 条且附理由）
 - [x] `vendor/bin/phpcs --standard=phpcs.xml.dist --report=summary` → **0 错误 / 0 警告**（42 个文件）
 - [x] 连续运行两次结果一致（测试自带环境复位）
@@ -113,12 +113,12 @@
 
 发布前必须五处一致，缺一处就会出现"用户装的版本和你说的是两个版本"：
 
-- [x] 插件头 `Version: 3.0.6.3`
-- [x] `define( 'AT8SA_VERSION', '3.0.6.3' )`
-- [x] `readme.txt` 的 `Stable tag: 3.0.6.3`
-- [x] `CHANGELOG.md` 最新条目为 `3.0.6.3`
+- [x] 插件头 `Version: 3.0.6.4`
+- [x] `define( 'AT8SA_VERSION', '3.0.6.4' )`
+- [x] `readme.txt` 的 `Stable tag: 3.0.6.4`
+- [x] `CHANGELOG.md` 最新条目为 `3.0.6.4`
 - [x] `languages/at8-site-accelerator.pot` 的 `Project-Id-Version`
-- [x] tag 名与版本号对应（`v3.0.6.3`）
+- [x] tag 名与版本号对应（`v3.0.6.4`）
 
 > 版本号规则：十进制封十进一（`1.2.9` → `1.3.0`），不存在 `1.2.10`。
 

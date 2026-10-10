@@ -31,7 +31,17 @@ if ( is_readable( $at8sa_dropin ) ) {
 	// 用 is_readable() 先判断，就不用 @ 抑制错误了。
 	$at8sa_head = (string) file_get_contents( $at8sa_dropin, false, null, 0, 2048 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 
-	if ( false !== strpos( $at8sa_head, 'AT8 Site Accelerator' ) ) {
+	// 归属判定必须与 AdvancedCache::head_is_ours() 保持一致（3.0.6.4 收紧）：
+	// 主标记 `Owner: at8-site-accelerator`；旧版（≤3.0.6.3）安装的 drop-in
+	// 没有 Owner 行，用"插件名全称标记 + 版本戳"双标记组合兼容。
+	// 只提插件名的宽松匹配会误删在注释里讨论本插件的第三方 drop-in，禁止回退。
+	$at8sa_dropin_ours = false !== strpos( $at8sa_head, 'Owner: at8-site-accelerator' )
+		|| (
+			false !== strpos( $at8sa_head, 'AT8 Site Accelerator —— advanced-cache.php drop-in' )
+			&& false !== strpos( $at8sa_head, '@at8sa-dropin-version' )
+		);
+
+	if ( $at8sa_dropin_ours ) {
 		wp_delete_file( $at8sa_dropin );
 	}
 }

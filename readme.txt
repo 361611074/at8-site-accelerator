@@ -4,7 +4,7 @@ Tags: cache, page cache, redis, lazy load, webp
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 3.0.6.3
+Stable tag: 3.0.6.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -114,6 +114,10 @@ Yes. Each site gets its own cache directory and its own Redis key prefix.
 
 == Changelog ==
 
+= 3.0.6.4 =
+* Security fix: **responses that declare themselves non-shareable are no longer written to the shared page cache.** If a page sends a `Set-Cookie` header, declares `Vary: Cookie` (or `Vary: *`), or sends `Cache-Control: private` / `no-store` / `no-cache`, the plugin now skips caching it - so one visitor's personalized response can never be served to the next visitor. Ordinary anonymous public pages are cached exactly as before. Parsing handles multiple headers, multiple directives and case differences.
+* Hardening: **the drop-in ownership check no longer relies on the plugin name appearing in the file.** A third-party `advanced-cache.php` that merely mentions this plugin in a comment can no longer be overwritten on activation or deleted on uninstall; ownership now requires the machine-readable `Owner: at8-site-accelerator` marker (older versions of this plugin's own drop-in are still recognized via their name + version stamp combination). Files that cannot be proven ours are always left untouched.
+
 = 3.0.6.3 =
 * Removed: **the plugin no longer sends any public browser-cache header for HTML pages.** WordPress.org's review pointed out that a check made when headers are sent cannot see cookies, `Cache-Control` or `DONOTCACHEPAGE` values that themes and plugins add later in the request - so a page could be marked `public` before it was known to be personal. The former "browser cache for HTML" option and its check are gone entirely; any value an older version saved is ignored. Page-cache hits now answer with `no-cache` (without ever overwriting a stricter header another plugin already sent), and HTML freshness is handled by the plugin's own page cache.
 * Kept: long-lived cache rules for static assets (CSS, JS, images, fonts) work exactly as before; the page cache, its bypass rules and invalidation are unchanged.
@@ -187,6 +191,9 @@ Yes. Each site gets its own cache directory and its own Redis key prefix.
 The full technical change list (including the reason behind every fix) is in `CHANGELOG.md` at the root of the repository.
 
 == Upgrade Notice ==
+
+= 3.0.6.4 =
+Security hardening: pages that send cookies or declare `private` / `no-store` / `no-cache` / `Vary: Cookie` are no longer written to the shared page cache; the drop-in ownership check can no longer be fooled by third-party files mentioning this plugin's name. Upgrade at your convenience.
 
 = 3.0.6.3 =
 The plugin no longer marks HTML pages as publicly cacheable (WordPress.org review): the HTML browser-cache switch is gone, saved values are ignored, and cache hits answer with `no-cache`. Static asset caching and the page cache are unchanged. Update at your convenience.

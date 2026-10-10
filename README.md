@@ -4,7 +4,7 @@
 优先 Redis 对象缓存、不可用时自动降级为磁盘缓存，内置 Elementor / WooCommerce
 兼容层与第三方缓存插件冲突检测。
 
-- 当前版本：**3.0.5**
+- 当前版本：**3.0.6.3**
 - 环境要求：**PHP 7.4+ / WordPress 5.8+**
 - 许可：**GPL-2.0-or-later**
 
@@ -28,7 +28,11 @@
 ### 前端优化
 - 原生懒加载（`loading="lazy"` + `decoding="async"`），首屏前 2 张图片标记为 eager
 - HTML 压缩（块级元素保护，`pre` / `textarea` / `script` / `style` 不参与压缩）
-- 浏览器缓存响应头 + 规则片段生成
+- 静态资源浏览器缓存规则片段生成（nginx / Apache）
+
+  > Free 版**不对 HTML 页面发送任何 `Cache-Control: public`**：
+  > 整页缓存命中时响应头为 `no-cache, must-revalidate, max-age=0`，
+  > 页面新鲜度完全由插件侧失效机制保证（详见 `readme.txt` FAQ）。
 - DNS 预取 / 预连接 / 资源预加载
 - 链接预取（instant.page 风格，每个链接独立计时器）
 - WebP 上传即转
@@ -74,7 +78,7 @@ at8-site-accelerator/
 │   ├── Support/                 # 日志、文件系统、Redis 客户端
 │   ├── Cache/                   # 缓存引擎、路径、请求守卫、后端实现
 │   ├── Purge/                   # 失效器与钩子绑定
-│   ├── Optimization/            # 压缩、懒加载、浏览器缓存、WebP、预加载
+│   ├── Optimization/            # 压缩、懒加载、静态资源浏览器缓存、WebP、预加载
 │   ├── Compatibility/           # Elementor / WooCommerce / 缓存插件检测
 │   ├── Diagnostics/             # 环境体检
 │   ├── Admin/                   # 设置页、AJAX、工具条、通知
@@ -126,7 +130,7 @@ php tools/check-upgrade-notice.php
 ```
 
 冒烟测试 358 项（静态断言，含 drop-in 命中路径的子进程测试），
-第二轮集成验收 71 项（行为断言：逐个后台页面验证通知作用域、
+第二轮集成验收 76 项（行为断言：逐个后台页面验证通知作用域、
 真实写/回滚 `wp-config.php` 后确认磁盘上不新增任何文件（目录快照差分）、
 校验失败时记 error 日志且日志不含 `wp-config.php` 任何敏感内容、
 `realpath()` 实测 Host 归一化）。

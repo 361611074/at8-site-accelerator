@@ -1,12 +1,56 @@
 # 测试报告
 
-版本：`3.0.1`
-测试日期：2026-09-26
-测试环境：Linux + PHP 8.3.33 + nginx + Redis（真实站点服务器 `wordpress.xmm.fan`）
+**当前版本：`3.0.6.3`**（实测日期 2026-10-10，闸门与 CI 同版本工具链）
+
+> 本报告分两部分：
+> **第〇节**是 3.0.6.3 的实测结果；第一～九节是测试策略与覆盖范围的长期说明，
+> 其中带"3.0.1 期间"等字样的**真机记录为历史存档**（当时的版本行为，
+> 例如第七节提到的 `Cache-Control: public` 已在 3.0.6.3 移除，不应据此判断当前行为）。
+
+## 〇、3.0.6.3 实测结果（2026-10-10）
+
+测试环境：Windows 本机开发环境 + php83（`C:/wbtools/php83`）、
+PHPStan 2.3.1 + phpstan-wordpress v2.0.4（与 CI `composer update` 结果同版本）、
+PHPUnit 9.6.38；另在本地 WordPress 验收站做真机 HTTP 取证。
+
+| 闸门 | 命令 | 结果 |
+| --- | --- | --- |
+| 代码规范 | `vendor/bin/phpcs --standard=phpcs.xml.dist --report=summary` | **0 错误 / 0 警告**（42 个文件） |
+| 静态分析 | `vendor/bin/phpstan analyse --memory-limit=2G` | **0 错误**（level 5，豁免仅 1 条：Webp GdImage 基线矛盾） |
+| 冒烟测试 | `php tests/unit/smoke.php` | **358 通过 / 0 失败** |
+| 二轮集成验收 | `php tests/unit/round2-integration.php` | **76 通过 / 0 失败** |
+| 单元测试 | `vendor/bin/phpunit --bootstrap tests/phpunit/bootstrap.php` | **229 用例 / 1054 断言，0 失败**（6 个 Redis 用例本机显式跳过；CI Redis 任务断言跳过数为 0） |
+| 打包自检 | `php tools/build-zip.php` | 白名单收录 + 回读自检通过，产物见第八节 |
+| GitHub Actions | commit `6cb4afd`（tag `v3.0.6.3`） | **22 项检查全绿**（PHP 7.4–8.3 矩阵、Redis 冒烟/单元、PHPUnit 7.4/8.3、PHPStan、PHPCS、打包） |
+
+### 3.0.6.3 专项验证（本轮整改点）
+
+整改内容：**彻底移除 HTML 公共浏览器缓存**。
+
+| 验证项 | 手段 | 结果 |
+| --- | --- | --- |
+| `BrowserCache` 全部 HTML 缓存 gate 方法已删除 | `HtmlPublicCacheRemovedTest` + smoke 移除不变式 | ✅ |
+| `send_headers` 钩子不再注册（含旧 DB 值 `browser_cache_html=1` 时） | 直写桩选项表模拟历史 DB 行后 `boot()` | ✅ |
+| 整页缓存命中响应头 = `no-cache, must-revalidate, max-age=0`（引擎路径） | PHPUnit 断言 | ✅ |
+| drop-in 命中路径同样 `no-cache` | smoke 子进程 drop-in 夹具 + 真机取证 | ✅ |
+| 真机 HTTP 取证：库中残留 `browser_cache_html=1` | MISS 无缓存头 → HIT 稳定 `no-cache, must-revalidate, max-age=0` | ✅ |
+| 静态资源缓存规则片段未被误伤（nginx `css|js` / Apache `ExpiresByType`） | smoke 21-5 + `HtmlPublicCacheRemovedTest` | ✅ |
+| `Cache-Control: public` 在 ZIP 非注释代码中零命中 | 对 3.0.6.3 发行包全量扫描（42 个 PHP 文件） | ✅ |
+
+### 3.0.6.3 期间由静态分析抓到的问题（已修）
+
+| # | 问题 | 修复 |
+| --- | --- | --- |
+| 1 | smoke.php 中 `$GLOBALS` 计数器/数组用字面量直写，PHPStan 推成 `int(0)`/`array{}`，汇总段被判恒假 | 经 `@var` 类型标注变量中转初始化 |
+| 2 | `method_exists()` 断言"方法已删除"被判 `impossibleType` | 改用 `get_class_methods()` 运行时方法表 |
+| 3 | `merge_rules()` 第二参传 `null` 与 `@param array|string` 不符 | 改传 `''`（同一非数组分支） |
+| 4 | phpstan-wordpress v2.0.4 已建模 `wp_delete_file()` 副作用，Logger 的旧豁免变为"未匹配错误" | 删除豁免（本地工具链升级到与 CI 同版本后验证） |
 
 ---
 
-## 一、结论
+## 一、历史版本结论（3.0.1 · 2026-09-26 存档）
+
+> 以下数字为 3.0.1 时的实测结果，仅作历史依据；当前版本以第〇节为准。
 
 四道闸门全部为**阻断式**，任何一道变红就不允许发版。
 
@@ -219,7 +263,12 @@ CI 的 `test-redis` 任务不仅带 `services: redis`，还额外断言**跳过�
 
 ---
 
-## 七、真机端到端验证（42 项 / 全部通过）
+## 七、真机端到端验证（3.0.1 · 2026-09-26 历史存档，42 项 / 全部通过）
+
+> **历史记录**：本轮验证的环境是当时版本（3.0.1）。其中"Redis 后端主路径"组
+> 当时观察到 HTML 命中带 `Cache-Control: public, max-age=3600` —— 该行为
+> 已在 **3.0.6.3 彻底移除**（现为 `no-cache, must-revalidate, max-age=0`，
+> 见第〇节专项验证），其余结论（缓存命中、Cookie 拦截、精准失效等）仍然有效。
 
 环境：`https://wordpress.xmm.fan/`（WordPress + nginx + Redis，PHP 8.3.33）
 

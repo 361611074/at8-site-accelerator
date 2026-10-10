@@ -3,8 +3,11 @@
 > 对应开发计划书 §87（发布产物）、§133（Phase 交付物）。
 > 每次发布新版本前逐项勾选，**不允许跳过**。
 
-版本：`3.0.5`
-类型：WordPress.org 最终提交前整改版（第三轮）
+版本：`3.0.6.3`
+类型：WordPress.org 审核二轮整改版（彻底移除 HTML 公共浏览器缓存）
+
+> 3.0.5 及更早版本的检查记录为**历史存档**，见文末"历史记录"；
+> 本版本（3.0.6.3）的验收结果以"3.0.6.3 实测记录"一节为准。
 
 ---
 
@@ -43,10 +46,11 @@
 
 - [x] 全部 PHP 文件通过 `php -l`
 - [x] 全部 JS 文件通过 `node --check`
-- [x] `php tests/unit/smoke.php` → **248 通过 / 0 失败**（26 组，0 跳过）
-- [x] `vendor/bin/phpunit` → **208 用例 / 550 断言，全通过**
-- [x] `vendor/bin/phpstan analyse` → **0 错误**（level 5，豁免仅 1 条且附理由）
-- [x] `vendor/bin/phpcs --report=summary` → **0 错误 / 0 警告**（42 个文件）
+- [x] `php tests/unit/smoke.php` → **358 通过 / 0 失败**（3.0.6.3，2026-10-10 实测）
+- [x] `php tests/unit/round2-integration.php` → **76 通过 / 0 失败**（3.0.6.3，2026-10-10 实测）
+- [x] `vendor/bin/phpunit` → **229 用例 / 1054 断言，全通过**（6 个 Redis 用例在本机显式跳过，CI 的 Redis 任务断言跳过数为 0）
+- [x] `vendor/bin/phpstan analyse` → **0 错误**（level 5，phpstan 2.3.1 + phpstan-wordpress v2.0.4，豁免仅 1 条且附理由）
+- [x] `vendor/bin/phpcs --standard=phpcs.xml.dist --report=summary` → **0 错误 / 0 警告**（42 个文件）
 - [x] 连续运行两次结果一致（测试自带环境复位）
 - [x] 所有 `use` 引用可解析（无指向不存在类的 import）
 - [x] 无未使用的类 / 常量 / 设置项（本轮已清理 `ServiceProviderInterface`、`AT8SA_MIN_CACHE_ROOT`、`AT8SA_CACHE_ROOT_URL`、`http2_push`，以及 `SettingsPage` 的 8 个未使用 import）
@@ -109,12 +113,12 @@
 
 发布前必须五处一致，缺一处就会出现"用户装的版本和你说的是两个版本"：
 
-- [x] 插件头 `Version: 3.0.5`
-- [x] `define( 'AT8SA_VERSION', '3.0.5' )`
-- [x] `readme.txt` 的 `Stable tag: 3.0.5`
-- [x] `CHANGELOG.md` 最新条目为 `3.0.5`
+- [x] 插件头 `Version: 3.0.6.3`
+- [x] `define( 'AT8SA_VERSION', '3.0.6.3' )`
+- [x] `readme.txt` 的 `Stable tag: 3.0.6.3`
+- [x] `CHANGELOG.md` 最新条目为 `3.0.6.3`
 - [x] `languages/at8-site-accelerator.pot` 的 `Project-Id-Version`
-- [x] tag 名与版本号对应（`v3.0.5`）
+- [x] tag 名与版本号对应（`v3.0.6.3`）
 
 > 版本号规则：十进制封十进一（`1.2.9` → `1.3.0`），不存在 `1.2.10`。
 
@@ -146,9 +150,11 @@
 - [x] ZIP 版本号与插件头版本号一致
 - [x] **产物已上传到 GitHub Release 附件**（不在仓库里，去 Release 页下载）
 
-> 产物实际内容：49 个文件 / 约 183 KB，顶层 9 项——
+> 产物实际内容（3.0.6.3，2026-10-10 实测）：49 个文件 / 215.4 KB，顶层 9 项——
 > `includes/`(38) `assets/`(3) `templates/`(2) `languages/`(1)
 > 加`at8-site-accelerator.php`、`uninstall.php`、`readme.txt`、`CHANGELOG.md`、`LICENSE`。
+> 五处版本号已在 ZIP 内核验一致（插件头 / AT8SA_VERSION / Stable tag），
+> 非 PHP 注释代码对 `Cache-Control: public`、wp-config 临时备份文件名零命中。
 >
 > 注意别把**仓库根目录**误当成打包产物：仓库里有 `.github`、`docs`、`tests`、
 > `tools`、`README.md`（仓库说明）这些，它们不该进发行包。
@@ -216,12 +222,35 @@
 - **WordPress 桩不忠实**：`do_action()` 空实现、`update_option()` 不触发钩子——
   这是漏掉上面第 3 条的直接原因，已修正。
 
+### 3.0.6.3 实测记录（2026-10-10）
+
+本轮整改内容：按 wp.org 审核二轮意见**彻底移除 HTML 公共浏览器缓存**——
+`BrowserCache` 删除全部 HTML 缓存 gate 方法；整页缓存命中路径响应头改为
+`no-cache, must-revalidate, max-age=0`（磁盘与 drop-in 两条路径）；设置页删除
+HTML 缓存开关；旧 DB 值运行时忽略（数据保留以便回滚）。
+
+新增/替换测试：
+
+| 用例 | 内容 | 结果 |
+| --- | --- | --- |
+| `HtmlPublicCacheRemovedTest`（PHPUnit，5 用例 / 148 断言） | gate 方法不存在、`send_headers` 钩子未注册、命中路径无 `Cache-Control: public`、共享绕过规则幸存、静态资源规则片段完好 | ✅ 全过 |
+| `smoke.php` 21-3…21-5 移除不变式 | 含直写桩选项表模拟历史 DB 行（`browser_cache_html=1`）验证运行时忽略 | ✅ 358/0 |
+| `round2-integration.php` | 76 项行为断言 | ✅ 76/0 |
+| PHPUnit 全量 | 229 用例 / 1054 断言 | ✅ 0 失败 |
+| PHPStan level 5 | phpstan 2.3.1 + phpstan-wordpress v2.0.4（与 CI 同版本） | ✅ 0 错误 |
+| PHPCS | `--standard=phpcs.xml.dist`，42 文件 | ✅ 0/0 |
+| 真机 HTTP 取证（本地验收站，库中残留 `browser_cache_html=1`） | MISS 无缓存头 → HIT 稳定 `no-cache, must-revalidate, max-age=0` | ✅ |
+
+Plugin Check 与最终 ZIP 核验结果见下文十一节与八节。
+
 ## 十、发布后
 
-- [x] 推 `main` 并确认 Actions 全绿（见第零节）
-- [x] 打 git tag `v3.0.5`
-- [x] 创建 GitHub Release（附上 ZIP，由 CI 自动挂载）
-- [x] `readme.txt` 的 `Tested up to` = **7.1**，且**有实跑依据**（不能只是"填个当前版本"）。
+### 3.0.6.3 发布记录（2026-10-10）
+
+- [ ] 推 `main` 并确认 Actions 全绿（见第零节）
+- [ ] 打 git tag `v3.0.6.3`（**在 main 全绿之后**才打，遵守第零节顺序）
+- [ ] GitHub Release 自动挂载 ZIP（`at8-site-accelerator-3.0.6.3.zip`）
+- [x] `readme.txt` 的 `Tested up to` = **7.1**，实跑依据见下（7.1.2 实测，沿用 3.0.5 时的验证结论，WP 版本未变）
 
   <!-- 下面两行是给 tests/unit/smoke.php 读的机器可读标记，改这两个值必须同步改依据 -->
   <!-- AT8SA_TESTED_UP_TO: 7.1 -->
@@ -261,7 +290,14 @@
 
   若将来 WP 升到 7.2 / 8.0 而没真跑过，这个字段**必须改回去**，不能跟着填。
   冒烟测试里有断言把 `Tested up to` 与本文件记录的值绑定，防止两边漂移。
-- [x] 记录发布日志到 `docs/PHASE_REPORT.md`
+
+- [x] 记录发布日志到 `docs/PHASE_REPORT.md`（3.0.6 / 3.0.6.1 / 3.0.6.2 / 3.0.6.3 变更见 `CHANGELOG.md`）
+
+### 历史记录（3.0.5 · 2026-09-26 存档）
+
+- [x] 推 `main` 并确认 Actions 全绿
+- [x] 打 git tag `v3.0.5`
+- [x] 创建 GitHub Release（ZIP 由 CI 自动挂载）
 
 ## 十一、wp.org 上架前必须补的验证
 
@@ -278,6 +314,29 @@
 
   **必须做的反向验证**：往包里注入一个 `unlink()` 探针后复跑，检查器要能报出
   `unlink_unlink` ERROR。只跑一次"通过"不足以采信——有可能是检查器根本没扫到。
+
+  ### 3.0.6.3 Plugin Check 复跑记录（2026-10-10）
+
+  - 被测对象：`tools/build-zip.php` 重新生成的 `dist/at8-site-accelerator-3.0.6.3.zip`
+    （49 文件 / 215.4 KB，sha256 前 16 位 `8a1c96d4f735c4a3`），
+    解包覆盖到本机 WordPress 验收站（WP 7.1.2 + PHP 8.2 + SQLite）。
+  - 标准检查：**`Success: Checks complete. No errors found.`**
+  - `--include-experimental`：**`Success: Checks complete. No errors found.`**
+
+  ### 3.0.6.3 安装启停测试记录（2026-10-10，同一验收站）
+
+  | 步骤 | 结果 |
+  | --- | --- |
+  | 用最终 ZIP 解包安装，后台识别 `3.0.6.3` 并激活 | ✅ |
+  | 激活态 drop-in `advanced-cache.php` 存在且带归属标记 | ✅ |
+  | 停用 → drop-in 被移除 | ✅ |
+  | 重新激活 → drop-in 重建、归属标记正常 | ✅ |
+  | HTTP 取证：第 1 发 `X-AT8-Cache: MISS-SAVED`（无 Cache-Control 头） | ✅ |
+  | HTTP 取证：第 2/3 发 `HIT` + `Cache-Control: no-cache, must-revalidate, max-age=0` | ✅ |
+
+  > 注：验收站 `WP_HOME` 带端口时页面缓存落盘会失败（PHP 内置服务器 +
+  > Windows 环境的已知交互），按 3.0.6.3 时确立的方案临时以无端口常量 +
+  > 显式 `Host` 头完成验证后已还原。生产 nginx 环境不受此影响。
 
 - [ ] Elementor 真机验证（3.0.1 时遗留，测试站未装 Elementor）
 - [ ] WooCommerce 真机验证（3.0.1 时遗留，测试站未装 WooCommerce）

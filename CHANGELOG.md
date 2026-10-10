@@ -6,6 +6,41 @@
 
 ---
 
+## 3.0.6.2 — 修复：数据库清理面板"勾选即执行"
+
+**事故**：silkuasilk.com 反馈——数据库面板勾选「文章修订版」「自动草稿」后点
+「执行清理」，报"没有任何清理项被勾选，请先在上方选择要清理的内容"。
+
+**根因**（UI 交互设计缺陷，代码审查定位）：面板里的勾选框是底部
+「保存设置」表单（`<form action="options.php">`）的一部分；而「执行清理」
+是 `type="button"` 的独立 AJAX（`at8sa_db_run`），请求体里只有 action 与 nonce。
+服务端 `DatabaseCleanup::run()` 读 `Settings::is_on()`——**已保存**的设置。
+勾选未保存 → 服务端看到全关 → `run()` 返回空 → 误报。页面文案也从未提示
+"必须先保存"，用户按直觉操作必然踩中。
+
+**修复**：
+1. `assets/js/admin.js`：「执行清理」的 payload 把数据库面板当前的勾选状态
+   （7 个 `db_*` 复选框 + `db_schedule` 下拉）序列化为 JSON 随请求发送；
+2. `includes/Admin/Ajax.php` 新增 `persist_db_panel_items()`：**白名单**只收
+   8 个已知键，值经 `Settings::sanitize()` 清洗（布尔归一、枚举校验、缺键保留
+   当前值）后持久化，再执行 `run()`。混入 items 的其它任何设置键一律忽略，
+   无法借道改写；items 缺失 / 非法 JSON 时行为与本版之前完全一致（向后兼容）；
+   持久化后定时清理计划与手动执行读到的必然是同一份勾选；
+3. `templates/settings-page.php`：面板说明补充"勾选后直接执行即可，
+   勾选状态会随执行自动保存"。
+
+**回归测试**：
+- 新增 `tests/phpunit/DbPanelSyncTest.php`（5 用例 / 11 断言）：合法 items 落库、
+  白名单外键被忽略、局部更新缺键保留、非法输入静默跳过、`db_schedule` 枚举校验；
+- `tests/unit/smoke.php` 20b-13：JS 带状态 / 服务端先持久化再执行 /
+  走 sanitize 白名单 / 文案更新，四段链路齐全性检查。
+
+**验证**：smoke 363/0、round2 76/0、PHPUnit 271 测试 968 断言 0 失败、
+PHPCS 42 文件 0/0、Upgrade Notice 199 字符 ✅、pot 幂等、
+dist ZIP 重建 49 文件。
+
+---
+
 ## 3.0.6.1 — 热修复：入口文件不再删除核心 `$wp_version` 全局变量
 
 **事故**：2026-10-09，silkuasilk.com 上传 3.0.6 并启用后整站 500（前台与 wp-admin），

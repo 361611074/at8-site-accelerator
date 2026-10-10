@@ -317,6 +317,35 @@
 		bindAction('#at8sa-db-run', 'at8sa_db_run', {
 			confirm: i18n.confirmDb,
 			messageTarget: '#at8sa-db-msg',
+			/* 设置页的勾选框属于底部「保存设置」表单，但用户习惯是勾选后直接执行。
+			 * 把数据库面板当前的勾选状态随请求带走，服务端先持久化再清理——
+			 * 否则服务端读到的还是上次保存的值，会误报"没有任何清理项被勾选"。 */
+			payload: function () {
+				var panel = document.querySelector('.at8sa-panel[data-panel="database"]');
+				var items = {};
+
+				if (!panel) {
+					return { items: '' };
+				}
+
+				panel.querySelectorAll('input[type="checkbox"]').forEach(function (box) {
+					var m = (box.name || '').match(/\[([^\]]+)\]/);
+
+					if (m) {
+						items[m[1]] = box.checked ? 1 : 0;
+					}
+				});
+
+				panel.querySelectorAll('select').forEach(function (sel) {
+					var m = (sel.name || '').match(/\[([^\]]+)\]/);
+
+					if (m) {
+						items[m[1]] = sel.value;
+					}
+				});
+
+				return { items: JSON.stringify(items) };
+			},
 			onSuccess: function (data) {
 				var container = $('#at8sa-db-preview-result');
 

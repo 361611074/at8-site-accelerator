@@ -460,7 +460,7 @@ $at8sa_cache_on = ! empty( $at8sa_settings['page_cache'] );
 			<div class="at8sa-card at8sa-danger-zone">
 				<h2><?php esc_html_e( '⑩ 数据库清理', 'at8-site-accelerator' ); ?></h2>
 				<p class="at8sa-card-note">
-					<?php esc_html_e( '这里的操作不可撤销，且默认全部关闭。请先点「预览数量」看清将要删除多少条，再勾选执行。回收站与草稿类项目删除后无法通过 WordPress 后台恢复。', 'at8-site-accelerator' ); ?>
+					<?php esc_html_e( '这里的操作不可撤销，且默认全部关闭。请先点「预览数量」看清将要删除多少条，再勾选执行。勾选后直接点「执行清理」即可，勾选状态会随执行自动保存，无需先点底部的「保存设置」。回收站与草稿类项目删除后无法通过 WordPress 后台恢复。', 'at8-site-accelerator' ); ?>
 				</p>
 
 				<?php

@@ -58,7 +58,7 @@
 
 ```
 php tools/build-zip.php
-# 产出 dist/at8-site-accelerator-3.0.6.1.zip
+# 产出 dist/at8-site-accelerator-3.0.6.2.zip
 ```
 
 ---

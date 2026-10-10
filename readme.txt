@@ -4,7 +4,7 @@ Tags: cache, page cache, redis, lazy load, webp
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 3.0.6.1
+Stable tag: 3.0.6.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -114,6 +114,10 @@ Yes. Each site gets its own cache directory and its own Redis key prefix.
 
 == Changelog ==
 
+= 3.0.6.2 =
+* Fixed: **checking items on the Database Cleanup screen and clicking "Run cleanup" now really runs the cleanup.** The checkboxes belong to the settings form at the bottom of the page, but the run button sends its own AJAX request that only looked at previously *saved* settings - so a freshly checked item was invisible to the server and the plugin answered "no cleanup items selected" even though boxes were ticked. The run request now carries the current checkbox state, the server saves it before running (so the automatic schedule follows the same selection), and the screen text explains that ticking a box is enough - no separate save needed.
+* Added: the cleanup request can only ever change the seven database-cleanup switches and the schedule dropdown; any other setting sent along is ignored and validated through the regular settings sanitization.
+
 = 3.0.6.1 =
 * Fixed: **the plugin no longer deletes WordPress's `$wp_version` variable at load time.** The plugin entry file runs in the top-level scope of `wp-settings.php`, and its environment check used to clean up after itself with `unset( $wp_version, ... )` - which really removed the core global. Any plugin loaded after it that reads `$wp_version` while booting (WPForms, for example) then received `null` and crashed with a fatal error that took the whole site down. The version check now reads `$GLOBALS['wp_version']` without touching it, and automated tests forbid the plugin from ever modifying that variable again.
 
@@ -179,6 +183,9 @@ Yes. Each site gets its own cache directory and its own Redis key prefix.
 The full technical change list (including the reason behind every fix) is in `CHANGELOG.md` at the root of the repository.
 
 == Upgrade Notice ==
+
+= 3.0.6.2 =
+Fixes the Database Cleanup screen: ticking items and clicking Run cleanup now really runs the cleanup, and the ticked selection is saved automatically. No action needed besides upgrading.
 
 = 3.0.6.1 =
 Critical fix for every 3.0.6 and earlier user. The plugin could delete WordPress's wp_version variable while loading, crashing any plugin that reads it during boot (WPForms) and taking the whole site down. Update now; no action needed besides upgrading.

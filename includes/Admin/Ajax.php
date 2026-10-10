@@ -203,9 +203,16 @@ final class Ajax {
 			wp_send_json_error( array( 'message' => __( '数据库模块不可用。', 'at8-site-accelerator' ) ) );
 		}
 
-		@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, Squiz.PHP.DiscouragedFunctions.Discouraged
+	@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, Squiz.PHP.DiscouragedFunctions.Discouraged
 
-		$result  = $cleanup->run();
+	// 设置页的勾选框属于页面底部的「保存设置」表单，但用户习惯是勾选后直接点
+	// 「执行清理」。数据库面板当前的勾选状态随本请求一并带来，先持久化再执行——
+	// 否则 run() 读到的仍是上次保存的值，用户必然看到"没有任何清理项被勾选"。
+	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- guard() 已完成 nonce 与能力校验。
+	$at8sa_db_items = isset( $_POST['items'] ) ? sanitize_text_field( wp_unslash( $_POST['items'] ) ) : '';
+	$this->persist_db_panel_items( $at8sa_db_items );
+
+	$result = $cleanup->run();
 		$preview = $cleanup->preview();
 		$lines   = array();
 
@@ -227,6 +234,66 @@ final class Ajax {
 				'result'  => $result,
 			)
 		);
+	}
+
+	/**
+	 * 把数据库面板随请求带来的勾选状态持久化到设置。
+	 *
+	 * 设计约束：
+	 * - **白名单**：只接受 7 个 db_* 布尔键与 db_schedule 枚举键，items 里混入的
+	 *   其它任何键（cache_backend、exclude_urls……）一律忽略，不可能借道本接口改写；
+	 * - **复用 Settings::sanitize()**：布尔归一、枚举校验（非法 db_schedule 回退 off），
+	 *   缺键保留当前已存值（sanitize 的局部更新语义），不会误动面板之外的设置；
+	 * - **向后兼容**：items 缺失 / 非法 JSON / 空数组时静默跳过，行为与本版之前
+	 *   完全一致（读取已保存的设置）。
+	 *
+	 * @param mixed $raw 原始 items（JSON 字符串，由 admin.js 序列化面板状态）。
+	 * @return void
+	 */
+	private function persist_db_panel_items( $raw ) {
+		if ( ! is_string( $raw ) || '' === $raw ) {
+			return;
+		}
+
+		$items = json_decode( $raw, true );
+
+		if ( ! is_array( $items ) ) {
+			return;
+		}
+
+		$settings = $this->dep( 'settings' );
+
+		if ( ! $settings instanceof Settings ) {
+			return;
+		}
+
+		$booleans = array(
+			'db_revisions',
+			'db_auto_drafts',
+			'db_trashed_posts',
+			'db_spam_comments',
+			'db_trashed_comments',
+			'db_transients',
+			'db_optimize',
+		);
+
+		$partial = array();
+
+		foreach ( $booleans as $key ) {
+			if ( array_key_exists( $key, $items ) ) {
+				$partial[ $key ] = empty( $items[ $key ] ) ? 0 : 1;
+			}
+		}
+
+		if ( isset( $items['db_schedule'] ) && is_string( $items['db_schedule'] ) ) {
+			$partial['db_schedule'] = $items['db_schedule'];
+		}
+
+		if ( empty( $partial ) ) {
+			return;
+		}
+
+		$settings->persist( $settings->sanitize( $partial ) );
 	}
 
 	/**

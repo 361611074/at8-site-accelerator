@@ -2682,6 +2682,43 @@ check(
 	''
 );
 
+// ── 20b-13. 数据库面板"勾选即执行"链路 ──
+//
+// 事故背景：silkuasilk.com 2026-10-09。面板勾选框属于底部「保存设置」表单，
+// 「执行清理」却是独立 AJAX，服务端 run() 只读已保存设置 → 必然误报
+// "没有任何清理项被勾选"。修复链路必须三段齐全：JS 带状态、服务端
+// 白名单持久化、设置页文案说明。
+$at8sa_admin_js  = (string) file_get_contents( AT8SA_PATH . 'assets/js/admin.js' );
+$at8sa_ajax_src  = (string) file_get_contents( AT8SA_PATH . 'includes/Admin/Ajax.php' );
+$at8sa_panel_tpl = (string) file_get_contents( AT8SA_PATH . 'templates/settings-page.php' );
+
+check(
+	'JS：执行清理时把数据库面板勾选状态随请求发送',
+	false !== strpos( $at8sa_admin_js, "data-panel=\"database\"" )
+		&& false !== strpos( $at8sa_admin_js, 'items: JSON.stringify(items)' ),
+	''
+);
+
+check(
+	'服务端：dispatch_db_run 先持久化面板状态再执行（原始输入过 sanitize）',
+	false !== strpos( $at8sa_ajax_src, 'persist_db_panel_items' )
+		&& false !== strpos( $at8sa_ajax_src, "sanitize_text_field( wp_unslash( \$_POST['items'] ) )" )
+		&& false !== strpos( $at8sa_ajax_src, '$this->persist_db_panel_items( $at8sa_db_items )' ),
+	''
+);
+
+check(
+	'服务端：持久化走 Settings::sanitize()（白名单 + 局部更新语义）',
+	preg_match( '/persist_db_panel_items.*?\$settings->persist\(\s*\$settings->sanitize\(\s*\$partial/s', $at8sa_ajax_src ) === 1,
+	''
+);
+
+check(
+	'设置页：文案说明勾选后直接执行即可（无需先保存）',
+	false !== strpos( $at8sa_panel_tpl, '勾选状态会随执行自动保存' ),
+	''
+);
+
 /* ---------------------------------------------------------------------------
  * 21. drop-in 命中路径（子进程真实执行）
  *

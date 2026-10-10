@@ -187,7 +187,11 @@ if ( ! headers_sent() ) {
 	// 显示名与 BackendInterface::name() 对齐：同一个响应头不该因为
 	// "这次命中由 drop-in 还是插件侧处理"而给出不同大小写的值。
 	header( 'X-AT8-Cache-Backend: ' . ( 'redis' === $at8sa_backend ? 'Redis' : 'Disk' ) );
-	header( 'Cache-Control: public, max-age=' . max( 0, $at8sa_ttl ) );
+	// 3.0.6.3（WordPress.org 二轮整改）：命中响应是 HTML，绝不再发送
+	// `Cache-Control: public`——共享中间层（CDN / 代理）会据此缓存并转发给
+	// 其它访客。改发显式 no-cache，页面新鲜度由本插件的整页缓存机制在
+	// 服务端控制。本文件在 WordPress 之前运行，不会有更早的 Cache-Control。
+	header( 'Cache-Control: no-cache, must-revalidate, max-age=0' );
 
 	/*
 	 * 移动端变体开启时，本响应代表"User-Agent 维度上的一份独立副本"，

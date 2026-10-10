@@ -103,8 +103,9 @@ final class Settings {
 			/* --- ④ 浏览器缓存 --- */
 			'browser_cache'          => 1,
 			'browser_cache_ttl'      => 31536000,
-			'browser_cache_html'     => 0,
-			'browser_cache_html_ttl' => 3600,
+			// browser_cache_html / browser_cache_html_ttl 已随 3.0.6.3 移除：
+			// HTML 公共浏览器缓存路径整体删除（官方二轮整改），不再有消费方。
+			// 旧数据库行里遗留的这两个键会被 all() 原样带出，但运行时无人读取。
 
 			/* --- ⑤ HTML 压缩 --- */
 			'html_minify'            => 1,
@@ -173,7 +174,6 @@ final class Settings {
 			'resource_preload',
 			'preload_debug',
 			'browser_cache',
-			'browser_cache_html',
 			'html_minify',
 			'html_minify_inline',
 			'lazyload',
@@ -305,14 +305,13 @@ final class Settings {
 		$out['db_schedule']   = $this->enum( $input, 'db_schedule', array( 'off', 'daily', 'weekly' ), 'off' );
 		$out['log_level']     = $this->enum( $input, 'log_level', array( 'error', 'warning', 'info', 'debug' ), 'error' );
 
-		$out['cache_ttl']              = $this->clamp_int( $input, 'cache_ttl', 60, 86400 * 30, 3600 );
-		$out['browser_cache_ttl']      = $this->clamp_int( $input, 'browser_cache_ttl', 3600, 31536000, 31536000 );
-		$out['browser_cache_html_ttl'] = $this->clamp_int( $input, 'browser_cache_html_ttl', 0, 86400 * 30, 3600 );
-		$out['hover_delay']            = $this->clamp_int( $input, 'hover_delay', 0, 2000, 50 );
-		$out['touch_delay']            = $this->clamp_int( $input, 'touch_delay', 0, 2000, 100 );
-		$out['max_preloads']           = $this->clamp_int( $input, 'max_preloads', 1, 200, 20 );
-		$out['max_per_domain']         = $this->clamp_int( $input, 'max_per_domain', 1, 100, 10 );
-		$out['preload_cooldown']       = $this->clamp_int( $input, 'preload_cooldown', 0, 86400, 300 );
+		$out['cache_ttl']         = $this->clamp_int( $input, 'cache_ttl', 60, 86400 * 30, 3600 );
+		$out['browser_cache_ttl'] = $this->clamp_int( $input, 'browser_cache_ttl', 3600, 31536000, 31536000 );
+		$out['hover_delay']       = $this->clamp_int( $input, 'hover_delay', 0, 2000, 50 );
+		$out['touch_delay']       = $this->clamp_int( $input, 'touch_delay', 0, 2000, 100 );
+		$out['max_preloads']      = $this->clamp_int( $input, 'max_preloads', 1, 200, 20 );
+		$out['max_per_domain']    = $this->clamp_int( $input, 'max_per_domain', 1, 100, 10 );
+		$out['preload_cooldown']  = $this->clamp_int( $input, 'preload_cooldown', 0, 86400, 300 );
 
 		if ( array_key_exists( 'preload_strategy', $input ) ) {
 			$strategy = is_array( $input['preload_strategy'] ) ? $input['preload_strategy'] : array();

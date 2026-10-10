@@ -6,6 +6,39 @@
 
 ---
 
+## 3.0.6.3 — WordPress.org 二轮审核整改：HTML 公共浏览器缓存整体移除
+
+**官方终裁**（P1-02）：3.0.6 的"发送时刻资格 Gate"方案被否决。`send_headers`
+钩子在主题/插件模板代码跑完**之前**执行，此刻检查 `headers_list()` 看不到后续
+才会添加的 `Set-Cookie`、`Cache-Control: private/no-store`、`Vary: Cookie` 或
+才定义的 `DONOTCACHEPAGE`——只凭发送时刻的快照就把整份 HTML 标成
+`Cache-Control: public`，正确性无法保证。
+
+**方案**：Free 版不再为 HTML 响应主动发送任何公共缓存头。
+
+1. `BrowserCache::boot()` 不再注册 `send_headers` 钩子；`send_html_headers()`、
+   `allow_public_html_cache()` 及全部 Gate 辅助方法删除（约 330 行）。
+2. **整页缓存命中路径同样整改**（这是复查时新发现的两处 public 头）：
+   `includes/Cache/CacheEngine.php` 与 `templates/advanced-cache.php`（drop-in）
+   命中时原本发送 `Cache-Control: public, max-age={cache_ttl}`，改发
+   `Cache-Control: no-cache, must-revalidate, max-age=0`；CacheEngine 侧先扫描
+   `headers_list()`，已有 Cache-Control 时**不覆盖**（绝不放宽 no-store/private）。
+3. `browser_cache_html` / `browser_cache_html_ttl` 从 `Settings` 默认值、布尔
+   白名单与 sanitize 中删除——旧数据库行里遗留的键随 `all()` 原样带出但无任何
+   读取方（v5 第 3 条"运行时忽略旧值"）。
+4. 设置页删除该开关与时长输入框（不留"可开启但无效"的控件），文案改为
+   "HTML 页面由整页缓存机制控制，浏览器不做 HTML 长缓存"。
+5. **保留不动**：静态资源（CSS/JS/图片/字体）的 nginx/Apache 规则生成与
+   .htaccess 写入周期、整页缓存的请求绕过机制（RequestGuard 共享规则）、
+   Redis/磁盘后端、缓存失效、P0-01 内存回滚。
+
+**测试**：`HtmlBrowserCacheGateTest`（47 用例）退役，替换为
+`HtmlPublicCacheRemovedTest`（5 用例 148 断言）——钉死"发送路径不存在 /
+send_headers 不注册 / 旧值无法重新启用 / 静态规则仍在 / 整页缓存绕过仍在"。
+smoke 21-3..21-5 改写为移除不变式（含旧 DB 行直写模拟）；smoke 全量 357/0。
+
+---
+
 ## 3.0.6.2 — 修复：数据库清理面板"勾选即执行"
 
 **事故**：silkuasilk.com 反馈——数据库面板勾选「文章修订版」「自动草稿」后点

@@ -4,7 +4,7 @@ Tags: cache, page cache, redis, lazy load, webp
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 3.0.6.2
+Stable tag: 3.0.6.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -38,7 +38,7 @@ Once "advanced cache" is enabled, the plugin writes `wp-content/advanced-cache.p
 
 **3. Smart preloading** - prefetches the target page when a visitor hovers or touches a link, turning "click" into "instant". Respects `Save-Data` and slow connections, and stops automatically while the page is hidden.
 
-**4. Browser caching** - long-lived cache headers for static assets, plus ready-to-paste nginx / Apache rule snippets (the plugin never edits your \`.htaccess\` on its own). HTML browser caching is applied only to responses that pass the plugin's public-response safety checks; signed-in, session, cart, password-protected, personalised responses and responses that WordPress or another plugin has already marked as non-cacheable are automatically skipped.
+**4. Browser caching** - long-lived cache rules for static assets (CSS, JS, images, fonts), plus ready-to-paste nginx / Apache rule snippets (the plugin never edits your \`.htaccess\` on its own). HTML pages are deliberately excluded: the Free version never sends `Cache-Control: public` for an HTML response - page freshness is handled by the plugin's own page cache, and anything another plugin has marked as non-cacheable is left untouched.
 
 **5. HTML minification** - removes comments and redundant whitespace. The contents of `pre` / `textarea` / `script` / `style` / `svg` are preserved verbatim, and IE conditional comments are kept. Includes a safety valve: if the minified size drops below 40% of the original, the result is treated as broken and discarded.
 
@@ -106,13 +106,17 @@ Because a cache entry is not tied to a specific person. Caching a page for a sig
 
 = Does the plugin ever make my pages publicly cacheable? =
 
-Only when you switch on "browser cache for HTML", and only for responses that pass every safety check: a plain GET or HEAD request, a 200 `text/html` response, no signed-in visitor, no session or cart cookie, no password protection, no query string, no `Set-Cookie`, no `Vary: Cookie`, no existing `no-cache` / `private` / `no-store` header, and no `DONOTCACHEPAGE`. Anything else falls back to `no-cache`. The option is off by default.
+No. The Free version never sends `Cache-Control: public` (or a long `Expires`) for an HTML page - not on cache misses, not on cache hits, and regardless of any value an older version saved for the former "browser cache for HTML" switch, which has been removed. Static assets (CSS, JS, images, fonts) can still get long-lived cache rules, because they contain no visitor-specific content.
 
 = Is Multisite supported? =
 
 Yes. Each site gets its own cache directory and its own Redis key prefix.
 
 == Changelog ==
+
+= 3.0.6.3 =
+* Removed: **the plugin no longer sends any public browser-cache header for HTML pages.** WordPress.org's review pointed out that a check made when headers are sent cannot see cookies, `Cache-Control` or `DONOTCACHEPAGE` values that themes and plugins add later in the request - so a page could be marked `public` before it was known to be personal. The former "browser cache for HTML" option and its check are gone entirely; any value an older version saved is ignored. Page-cache hits now answer with `no-cache` (without ever overwriting a stricter header another plugin already sent), and HTML freshness is handled by the plugin's own page cache.
+* Kept: long-lived cache rules for static assets (CSS, JS, images, fonts) work exactly as before; the page cache, its bypass rules and invalidation are unchanged.
 
 = 3.0.6.2 =
 * Fixed: **checking items on the Database Cleanup screen and clicking "Run cleanup" now really runs the cleanup.** The checkboxes belong to the settings form at the bottom of the page, but the run button sends its own AJAX request that only looked at previously *saved* settings - so a freshly checked item was invisible to the server and the plugin answered "no cleanup items selected" even though boxes were ticked. The run request now carries the current checkbox state, the server saves it before running (so the automatic schedule follows the same selection), and the screen text explains that ticking a box is enough - no separate save needed.
@@ -183,6 +187,9 @@ Yes. Each site gets its own cache directory and its own Redis key prefix.
 The full technical change list (including the reason behind every fix) is in `CHANGELOG.md` at the root of the repository.
 
 == Upgrade Notice ==
+
+= 3.0.6.3 =
+The plugin no longer marks HTML pages as publicly cacheable (WordPress.org review): the HTML browser-cache switch is gone, saved values are ignored, and cache hits answer with `no-cache`. Static asset caching and the page cache are unchanged. Update at your convenience.
 
 = 3.0.6.2 =
 Fixes the Database Cleanup screen: ticking items and clicking Run cleanup now really runs the cleanup, and the ticked selection is saved automatically. No action needed besides upgrading.

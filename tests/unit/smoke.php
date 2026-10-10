@@ -1674,6 +1674,20 @@ foreach ( $iterator as $file ) {
 	}
 }
 
+// templates/ 也要进集合：drop-in 模板与设置页是"对外行为"的一部分，
+// 静态扫描（如 HTML 公共缓存移除检查）需要看到它们。
+$templates_iterator = new RecursiveIteratorIterator(
+	new RecursiveDirectoryIterator( AT8SA_PATH . 'templates', FilesystemIterator::SKIP_DOTS )
+);
+
+foreach ( $templates_iterator as $file ) {
+	if ( 'php' === strtolower( $file->getExtension() ) ) {
+		$relative = str_replace( '\\', '/', str_replace( AT8SA_PATH, '', $file->getPathname() ) );
+
+		$php_files[ $relative ] = (string) file_get_contents( $file->getPathname() );
+	}
+}
+
 $php_files['at8-site-accelerator.php'] = (string) file_get_contents( AT8SA_PATH . 'at8-site-accelerator.php' );
 
 $no_abspath_guard = array();
@@ -3016,112 +3030,127 @@ check(
 
 @unlink( $wp_config_path );
 
-// ── 21-3（P1-02）源码：HTML 浏览器缓存必须走公共响应 Gate ──
+// ── 21-3（P1-02 终裁）源码：HTML 公共浏览器缓存路径必须整体移除 ──
+//
+// 官方二轮反馈否决了 3.0.6 的"发送时刻 Gate"方案：send_headers 钩子看不见
+// 主题/插件之后才添加的 Set-Cookie / private / no-store / Vary: Cookie /
+// DONOTCACHEPAGE。因此 Free 版不再为 HTML 发送任何公共缓存头——
+// 这里把"移除"本身钉死，防止未来任何提交悄悄把路径加回来。
 
 $at8sa_bc_src = at8sa_source_by_suffix( $php_files, '/Optimization/BrowserCache.php' );
+$at8sa_ce_src = at8sa_source_by_suffix( $php_files, '/Cache/CacheEngine.php' );
+$at8sa_di_src = at8sa_source_by_suffix( $php_files, '/advanced-cache.php' );
+$at8sa_sp_src = at8sa_source_by_suffix( $php_files, '/settings-page.php' );
 
-check( '能取到 BrowserCache 源码（断言自身有效）', '' !== $at8sa_bc_src, '' );
-check(
-	'BrowserCache 提供公共响应安全 Gate',
-	false !== strpos( strip_php_comments( $at8sa_bc_src ), 'allow_public_html_cache' ),
+check( '能取到 BrowserCache / CacheEngine / drop-in / 设置页源码（断言自身有效）',
+	'' !== $at8sa_bc_src && '' !== $at8sa_ce_src && '' !== $at8sa_di_src && '' !== $at8sa_sp_src,
 	''
 );
 
-$at8sa_bc_reflect = new ReflectionClass( BrowserCache::class );
-
 check(
-	'Gate 对外可见（可被设置页 / 诊断 / 测试直接调用）',
-	$at8sa_bc_reflect->hasMethod( 'allow_public_html_cache' )
-		&& $at8sa_bc_reflect->getMethod( 'allow_public_html_cache' )->isPublic(),
+	'BrowserCache 不再有任何 HTML 发送路径（Gate 方法已删除）',
+	false === strpos( strip_php_comments( $at8sa_bc_src ), 'send_html_headers' )
+		&& false === strpos( strip_php_comments( $at8sa_bc_src ), 'allow_public_html_cache' )
+		&& false === strpos( strip_php_comments( $at8sa_bc_src ), "add_action( 'send_headers'" ),
 	''
 );
 
-// ── 21-4（P1-02）行为：逐条跑审核要求的判定 ──
+check(
+	'运行时引擎与 drop-in 命中路径都不再发送 Cache-Control: public',
+	false === strpos( strip_php_comments( $at8sa_ce_src ), 'Cache-Control: public' )
+		&& false === strpos( strip_php_comments( $at8sa_di_src ), 'Cache-Control: public' ),
+	''
+);
 
-$at8sa_gate_settings = new Settings();
-$at8sa_gate_settings->persist(
-	$at8sa_gate_settings->sanitize(
-		array(
-			'browser_cache'          => 1,
-			'browser_cache_html'     => 1,
-			'browser_cache_html_ttl' => 3600,
-		)
+check(
+	'命中路径改发显式 no-cache（页面新鲜度由整页缓存机制控制）',
+	false !== strpos( strip_php_comments( $at8sa_ce_src ), 'no-cache, must-revalidate, max-age=0' )
+		&& false !== strpos( strip_php_comments( $at8sa_di_src ), 'no-cache, must-revalidate, max-age=0' ),
+	''
+);
+
+check(
+	'命中路径不覆盖其它代码已发送的 Cache-Control（不得放宽 no-store/private）',
+	false !== strpos( strip_php_comments( $at8sa_ce_src ), 'cache-control:' ),
+	''
+);
+
+check(
+	'落盘前有状态码防线（3xx/错误响应不得进共享缓存）',
+	false !== strpos( strip_php_comments( $at8sa_ce_src ), 'http_response_code()' )
+		&& preg_match( '/is_int\( \$at8sa_status \) && \$at8sa_status >= 300/', strip_php_comments( $at8sa_ce_src ) ) === 1,
+	''
+);
+
+check(
+	'设置页不再渲染 browser_cache_html 开关与 HTML 缓存时长输入框',
+	false === strpos( $at8sa_sp_src, 'browser_cache_html' ),
+	''
+);
+
+// ── 21-4（P1-02 终裁）行为：旧数据库值 browser_cache_html=1 也无法重新启用 ──
+
+// 3.0.6.3 起 sanitize 白名单已不再接受该键，所以这里直接伪造一条"老版本
+// 留下的数据库行"（不经 sanitize），验证运行时对旧值的真实态度。
+$at8sa_legacy_settings = new Settings();
+$GLOBALS['at8sa_test_options'][ Settings::OPTION ] = array_merge(
+	$at8sa_legacy_settings->defaults(),
+	array(
+		'browser_cache'          => 1,
+		'browser_cache_html'     => 1,
+		'browser_cache_html_ttl' => 3600,
 	)
 );
-
-$at8sa_gate  = new BrowserCache( $at8sa_gate_settings );
-$at8sa_html  = array( 'Content-Type: text/html; charset=UTF-8' );
-$at8sa_plain = array( 'REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/blog/hello/' );
-
-$at8sa_gate_check = static function ( $label, $expected, $server = array(), $cookies = array(), $headers = null, $status = 200 ) use ( $at8sa_gate, $at8sa_html, $at8sa_plain ) {
-	$at8sa_used_headers = null === $headers ? $at8sa_html : $headers;
-
-	return check(
-		'HTML 浏览器缓存 Gate：' . $label,
-		with_request(
-			array_merge( $at8sa_plain, $server ),
-			$cookies,
-			static function () use ( $at8sa_gate, $at8sa_used_headers, $status ) {
-				return $at8sa_gate->allow_public_html_cache( $at8sa_used_headers, $status );
-			}
-		) === $expected,
-		''
-	);
-};
-
-$at8sa_gate_check( '普通匿名 200 text/html 页面 → 允许', true );
-$at8sa_gate_check( '带 Query String → 拒绝', false, array( 'REQUEST_URI' => '/blog/hello/?utm_source=x' ) );
-$at8sa_gate_check( 'POST → 拒绝', false, array( 'REQUEST_METHOD' => 'POST' ) );
-$at8sa_gate_check( '购物车 Cookie → 拒绝', false, array(), array( 'woocommerce_cart_hash' => 'x' ) );
-$at8sa_gate_check( '密码保护 Cookie → 拒绝', false, array(), array( 'wp-postpass_' . COOKIEHASH => 'x' ) );
-$at8sa_gate_check( '/cart 路径 → 拒绝', false, array( 'REQUEST_URI' => '/cart/' ) );
-$at8sa_gate_check( 'Set-Cookie → 拒绝', false, array(), array(), array_merge( $at8sa_html, array( 'Set-Cookie: a=1' ) ) );
-$at8sa_gate_check( '已有 private → 拒绝', false, array(), array(), array_merge( $at8sa_html, array( 'Cache-Control: private' ) ) );
-$at8sa_gate_check( '非 200 → 拒绝', false, array(), array(), $at8sa_html, 404 );
-$at8sa_gate_check( '非 text/html → 拒绝', false, array(), array(), array( 'Content-Type: application/json' ) );
-
-$GLOBALS['at8sa_test_logged_in'] = true;
-$at8sa_gate_check( '登录用户 → 拒绝', false );
-$GLOBALS['at8sa_test_logged_in'] = false;
-
-$GLOBALS['at8sa_test_password_required'] = true;
-$at8sa_gate_check( '密码保护页面 → 拒绝', false );
-$GLOBALS['at8sa_test_password_required'] = false;
-
-// 默认设置（browser_cache_html 默认关）下必须永远拒绝——这是"升级即安全"的兜底。
-//
-// 注意必须把选项表还原成默认值再取 Settings：上面 21-4 刚把
-// `browser_cache_html => 1` 持久化进了桩的选项表，而 `sanitize()` 对"缺键"是
-// 保留当前值，靠 persist( sanitize( array() ) ) 是**关不掉**的。
-$at8sa_defaults = ( new Settings() )->defaults();
-
-check( 'browser_cache_html 默认为关', 0 === (int) $at8sa_defaults['browser_cache_html'] );
-
-$GLOBALS['at8sa_test_options'][ Settings::OPTION ] = $at8sa_defaults;
-
-$at8sa_default_gate = new BrowserCache( new Settings() );
+$at8sa_legacy_settings = new Settings();
 
 check(
-	'默认设置不发送公共 HTML 浏览器缓存头',
-	false === with_request(
-		$at8sa_plain,
-		array(),
-		static function () use ( $at8sa_default_gate, $at8sa_html ) {
-			return $at8sa_default_gate->allow_public_html_cache( $at8sa_html, 200 );
-		}
+	'旧值仍在设置里（v5 允许保留历史数据）',
+	1 === (int) $at8sa_legacy_settings->get( 'browser_cache_html' ),
+	''
+);
+
+$at8sa_legacy_browser = new BrowserCache( $at8sa_legacy_settings );
+$at8sa_legacy_browser->boot();
+
+check(
+	'browser_cache_html=1 时 boot() 也不挂 send_headers 钩子（运行时忽略旧值）',
+	false === has_action( 'send_headers' ),
+	''
+);
+
+check(
+	'HTML 发送方法在类上不存在（双重保险）',
+	! method_exists( $at8sa_legacy_browser, 'send_html_headers' ),
+	''
+);
+
+// ── 21-5 静态资源缓存必须原样保留（v5：不得把静态资源与 HTML 公共缓存混为一谈）──
+
+$at8sa_static_browser = new BrowserCache( $at8sa_legacy_settings );
+
+check(
+	'nginx 片段仍生成静态资源长缓存规则',
+	false !== strpos( $at8sa_static_browser->nginx_rules(), 'css|js' )
+		&& false !== strpos( strtolower( $at8sa_static_browser->nginx_rules() ), 'expires' ),
+	''
+);
+
+check(
+	'Apache 片段仍覆盖 CSS / WebP 且把 HTML 明确归零',
+	false !== strpos( $at8sa_static_browser->apache_rules(), 'ExpiresByType text/css' )
+		&& false !== strpos( $at8sa_static_browser->apache_rules(), 'ExpiresByType image/webp' )
+		&& false !== strpos( $at8sa_static_browser->apache_rules(), 'ExpiresByType text/html "access plus 0 seconds"' ),
+	''
+);
+
+check(
+	'整页缓存的绕过规则未被本次移除动作误伤（Cookie 表含密码保护 / WooCommerce）',
+	RequestGuard::has_bypass_cookie(
+		RequestGuard::merge_rules( RequestGuard::default_bypass_cookies(), null ),
+		array( 'wp-postpass_' . COOKIEHASH => 'x', 'wp_woocommerce_session_' . COOKIEHASH => 'x', 'woocommerce_cart_hash' => '1' )
 	),
 	''
 );
-
-// ── 21-5 DONOTCACHEPAGE：必须尊重其它插件声明的"不许缓存" ──
-//
-// 常量定义之后无法取消，所以放在整份脚本的最后一条。
-if ( ! defined( 'DONOTCACHEPAGE' ) ) {
-	// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- 跨插件互通的标准常量。
-	define( 'DONOTCACHEPAGE', true );
-}
-
-$at8sa_gate_check( 'DONOTCACHEPAGE → 拒绝', false );
 
 /* ---------------------------------------------------------------------------
  * 汇总

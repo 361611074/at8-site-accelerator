@@ -2,7 +2,7 @@
 # This file is distributed under the GPL-2.0-or-later license.
 msgid ""
 msgstr ""
-"Project-Id-Version: AT8 Site Accelerator 3.0.6.2\n"
+"Project-Id-Version: AT8 Site Accelerator 3.0.6.3\n"
 "Report-Msgid-Bugs-To: https://www.at8.fun/\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -56,10 +56,6 @@ msgstr ""
 msgid "GD WebP 支持"
 msgstr ""
 
-#: templates/settings-page.php
-msgid "HTML 缓存（秒）"
-msgstr ""
-
 #: includes/Diagnostics/Diagnostics.php
 msgid "HTTPS"
 msgstr ""
@@ -86,10 +82,6 @@ msgstr ""
 
 #: includes/Diagnostics/Diagnostics.php
 msgid "PHP"
-msgstr ""
-
-#: templates/settings-page.php
-msgid "PHP 只能给 HTML 文档设置缓存头；CSS/JS/图片由 Web 服务器直接返回，需要服务器规则。到「工具」标签页可以复制对应你服务器的规则片段。"
 msgstr ""
 
 #: templates/settings-page.php
@@ -290,10 +282,6 @@ msgstr ""
 
 #: templates/settings-page.php
 msgid "了解 Pro"
-msgstr ""
-
-#: templates/settings-page.php
-msgid "仅对明确可公开缓存的 HTML 响应启用浏览器长缓存"
 msgstr ""
 
 #: includes/Diagnostics/Diagnostics.php
@@ -569,15 +557,15 @@ msgid "启用日志"
 msgstr ""
 
 #: templates/settings-page.php
-msgid "启用浏览器缓存头"
-msgstr ""
-
-#: templates/settings-page.php
 msgid "启用访客页面缓存"
 msgstr ""
 
 #: templates/settings-page.php
 msgid "启用链接预取"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "启用静态资源浏览器缓存"
 msgstr ""
 
 #: includes/Optimization/DatabaseCleanup.php
@@ -1229,6 +1217,10 @@ msgid "这里的操作不可撤销，且默认全部关闭。请先点「预览�
 msgstr ""
 
 #: templates/settings-page.php
+msgid "这里的缓存头只作用于 CSS/JS/图片等静态资源，由 Web 服务器直接返回；到「工具」标签页可以复制对应你服务器的规则片段。HTML 页面不在此列：页面内容的即时性由本插件的整页缓存机制控制，浏览器不做 HTML 长缓存。"
+msgstr ""
+
+#: templates/settings-page.php
 msgid "遇到这些 Cookie 时绕过缓存（每行一个）"
 msgstr ""
 
@@ -1326,10 +1318,6 @@ msgstr ""
 
 #: templates/settings-page.php
 msgid "默认保留。关闭后卸载会删除本插件的所有选项与临时数据（缓存目录无论开关都会清理）。"
-msgstr ""
-
-#: templates/settings-page.php
-msgid "默认关闭。开启后，登录用户、带会话/购物车/密码保护 Cookie、WooCommerce 动态请求、带查询参数的请求、带 Set-Cookie 的响应、已被声明 no-cache/private 的响应，以及 WordPress 明确禁止缓存的页面都会自动跳过；只有全部检查通过的普通页面才会发送公共缓存头，内容更新在有效期内会有延迟。"
 msgstr ""
 
 #: templates/settings-page.php

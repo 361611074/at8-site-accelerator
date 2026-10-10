@@ -388,13 +388,11 @@ $at8sa_cache_on = ! empty( $at8sa_settings['page_cache'] );
 		<section class="at8sa-panel" data-panel="optimize" role="tabpanel" hidden>
 			<div class="at8sa-card">
 				<h2><?php esc_html_e( '④ 浏览器缓存', 'at8-site-accelerator' ); ?></h2>
-				<p class="at8sa-card-note"><?php esc_html_e( 'PHP 只能给 HTML 文档设置缓存头；CSS/JS/图片由 Web 服务器直接返回，需要服务器规则。到「工具」标签页可以复制对应你服务器的规则片段。', 'at8-site-accelerator' ); ?></p>
+				<p class="at8sa-card-note"><?php esc_html_e( '这里的缓存头只作用于 CSS/JS/图片等静态资源，由 Web 服务器直接返回；到「工具」标签页可以复制对应你服务器的规则片段。HTML 页面不在此列：页面内容的即时性由本插件的整页缓存机制控制，浏览器不做 HTML 长缓存。', 'at8-site-accelerator' ); ?></p>
 
-				<?php $at8sa_toggle( 'browser_cache', __( '启用浏览器缓存头', 'at8-site-accelerator' ) ); ?>
-				<?php $at8sa_toggle( 'browser_cache_html', __( '仅对明确可公开缓存的 HTML 响应启用浏览器长缓存', 'at8-site-accelerator' ), __( '默认关闭。开启后，登录用户、带会话/购物车/密码保护 Cookie、WooCommerce 动态请求、带查询参数的请求、带 Set-Cookie 的响应、已被声明 no-cache/private 的响应，以及 WordPress 明确禁止缓存的页面都会自动跳过；只有全部检查通过的普通页面才会发送公共缓存头，内容更新在有效期内会有延迟。', 'at8-site-accelerator' ) ); ?>
+				<?php $at8sa_toggle( 'browser_cache', __( '启用静态资源浏览器缓存', 'at8-site-accelerator' ) ); ?>
 				<div class="at8sa-row">
 					<?php $at8sa_number( 'browser_cache_ttl', __( '静态资源缓存（秒）', 'at8-site-accelerator' ), 3600, 31536000, 3600 ); ?>
-					<?php $at8sa_number( 'browser_cache_html_ttl', __( 'HTML 缓存（秒）', 'at8-site-accelerator' ), 0, 2592000, 300 ); ?>
 				</div>
 			</div>
 

@@ -104,17 +104,20 @@
 
 | 设置项 | 默认 | 说明 |
 | --- | --- | --- |
-| `browser_cache` | 开 | 发送静态资源缓存响应头 |
+| `browser_cache` | 开 | 生成静态资源缓存规则（nginx / Apache 片段） |
 | `browser_cache_ttl` | 31536000 | 静态资源缓存时长（秒） |
-| `browser_cache_html` | 关 | 仅对通过公共响应安全检查的 HTML 响应启用浏览器长缓存 |
-| `browser_cache_html_ttl` | 3600 | HTML 缓存时长（秒） |
 
-`browser_cache_html` 开启后仍要逐条通过 `BrowserCache::allow_public_html_cache()`：
-请求方法必须是 GET/HEAD，未登录、无密码保护、无会话/购物车/评论者 Cookie，
-URI 不在排除表内且不带 Query String，不是 WooCommerce 动态页，
-状态码为 200、Content-Type 为 `text/html`，响应不带 `Set-Cookie`、不带 `Vary: Cookie`，
-未被声明 `no-cache` / `no-store` / `private` / `max-age=0`，且未定义 `DONOTCACHEPAGE`。
-任一条件不成立即退回 `no-cache`（宁可放过，不可错放）。
+**HTML 公共浏览器缓存已随 3.0.6.3 整体移除**（WordPress.org 二轮审核终裁）：
+3.0.6 的"发送时刻资格 Gate"方案被否决——`send_headers` 钩子无法看见主题/插件
+之后才添加的 `Set-Cookie`、`Cache-Control: private/no-store`、`Vary: Cookie`
+或才定义的 `DONOTCACHEPAGE`。因此 Free 版不再为 HTML 发送任何公共缓存头：
+
+- `browser_cache_html` / `browser_cache_html_ttl` 两个设置键已删除；
+  旧数据库行里遗留的值会被 `Settings::all()` 原样带出，但运行时无任何读取方（被忽略）。
+- 整页缓存命中（运行时引擎与 drop-in 两条路径）改发
+  `Cache-Control: no-cache, must-revalidate, max-age=0`，且**不覆盖**其它代码
+  已发送的 Cache-Control（不放宽 no-store / private）。
+- HTML 的新鲜度完全由本插件整页缓存机制在服务端控制。
 
 提供 nginx / Apache 规则片段供复制，**不自动覆盖** `.htaccess`；
 写入 `.htaccess` 时也不再生成 `.htaccess.at8sa.bak` 明文备份（改为内存回滚）。

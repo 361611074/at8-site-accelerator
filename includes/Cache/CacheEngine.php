@@ -134,7 +134,25 @@ final class CacheEngine {
 		if ( ! headers_sent() ) {
 			header( 'Content-Type: text/html; charset=' . get_bloginfo( 'charset' ) );
 			header( 'X-AT8-Cache-Backend: ' . $backend->name() );
-			header( 'Cache-Control: public, max-age=' . (int) $this->settings->get( 'cache_ttl', 3600 ) );
+
+			// 3.0.6.3（WordPress.org 二轮整改）：命中响应是 HTML，不再发送
+			// `Cache-Control: public`——发送头的那一刻无法预知主题/插件
+			// 之后才会添加的 Set-Cookie / private / no-store / Vary: Cookie，
+			// 公共头无法保证安全。改发显式 no-cache，页面新鲜度由整页缓存
+			// 机制在服务端控制；且**不覆盖**其它代码已发送的 Cache-Control
+			// （避免把别人的 no-store / private 放宽成 no-cache）。
+			$at8sa_cc_sent = false;
+
+			foreach ( headers_list() as $at8sa_cc ) {
+				if ( 0 === stripos( (string) $at8sa_cc, 'cache-control:' ) ) {
+					$at8sa_cc_sent = true;
+					break;
+				}
+			}
+
+			if ( ! $at8sa_cc_sent ) {
+				header( 'Cache-Control: no-cache, must-revalidate, max-age=0' );
+			}
 		}
 
 		echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- 缓存内容已在写入时消毒。
@@ -188,6 +206,16 @@ final class CacheEngine {
 
 		// 到这里 WordPress 已经完全加载，可以放心用条件函数。
 		if ( ! $this->should_cache_response() ) {
+			return $buffer;
+		}
+
+		// 状态码防线（3.0.6.3 加固）：只有 2xx 的响应才配进共享缓存。
+		// 带正文的 3xx 跳转 / 错误页如果在这里落盘，下一个访客会拿到
+		// 200 状态的旧跳转体（重定向就此丢失）。canonical 跳转的响应体
+		// 通常为空、被上面的空体早退挡住，这道防线兜住"带正文"的例外。
+		$at8sa_status = http_response_code();
+
+		if ( is_int( $at8sa_status ) && $at8sa_status >= 300 ) {
 			return $buffer;
 		}
 
